@@ -2,10 +2,8 @@ package tech.pegasys.teku.phase1.pylib
 
 import org.apache.tuweni.bytes.Bytes
 import tech.pegasys.teku.phase1.ssz.Bytes32
-import tech.pegasys.teku.phase1.ssz.CBitlist
-import tech.pegasys.teku.phase1.ssz.CList
+import tech.pegasys.teku.phase1.ssz.SSZBitVector
 import tech.pegasys.teku.phase1.ssz.uint64
-import tech.pegasys.teku.ssz.SSZTypes.Bytes4
 import java.lang.Long
 import java.math.BigInteger
 import java.util.*
@@ -94,13 +92,18 @@ fun <T> MutableList<T>.updateSlice(f: uint64, t: uint64, x: List<T>) {
     this[i] = x[i]
   }
 }
+fun SSZBitVector.updateSlice(f: uint64, t: uint64, x: List<Boolean>) {
+  for (i in f until t) {
+    this[i] = x[i]
+  }
+}
 
 operator fun <T> List<T>.get(index: uint64) = get(index.toInt())
 operator fun <A> Pair<A, A>.get(i: uint64) = if (i == 0uL) first else if (i == 1uL) second else fail("bad index " + i)
 operator fun pybytes.get(index: uint64) = get(index.toInt())
 
 operator fun <T> MutableList<T>.set(index: uint64, value: T) = set(index.toInt(), value)
-operator fun MutableList<Boolean>.set(i: uint64, v: uint64) = this.set(i, pybool(v))
+operator fun SSZBitVector.set(i: uint64, v: uint64) = this.set(i, pybool(v))
 
 fun <T> Iterable<T>.count(x: T): uint64 {
   fun pred(a: T): Boolean = a == x
@@ -154,8 +157,3 @@ fun uint64.to_bytes(length: uint64, endiannes: String): pybytes = TODO()
 fun from_bytes(data: pybytes, endiannes: String): uint64 = TODO()
 
 operator fun <T> Pair<T, T>.contains(a: T) = this.first == a || this.second == a
-
-// ADDITIONS
-
-operator fun Bytes4.plus(bytes: Bytes) = Bytes.concatenate(this.wrappedBytes, bytes)
-fun <T : Any> CList<T>.append(item: T) = this.items.add(item)

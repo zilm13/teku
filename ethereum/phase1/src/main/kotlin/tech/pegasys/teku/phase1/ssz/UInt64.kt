@@ -1,7 +1,7 @@
 package tech.pegasys.teku.phase1.ssz
 
 @ExperimentalUnsignedTypes
-public inline class UInt64(val v: ULong) : SSZObject, Comparable<UInt64> {
+public inline class UInt64(val v: ULong) : SSZComposite, Comparable<UInt64> {
 
   override fun hash_tree_root(): org.apache.tuweni.bytes.Bytes32 {
     TODO("Not yet implemented")
