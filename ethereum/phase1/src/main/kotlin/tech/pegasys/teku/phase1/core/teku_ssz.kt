@@ -9,10 +9,10 @@ import tech.pegasys.teku.phase1.ssz.Bytes32
 import tech.pegasys.teku.phase1.ssz.SSZBitList
 import tech.pegasys.teku.phase1.ssz.SSZBitVector
 import tech.pegasys.teku.phase1.ssz.SSZByteList
-import tech.pegasys.teku.phase1.ssz.SSZList
 import tech.pegasys.teku.phase1.ssz.SSZMutableCollection
+import tech.pegasys.teku.phase1.ssz.SSZMutableList
+import tech.pegasys.teku.phase1.ssz.SSZMutableVector
 import tech.pegasys.teku.phase1.ssz.SSZObjectFactory
-import tech.pegasys.teku.phase1.ssz.SSZVector
 import tech.pegasys.teku.ssz.SSZTypes.Bitlist
 import tech.pegasys.teku.ssz.SSZTypes.Bitvector
 import tech.pegasys.teku.util.hashtree.HashTreeUtil
@@ -69,10 +69,10 @@ abstract class SSZMutableCollectionDelegate<Onotole : Any, Teku : Any>(
   override fun listIterator(index: Int): MutableListIterator<Onotole> = TODO("Not yet implemented")
 }
 
-open class SSZListDelegate<Onotole : Any, Teku : Any>(
+open class SSZMutableListDelegate<Onotole : Any, Teku : Any>(
     override val data: TekuSSZMutableList<Teku>,
     type: KClass<Onotole>
-) : SSZList<Onotole>, SSZMutableCollectionDelegate<Onotole, Teku>(type) {
+) : SSZMutableList<Onotole>, SSZMutableCollectionDelegate<Onotole, Teku>(type) {
 
   constructor(items: MutableList<Onotole>, maxSize: ULong, type: KClass<Onotole>)
       : this(
@@ -81,6 +81,9 @@ open class SSZListDelegate<Onotole : Any, Teku : Any>(
           maxSize.toLong(),
           TypeConverter.match<Teku>(type).java),
       type)
+
+  constructor(items: TekuSSZList<Teku>, type: KClass<Onotole>)
+      : this(TekuSSZList.createMutable(items), type)
 
   override val maxSize: ULong
     get() = data.maxSize.toULong()
@@ -106,15 +109,19 @@ open class SSZListDelegate<Onotole : Any, Teku : Any>(
   }
 }
 
-class SSZBitListDelegate(items: MutableList<Boolean>, override val maxSize: ULong) : SSZBitList {
+class SSZBitListDelegate(internal val data: Bitlist) : SSZBitList {
   override val type: KClass<Boolean> = Boolean::class
-  private val data: Bitlist
 
-  init {
-    data = Bitlist(items.size, maxSize.toLong())
-    items.forEachIndexed { i, bit -> if (bit) data.setBit(i) }
-  }
+  constructor(items: MutableList<Boolean>, maxSize: ULong) : this(
+      MutableList(1) { items }.map<MutableList<Boolean>, Bitlist> { list ->
+        val data = Bitlist(items.size, maxSize.toLong())
+        list.forEachIndexed { i, bit -> if (bit) data.setBit(i) }
+        data
+      }.first()
+  )
 
+  override val maxSize: ULong
+    get() = data.maxSize.toULong()
   override val size: Int = data.currentSize
   override fun get(index: ULong): Boolean = data.getBit(index.toInt())
   override fun isEmpty() = size == 0
@@ -138,17 +145,25 @@ class SSZBitListDelegate(items: MutableList<Boolean>, override val maxSize: ULon
 }
 
 class SSZByteListDelegate(items: MutableList<Byte>, maxSize: ULong)
-  : SSZListDelegate<Bytes1, Byte>(items, maxSize, Bytes1::class), SSZByteList
+  : SSZMutableListDelegate<Bytes1, Byte>(items, maxSize, Bytes1::class), SSZByteList
 
-class SSZVectorDelegate<Onotole : Any, Teku : Any>(
+class SSZMutableVectorDelegate<Onotole : Any, Teku : Any>(
     override val data: TekuSSZMutableVector<Teku>,
     type: KClass<Onotole>
-) : SSZVector<Onotole>, SSZMutableCollectionDelegate<Onotole, Teku>(type) {
+) : SSZMutableVector<Onotole>, SSZMutableCollectionDelegate<Onotole, Teku>(type) {
 
   constructor(items: MutableList<Onotole>, type: KClass<Onotole>)
       : this(
       TekuSSZVector.createMutable(
           items.map { cast(it, TypeConverter.match<Teku>(type)) }.toList(),
+          TypeConverter.match<Teku>(type).java
+      ),
+      type)
+
+  constructor(items: TekuSSZVector<Teku>, type: KClass<Onotole>)
+      : this(
+      TekuSSZVector.createMutable(
+          items.map { it }.toList(),
           TypeConverter.match<Teku>(type).java
       ),
       type)
@@ -165,14 +180,16 @@ class SSZVectorDelegate<Onotole : Any, Teku : Any>(
   }
 }
 
-class SSZBitVectorDelegate(items: MutableList<Boolean>) : SSZBitVector {
-  private val data: Bitvector
+class SSZBitVectorDelegate(internal val data: Bitvector) : SSZBitVector {
   override val type: KClass<Boolean> = Boolean::class
 
-  init {
-    data = Bitvector(items.size)
-    items.forEachIndexed { i, bit -> if (bit) data.setBit(i) }
-  }
+  constructor(items: MutableList<Boolean>) : this(
+      Bitvector(
+          items.mapIndexed { i, v -> Pair(i, v) }.filter { p -> p.second }
+              .map { p -> p.first },
+          items.size
+      )
+  )
 
   override val size: Int = data.size
   override fun get(index: ULong): Boolean = data.getBit(index.toInt())
@@ -203,8 +220,8 @@ fun <Onotole : Any, Teku : Any> SSZMutableCollection<Onotole>.copyTo(
 }
 
 class TekuSSZFactory : SSZObjectFactory {
-  override fun <T : Any> SSZList(type: KClass<T>, maxSize: ULong, items: MutableList<T>) = SSZListDelegate<T, Any>(items, maxSize, type)
-  override fun <T : Any> SSZVector(type: KClass<T>, items: MutableList<T>) = SSZVectorDelegate<T, Any>(items, type)
+  override fun <T : Any> SSZList(type: KClass<T>, maxSize: ULong, items: MutableList<T>) = SSZMutableListDelegate<T, Any>(items, maxSize, type)
+  override fun <T : Any> SSZVector(type: KClass<T>, items: MutableList<T>) = SSZMutableVectorDelegate<T, Any>(items, type)
   override fun SSZByteList(maxSize: ULong, items: MutableList<Byte>) = SSZByteListDelegate(items, maxSize)
   override fun SSZBitList(maxSize: ULong, items: MutableList<Boolean>) = SSZBitListDelegate(items, maxSize)
   override fun SSZBitVector(items: MutableList<Boolean>) = SSZBitVectorDelegate(items)

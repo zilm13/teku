@@ -9,13 +9,12 @@ import tech.pegasys.teku.phase1.ssz.SSZBitList
 import tech.pegasys.teku.phase1.ssz.SSZBitVector
 import tech.pegasys.teku.phase1.ssz.SSZByteList
 import tech.pegasys.teku.phase1.ssz.SSZComposite
-import tech.pegasys.teku.phase1.ssz.SSZList
+import tech.pegasys.teku.phase1.ssz.SSZMutableList
 import tech.pegasys.teku.phase1.ssz.SSZObjectFactory
-import tech.pegasys.teku.phase1.ssz.SSZVector
+import tech.pegasys.teku.phase1.ssz.SSZMutableVector
 import tech.pegasys.teku.phase1.ssz.boolean
 import tech.pegasys.teku.phase1.ssz.uint64
 import tech.pegasys.teku.phase1.ssz.uint8
-import kotlin.reflect.KClass
 
 typealias Slot = uint64
 
@@ -87,7 +86,7 @@ typealias OnlineEpochs = uint8
 fun OnlineEpochs(x: uint8): OnlineEpochs = x
 fun OnlineEpochs() = OnlineEpochs(0u.toUByte())
 
-interface ValidatorIndicesSSZList : SSZList<ValidatorIndex>
+interface ValidatorIndicesSSZList : SSZMutableList<ValidatorIndex>
 
 interface Fork : SSZComposite {
   val previous_version: Version
@@ -118,7 +117,7 @@ interface Validator : SSZComposite {
   var max_reveal_lateness: Epoch
 }
 
-interface AttestationData {
+interface AttestationData : SSZComposite {
   val slot: Slot
   val index: CommitteeIndex
   val beacon_block_root: Root
@@ -128,7 +127,7 @@ interface AttestationData {
   val shard_transition_root: Root
 }
 
-interface PendingAttestation {
+interface PendingAttestation : SSZComposite {
   val aggregation_bits: SSZBitList
   val data: AttestationData
   val inclusion_delay: Slot
@@ -136,24 +135,24 @@ interface PendingAttestation {
   var crosslink_success: boolean
 }
 
-interface Eth1Data {
+interface Eth1Data : SSZComposite {
   var deposit_root: Root
   val deposit_count: uint64
   val block_hash: Bytes32
 }
 
-interface HistoricalBatch {
-  val block_roots: SSZVector<Root>
-  val state_roots: SSZVector<Root>
+interface HistoricalBatch : SSZComposite {
+  val block_roots: SSZMutableVector<Root>
+  val state_roots: SSZMutableVector<Root>
 }
 
-interface DepositMessage {
+interface DepositMessage : SSZComposite {
   val pubkey: BLSPubkey
   val withdrawal_credentials: Bytes32
   val amount: Gwei
 }
 
-interface DepositData {
+interface DepositData : SSZComposite {
   val pubkey: BLSPubkey
   val withdrawal_credentials: Bytes32
   val amount: Gwei
@@ -176,59 +175,59 @@ interface BeaconBlockHeader : SSZComposite {
   ): BeaconBlockHeader
 }
 
-interface SigningRoot {
+interface SigningRoot : SSZComposite {
   val object_root: Root
   val domain: Domain
 }
 
-interface Attestation {
+interface Attestation : SSZComposite {
   val aggregation_bits: SSZBitList
   val data: AttestationData
-  val custody_bits_blocks: SSZList<SSZBitList>
+  val custody_bits_blocks: SSZMutableList<SSZBitList>
   val signature: BLSSignature
 }
 
-interface IndexedAttestation {
-  val committee: SSZList<ValidatorIndex>
+interface IndexedAttestation : SSZComposite {
+  val committee: SSZMutableList<ValidatorIndex>
   val attestation: Attestation
 }
 
-interface AttesterSlashing {
+interface AttesterSlashing : SSZComposite {
   val attestation_1: IndexedAttestation
   val attestation_2: IndexedAttestation
 }
 
-interface Deposit {
-  val proof: SSZVector<Bytes32>
+interface Deposit : SSZComposite {
+  val proof: SSZMutableVector<Bytes32>
   val data: DepositData
 }
 
-interface VoluntaryExit {
+interface VoluntaryExit : SSZComposite {
   val epoch: Epoch
   val validator_index: ValidatorIndex
 }
 
-interface SignedVoluntaryExit {
+interface SignedVoluntaryExit : SSZComposite {
   val message: VoluntaryExit
   val signature: BLSSignature
 }
 
-interface SignedBeaconBlockHeader {
+interface SignedBeaconBlockHeader : SSZComposite {
   val message: BeaconBlockHeader
   val signature: BLSSignature
 }
 
-interface ProposerSlashing {
+interface ProposerSlashing : SSZComposite {
   val signed_header_1: SignedBeaconBlockHeader
   val signed_header_2: SignedBeaconBlockHeader
 }
 
-interface CustodyKeyReveal {
+interface CustodyKeyReveal : SSZComposite {
   val revealer_index: ValidatorIndex
   val reveal: BLSSignature
 }
 
-interface EarlyDerivedSecretReveal {
+interface EarlyDerivedSecretReveal : SSZComposite {
   val revealed_index: ValidatorIndex
   val epoch: Epoch
   val reveal: BLSSignature
@@ -236,7 +235,7 @@ interface EarlyDerivedSecretReveal {
   val mask: Bytes32
 }
 
-interface ShardBlock {
+interface ShardBlock : SSZComposite {
   val shard_parent_root: Root
   val beacon_parent_root: Root
   val slot: Slot
@@ -244,12 +243,12 @@ interface ShardBlock {
   val body: SSZByteList
 }
 
-interface SignedShardBlock {
+interface SignedShardBlock : SSZComposite {
   val message: ShardBlock
   val signature: BLSSignature
 }
 
-interface ShardBlockHeader {
+interface ShardBlockHeader : SSZComposite {
   val shard_parent_root: Root
   val beacon_parent_root: Root
   val slot: Slot
@@ -257,24 +256,29 @@ interface ShardBlockHeader {
   val body_root: Root
 }
 
-interface ShardState {
+interface ShardState : SSZComposite {
   var slot: Slot
   var gasprice: Gwei
   var transition_digest: Bytes32
   var latest_block_root: Root
 
-  fun copy(): ShardState
+  fun copy(
+      slot: Slot = this.slot,
+      gasprice: Gwei = this.gasprice,
+      transition_digest: Bytes32 = this.transition_digest,
+      latest_block_root: Root = this.latest_block_root
+  ): ShardState
 }
 
-interface ShardTransition {
+interface ShardTransition : SSZComposite {
   val start_slot: Slot
-  val shard_block_lengths: SSZList<uint64>
-  val shard_data_roots: SSZList<Bytes32>
-  val shard_states: SSZList<ShardState>
+  val shard_block_lengths: SSZMutableList<uint64>
+  val shard_data_roots: SSZMutableList<Bytes32>
+  val shard_states: SSZMutableList<ShardState>
   val proposer_signature_aggregate: BLSSignature
 }
 
-interface CustodySlashing {
+interface CustodySlashing : SSZComposite {
   val data_index: uint64
   val malefactor_index: ValidatorIndex
   val malefactor_secret: BLSSignature
@@ -284,29 +288,29 @@ interface CustodySlashing {
   val data: SSZByteList
 }
 
-interface SignedCustodySlashing {
+interface SignedCustodySlashing : SSZComposite {
   val message: CustodySlashing
   val signature: BLSSignature
 }
 
-interface BeaconBlockBody {
+interface BeaconBlockBody : SSZComposite {
   val randao_reveal: BLSSignature
   val eth1_data: Eth1Data
   val graffiti: Bytes32
-  val proposer_slashings: SSZList<ProposerSlashing>
-  val attester_slashings: SSZList<AttesterSlashing>
-  val attestations: SSZList<Attestation>
-  val deposits: SSZList<Deposit>
-  val voluntary_exits: SSZList<SignedVoluntaryExit>
-  val custody_slashings: SSZList<SignedCustodySlashing>
-  val custody_key_reveals: SSZList<CustodyKeyReveal>
-  val early_derived_secret_reveals: SSZList<EarlyDerivedSecretReveal>
-  val shard_transitions: SSZVector<ShardTransition>
+  val proposer_slashings: SSZMutableList<ProposerSlashing>
+  val attester_slashings: SSZMutableList<AttesterSlashing>
+  val attestations: SSZMutableList<Attestation>
+  val deposits: SSZMutableList<Deposit>
+  val voluntary_exits: SSZMutableList<SignedVoluntaryExit>
+  val custody_slashings: SSZMutableList<SignedCustodySlashing>
+  val custody_key_reveals: SSZMutableList<CustodyKeyReveal>
+  val early_derived_secret_reveals: SSZMutableList<EarlyDerivedSecretReveal>
+  val shard_transitions: SSZMutableVector<ShardTransition>
   val light_client_signature_bitfield: SSZBitVector
   val light_client_signature: BLSSignature
 }
 
-interface BeaconBlock {
+interface BeaconBlock : SSZComposite {
   val slot: Slot
   val proposer_index: ValidatorIndex
   val parent_root: Root
@@ -314,48 +318,75 @@ interface BeaconBlock {
   val body: BeaconBlockBody
 }
 
-interface SignedBeaconBlock {
+interface SignedBeaconBlock : SSZComposite {
   val message: BeaconBlock
   val signature: BLSSignature
 }
 
-interface CompactCommittee {
-  val pubkeys: SSZList<BLSPubkey>
-  val compact_validators: SSZList<uint64>
+interface CompactCommittee : SSZComposite {
+  val pubkeys: SSZMutableList<BLSPubkey>
+  val compact_validators: SSZMutableList<uint64>
 }
 
-interface BeaconState {
+interface BeaconState : SSZComposite {
   val genesis_time: uint64
   var genesis_validators_root: Root
   var slot: Slot
   var fork: Fork
   var latest_block_header: BeaconBlockHeader
-  val block_roots: SSZVector<Root>
-  val state_roots: SSZVector<Root>
-  val historical_roots: SSZList<Root>
+  val block_roots: SSZMutableVector<Root>
+  val state_roots: SSZMutableVector<Root>
+  val historical_roots: SSZMutableList<Root>
   var eth1_data: Eth1Data
-  var eth1_data_votes: SSZList<Eth1Data>
+  var eth1_data_votes: SSZMutableList<Eth1Data>
   var eth1_deposit_index: uint64
-  val validators: SSZList<Validator>
-  val balances: SSZList<Gwei>
-  val randao_mixes: SSZVector<Root>
-  val slashings: SSZVector<Gwei>
-  var previous_epoch_attestations: SSZList<PendingAttestation>
-  var current_epoch_attestations: SSZList<PendingAttestation>
+  val validators: SSZMutableList<Validator>
+  val balances: SSZMutableList<Gwei>
+  val randao_mixes: SSZMutableVector<Root>
+  val slashings: SSZMutableVector<Gwei>
+  var previous_epoch_attestations: SSZMutableList<PendingAttestation>
+  var current_epoch_attestations: SSZMutableList<PendingAttestation>
   val justification_bits: SSZBitVector
   var previous_justified_checkpoint: Checkpoint
   var current_justified_checkpoint: Checkpoint
   var finalized_checkpoint: Checkpoint
-  val shard_states: SSZList<ShardState>
-  val online_countdown: SSZList<OnlineEpochs>
+  val shard_states: SSZMutableList<ShardState>
+  val online_countdown: SSZMutableList<OnlineEpochs>
   var current_light_committee: CompactCommittee
   var next_light_committee: CompactCommittee
-  val exposed_derived_secrets: SSZVector<ValidatorIndicesSSZList>
+  val exposed_derived_secrets: SSZMutableVector<ValidatorIndicesSSZList>
 
-  fun copy(): BeaconState
+  fun copy(
+      genesis_time: uint64 = this.genesis_time,
+      genesis_validators_root: Root = this.genesis_validators_root,
+      slot: Slot = this.slot,
+      fork: Fork = this.fork,
+      latest_block_header: BeaconBlockHeader = this.latest_block_header,
+      block_roots: SSZMutableVector<Root> = this.block_roots,
+      state_roots: SSZMutableVector<Root> = this.state_roots,
+      historical_roots: SSZMutableList<Root> = this.historical_roots,
+      eth1_data: Eth1Data = this.eth1_data,
+      eth1_data_votes: SSZMutableList<Eth1Data> = this.eth1_data_votes,
+      eth1_deposit_index: uint64 = this.eth1_deposit_index,
+      validators: SSZMutableList<Validator> = this.validators,
+      balances: SSZMutableList<Gwei> = this.balances,
+      randao_mixes: SSZMutableVector<Root> = this.randao_mixes,
+      slashings: SSZMutableVector<Gwei> = this.slashings,
+      previous_epoch_attestations: SSZMutableList<PendingAttestation> = this.previous_epoch_attestations,
+      current_epoch_attestations: SSZMutableList<PendingAttestation> = this.current_epoch_attestations,
+      justification_bits: SSZBitVector = this.justification_bits,
+      previous_justified_checkpoint: Checkpoint = this.previous_justified_checkpoint,
+      current_justified_checkpoint: Checkpoint = this.current_justified_checkpoint,
+      finalized_checkpoint: Checkpoint = this.finalized_checkpoint,
+      shard_states: SSZMutableList<ShardState> = this.shard_states,
+      online_countdown: SSZMutableList<OnlineEpochs> = this.online_countdown,
+      current_light_committee: CompactCommittee = this.current_light_committee,
+      next_light_committee: CompactCommittee = this.next_light_committee,
+      exposed_derived_secrets: SSZMutableVector<ValidatorIndicesSSZList> = this.exposed_derived_secrets
+  ): BeaconState
 }
 
-interface AttestationCustodyBitWrapper {
+interface AttestationCustodyBitWrapper : SSZComposite {
   val attestation_data_root: Root
   val block_index: uint64
   val bit: boolean
@@ -417,7 +448,7 @@ interface DataObjectFactory {
         TODO("Not yet implemented")
       }
 
-      override fun HistoricalBatch(block_roots: SSZVector<Root>, state_roots: SSZVector<Root>): HistoricalBatch {
+      override fun HistoricalBatch(block_roots: SSZMutableVector<Root>, state_roots: SSZMutableVector<Root>): HistoricalBatch {
         TODO("Not yet implemented")
       }
 
@@ -437,11 +468,11 @@ interface DataObjectFactory {
         TODO("Not yet implemented")
       }
 
-      override fun Attestation(aggregation_bits: SSZBitList, data: AttestationData, custody_bits_blocks: SSZList<SSZBitList>, signature: BLSSignature): Attestation {
+      override fun Attestation(aggregation_bits: SSZBitList, data: AttestationData, custody_bits_blocks: SSZMutableList<SSZBitList>, signature: BLSSignature): Attestation {
         TODO("Not yet implemented")
       }
 
-      override fun IndexedAttestation(committee: SSZList<ValidatorIndex>, attestation: Attestation): IndexedAttestation {
+      override fun IndexedAttestation(committee: SSZMutableList<ValidatorIndex>, attestation: Attestation): IndexedAttestation {
         TODO("Not yet implemented")
       }
 
@@ -449,7 +480,7 @@ interface DataObjectFactory {
         TODO("Not yet implemented")
       }
 
-      override fun Deposit(proof: SSZVector<Bytes32>, data: DepositData): Deposit {
+      override fun Deposit(proof: SSZMutableVector<Bytes32>, data: DepositData): Deposit {
         TODO("Not yet implemented")
       }
 
@@ -493,7 +524,7 @@ interface DataObjectFactory {
         TODO("Not yet implemented")
       }
 
-      override fun ShardTransition(start_slot: Slot, shard_block_lengths: SSZList<uint64>, shard_data_roots: SSZList<Bytes32>, shard_states: SSZList<ShardState>, proposer_signature_aggregate: BLSSignature): ShardTransition {
+      override fun ShardTransition(start_slot: Slot, shard_block_lengths: SSZMutableList<uint64>, shard_data_roots: SSZMutableList<Bytes32>, shard_states: SSZMutableList<ShardState>, proposer_signature_aggregate: BLSSignature): ShardTransition {
         TODO("Not yet implemented")
       }
 
@@ -505,7 +536,7 @@ interface DataObjectFactory {
         TODO("Not yet implemented")
       }
 
-      override fun BeaconBlockBody(randao_reveal: BLSSignature, eth1_data: Eth1Data, graffiti: Bytes32, proposer_slashings: SSZList<ProposerSlashing>, attester_slashings: SSZList<AttesterSlashing>, attestations: SSZList<Attestation>, deposits: SSZList<Deposit>, voluntary_exits: SSZList<SignedVoluntaryExit>, custody_slashings: SSZList<SignedCustodySlashing>, custody_key_reveals: SSZList<CustodyKeyReveal>, early_derived_secret_reveals: SSZList<EarlyDerivedSecretReveal>, shard_transitions: SSZVector<ShardTransition>, light_client_signature_bitfield: SSZBitVector, light_client_signature: BLSSignature): BeaconBlockBody {
+      override fun BeaconBlockBody(randao_reveal: BLSSignature, eth1_data: Eth1Data, graffiti: Bytes32, proposer_slashings: SSZMutableList<ProposerSlashing>, attester_slashings: SSZMutableList<AttesterSlashing>, attestations: SSZMutableList<Attestation>, deposits: SSZMutableList<Deposit>, voluntary_exits: SSZMutableList<SignedVoluntaryExit>, custody_slashings: SSZMutableList<SignedCustodySlashing>, custody_key_reveals: SSZMutableList<CustodyKeyReveal>, early_derived_secret_reveals: SSZMutableList<EarlyDerivedSecretReveal>, shard_transitions: SSZMutableVector<ShardTransition>, light_client_signature_bitfield: SSZBitVector, light_client_signature: BLSSignature): BeaconBlockBody {
         TODO("Not yet implemented")
       }
 
@@ -517,7 +548,7 @@ interface DataObjectFactory {
         TODO("Not yet implemented")
       }
 
-      override fun CompactCommittee(pubkeys: SSZList<BLSPubkey>, compact_validators: SSZList<uint64>): CompactCommittee {
+      override fun CompactCommittee(pubkeys: SSZMutableList<BLSPubkey>, compact_validators: SSZMutableList<uint64>): CompactCommittee {
         TODO("Not yet implemented")
       }
 
@@ -529,7 +560,7 @@ interface DataObjectFactory {
         TODO("Not yet implemented")
       }
 
-      override fun BeaconState(genesis_time: uint64, genesis_validators_root: Root, slot: Slot, fork: Fork, latest_block_header: BeaconBlockHeader, block_roots: SSZVector<Root>, state_roots: SSZVector<Root>, historical_roots: SSZList<Root>, eth1_data: Eth1Data, eth1_data_votes: SSZList<Eth1Data>, eth1_deposit_index: uint64, validators: SSZList<Validator>, balances: SSZList<Gwei>, randao_mixes: SSZVector<Root>, slashings: SSZVector<Gwei>, previous_epoch_attestations: SSZList<PendingAttestation>, current_epoch_attestations: SSZList<PendingAttestation>, justification_bits: SSZBitVector, previous_justified_checkpoint: Checkpoint, current_justified_checkpoint: Checkpoint, finalized_checkpoint: Checkpoint, shard_states: SSZList<ShardState>, online_countdown: SSZList<OnlineEpochs>, current_light_committee: CompactCommittee, next_light_committee: CompactCommittee, exposed_derived_secrets: SSZVector<ValidatorIndicesSSZList>): BeaconState {
+      override fun BeaconState(genesis_time: uint64, genesis_validators_root: Root, slot: Slot, fork: Fork, latest_block_header: BeaconBlockHeader, block_roots: SSZMutableVector<Root>, state_roots: SSZMutableVector<Root>, historical_roots: SSZMutableList<Root>, eth1_data: Eth1Data, eth1_data_votes: SSZMutableList<Eth1Data>, eth1_deposit_index: uint64, validators: SSZMutableList<Validator>, balances: SSZMutableList<Gwei>, randao_mixes: SSZMutableVector<Root>, slashings: SSZMutableVector<Gwei>, previous_epoch_attestations: SSZMutableList<PendingAttestation>, current_epoch_attestations: SSZMutableList<PendingAttestation>, justification_bits: SSZBitVector, previous_justified_checkpoint: Checkpoint, current_justified_checkpoint: Checkpoint, finalized_checkpoint: Checkpoint, shard_states: SSZMutableList<ShardState>, online_countdown: SSZMutableList<OnlineEpochs>, current_light_committee: CompactCommittee, next_light_committee: CompactCommittee, exposed_derived_secrets: SSZMutableVector<ValidatorIndicesSSZList>): BeaconState {
         TODO("Not yet implemented")
       }
 
@@ -580,15 +611,9 @@ interface DataObjectFactory {
       block_hash: Bytes32 = Bytes32()
   ): Eth1Data
 
-  class CEth1Data(
-      override var deposit_root: Root,
-      override val deposit_count: uint64,
-      override val block_hash: Bytes32
-  ) : Eth1Data
-
   fun HistoricalBatch(
-      block_roots: SSZVector<Root> = SSZObjectFactory.INSTANCE.SSZVector(Root::class, MutableList(SLOTS_PER_HISTORICAL_ROOT.toInt()) { Root() }),
-      state_roots: SSZVector<Root> = SSZObjectFactory.INSTANCE.SSZVector(Root::class, MutableList(SLOTS_PER_HISTORICAL_ROOT.toInt()) { Root() })
+      block_roots: SSZMutableVector<Root> = SSZObjectFactory.INSTANCE.SSZVector(Root::class, MutableList(SLOTS_PER_HISTORICAL_ROOT.toInt()) { Root() }),
+      state_roots: SSZMutableVector<Root> = SSZObjectFactory.INSTANCE.SSZVector(Root::class, MutableList(SLOTS_PER_HISTORICAL_ROOT.toInt()) { Root() })
   ): HistoricalBatch
 
   fun DepositMessage(
@@ -620,12 +645,12 @@ interface DataObjectFactory {
   fun Attestation(
       aggregation_bits: SSZBitList = SSZObjectFactory.INSTANCE.SSZBitList(MAX_VALIDATORS_PER_COMMITTEE),
       data: AttestationData = AttestationData(),
-      custody_bits_blocks: SSZList<SSZBitList> = SSZObjectFactory.INSTANCE.SSZList(SSZBitList::class, MAX_SHARD_BLOCKS_PER_ATTESTATION, mutableListOf()),
+      custody_bits_blocks: SSZMutableList<SSZBitList> = SSZObjectFactory.INSTANCE.SSZList(SSZBitList::class, MAX_SHARD_BLOCKS_PER_ATTESTATION, mutableListOf()),
       signature: BLSSignature = BLSSignature()
   ): Attestation
 
   fun IndexedAttestation(
-      committee: SSZList<ValidatorIndex> = SSZObjectFactory.INSTANCE.SSZList(ValidatorIndex::class, MAX_VALIDATORS_PER_COMMITTEE),
+      committee: SSZMutableList<ValidatorIndex> = SSZObjectFactory.INSTANCE.SSZList(ValidatorIndex::class, MAX_VALIDATORS_PER_COMMITTEE),
       attestation: Attestation = Attestation()
   ): IndexedAttestation
 
@@ -635,7 +660,7 @@ interface DataObjectFactory {
   ): AttesterSlashing
 
   fun Deposit(
-      proof: SSZVector<Bytes32> = SSZObjectFactory.INSTANCE.SSZVector(Bytes32::class, MutableList((DEPOSIT_CONTRACT_TREE_DEPTH + 1uL).toInt()) { Bytes32() }),
+      proof: SSZMutableVector<Bytes32> = SSZObjectFactory.INSTANCE.SSZVector(Bytes32::class, MutableList((DEPOSIT_CONTRACT_TREE_DEPTH + 1uL).toInt()) { Bytes32() }),
       data: DepositData = DepositData()
   ): Deposit
 
@@ -702,9 +727,9 @@ interface DataObjectFactory {
 
   fun ShardTransition(
       start_slot: Slot = Slot(),
-      shard_block_lengths: SSZList<uint64> = SSZObjectFactory.INSTANCE.SSZList(uint64::class, MAX_SHARD_BLOCKS_PER_ATTESTATION),
-      shard_data_roots: SSZList<Bytes32> = SSZObjectFactory.INSTANCE.SSZList(Bytes32::class, MAX_SHARD_BLOCKS_PER_ATTESTATION),
-      shard_states: SSZList<ShardState> = SSZObjectFactory.INSTANCE.SSZList(ShardState::class, MAX_SHARD_BLOCKS_PER_ATTESTATION),
+      shard_block_lengths: SSZMutableList<uint64> = SSZObjectFactory.INSTANCE.SSZList(uint64::class, MAX_SHARD_BLOCKS_PER_ATTESTATION),
+      shard_data_roots: SSZMutableList<Bytes32> = SSZObjectFactory.INSTANCE.SSZList(Bytes32::class, MAX_SHARD_BLOCKS_PER_ATTESTATION),
+      shard_states: SSZMutableList<ShardState> = SSZObjectFactory.INSTANCE.SSZList(ShardState::class, MAX_SHARD_BLOCKS_PER_ATTESTATION),
       proposer_signature_aggregate: BLSSignature = BLSSignature()
   ): ShardTransition
 
@@ -727,15 +752,15 @@ interface DataObjectFactory {
       randao_reveal: BLSSignature = BLSSignature(),
       eth1_data: Eth1Data = Eth1Data(),
       graffiti: Bytes32 = Bytes32(),
-      proposer_slashings: SSZList<ProposerSlashing> = SSZObjectFactory.INSTANCE.SSZList(ProposerSlashing::class, MAX_PROPOSER_SLASHINGS),
-      attester_slashings: SSZList<AttesterSlashing> = SSZObjectFactory.INSTANCE.SSZList(AttesterSlashing::class, MAX_ATTESTER_SLASHINGS),
-      attestations: SSZList<Attestation> = SSZObjectFactory.INSTANCE.SSZList(Attestation::class, MAX_ATTESTATIONS),
-      deposits: SSZList<Deposit> = SSZObjectFactory.INSTANCE.SSZList(Deposit::class, MAX_DEPOSITS),
-      voluntary_exits: SSZList<SignedVoluntaryExit> = SSZObjectFactory.INSTANCE.SSZList(SignedVoluntaryExit::class, MAX_VOLUNTARY_EXITS),
-      custody_slashings: SSZList<SignedCustodySlashing> = SSZObjectFactory.INSTANCE.SSZList(SignedCustodySlashing::class, MAX_CUSTODY_SLASHINGS),
-      custody_key_reveals: SSZList<CustodyKeyReveal> = SSZObjectFactory.INSTANCE.SSZList(CustodyKeyReveal::class, MAX_CUSTODY_KEY_REVEALS),
-      early_derived_secret_reveals: SSZList<EarlyDerivedSecretReveal> = SSZObjectFactory.INSTANCE.SSZList(EarlyDerivedSecretReveal::class, MAX_EARLY_DERIVED_SECRET_REVEALS),
-      shard_transitions: SSZVector<ShardTransition> = SSZObjectFactory.INSTANCE.SSZVector(ShardTransition::class, MutableList(MAX_SHARDS.toInt()) { ShardTransition() }),
+      proposer_slashings: SSZMutableList<ProposerSlashing> = SSZObjectFactory.INSTANCE.SSZList(ProposerSlashing::class, MAX_PROPOSER_SLASHINGS),
+      attester_slashings: SSZMutableList<AttesterSlashing> = SSZObjectFactory.INSTANCE.SSZList(AttesterSlashing::class, MAX_ATTESTER_SLASHINGS),
+      attestations: SSZMutableList<Attestation> = SSZObjectFactory.INSTANCE.SSZList(Attestation::class, MAX_ATTESTATIONS),
+      deposits: SSZMutableList<Deposit> = SSZObjectFactory.INSTANCE.SSZList(Deposit::class, MAX_DEPOSITS),
+      voluntary_exits: SSZMutableList<SignedVoluntaryExit> = SSZObjectFactory.INSTANCE.SSZList(SignedVoluntaryExit::class, MAX_VOLUNTARY_EXITS),
+      custody_slashings: SSZMutableList<SignedCustodySlashing> = SSZObjectFactory.INSTANCE.SSZList(SignedCustodySlashing::class, MAX_CUSTODY_SLASHINGS),
+      custody_key_reveals: SSZMutableList<CustodyKeyReveal> = SSZObjectFactory.INSTANCE.SSZList(CustodyKeyReveal::class, MAX_CUSTODY_KEY_REVEALS),
+      early_derived_secret_reveals: SSZMutableList<EarlyDerivedSecretReveal> = SSZObjectFactory.INSTANCE.SSZList(EarlyDerivedSecretReveal::class, MAX_EARLY_DERIVED_SECRET_REVEALS),
+      shard_transitions: SSZMutableVector<ShardTransition> = SSZObjectFactory.INSTANCE.SSZVector(ShardTransition::class, MutableList(MAX_SHARDS.toInt()) { ShardTransition() }),
       light_client_signature_bitfield: SSZBitVector = SSZObjectFactory.INSTANCE.SSZBitVector(MutableList(LIGHT_CLIENT_COMMITTEE_SIZE.toInt()) { false }),
       light_client_signature: BLSSignature = BLSSignature()
   ): BeaconBlockBody
@@ -754,8 +779,8 @@ interface DataObjectFactory {
   ): SignedBeaconBlock
 
   fun CompactCommittee(
-      pubkeys: SSZList<BLSPubkey> = SSZObjectFactory.INSTANCE.SSZList(BLSPubkey::class, MAX_VALIDATORS_PER_COMMITTEE),
-      compact_validators: SSZList<uint64> = SSZObjectFactory.INSTANCE.SSZList(uint64::class, MAX_VALIDATORS_PER_COMMITTEE)
+      pubkeys: SSZMutableList<BLSPubkey> = SSZObjectFactory.INSTANCE.SSZList(BLSPubkey::class, MAX_VALIDATORS_PER_COMMITTEE),
+      compact_validators: SSZMutableList<uint64> = SSZObjectFactory.INSTANCE.SSZList(uint64::class, MAX_VALIDATORS_PER_COMMITTEE)
   ): CompactCommittee
 
   fun AttestationCustodyBitWrapper(
@@ -775,27 +800,27 @@ interface DataObjectFactory {
       slot: Slot = Slot(),
       fork: Fork = Fork(),
       latest_block_header: BeaconBlockHeader = BeaconBlockHeader(),
-      block_roots: SSZVector<Root> = SSZObjectFactory.INSTANCE.SSZVector(Root::class, MutableList(SLOTS_PER_HISTORICAL_ROOT.toInt()) { Root() }),
-      state_roots: SSZVector<Root> = SSZObjectFactory.INSTANCE.SSZVector(Root::class, MutableList(SLOTS_PER_HISTORICAL_ROOT.toInt()) { Root() }),
-      historical_roots: SSZList<Root> = SSZObjectFactory.INSTANCE.SSZList(Root::class, HISTORICAL_ROOTS_LIMIT),
+      block_roots: SSZMutableVector<Root> = SSZObjectFactory.INSTANCE.SSZVector(Root::class, MutableList(SLOTS_PER_HISTORICAL_ROOT.toInt()) { Root() }),
+      state_roots: SSZMutableVector<Root> = SSZObjectFactory.INSTANCE.SSZVector(Root::class, MutableList(SLOTS_PER_HISTORICAL_ROOT.toInt()) { Root() }),
+      historical_roots: SSZMutableList<Root> = SSZObjectFactory.INSTANCE.SSZList(Root::class, HISTORICAL_ROOTS_LIMIT),
       eth1_data: Eth1Data = Eth1Data(),
-      eth1_data_votes: SSZList<Eth1Data> = SSZObjectFactory.INSTANCE.SSZList(Eth1Data::class, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH),
+      eth1_data_votes: SSZMutableList<Eth1Data> = SSZObjectFactory.INSTANCE.SSZList(Eth1Data::class, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH),
       eth1_deposit_index: uint64 = 0uL,
-      validators: SSZList<Validator> = SSZObjectFactory.INSTANCE.SSZList(Validator::class, VALIDATOR_REGISTRY_LIMIT),
-      balances: SSZList<Gwei> = SSZObjectFactory.INSTANCE.SSZList(Gwei::class, VALIDATOR_REGISTRY_LIMIT),
-      randao_mixes: SSZVector<Root> = SSZObjectFactory.INSTANCE.SSZVector(Root::class, MutableList(EPOCHS_PER_HISTORICAL_VECTOR.toInt()) { Root() }),
-      slashings: SSZVector<Gwei> = SSZObjectFactory.INSTANCE.SSZVector(Gwei::class, MutableList(EPOCHS_PER_SLASHINGS_VECTOR.toInt()) { Gwei() }),
-      previous_epoch_attestations: SSZList<PendingAttestation> = SSZObjectFactory.INSTANCE.SSZList(PendingAttestation::class, MAX_ATTESTATIONS * SLOTS_PER_EPOCH),
-      current_epoch_attestations: SSZList<PendingAttestation> = SSZObjectFactory.INSTANCE.SSZList(PendingAttestation::class, MAX_ATTESTATIONS * SLOTS_PER_EPOCH),
+      validators: SSZMutableList<Validator> = SSZObjectFactory.INSTANCE.SSZList(Validator::class, VALIDATOR_REGISTRY_LIMIT),
+      balances: SSZMutableList<Gwei> = SSZObjectFactory.INSTANCE.SSZList(Gwei::class, VALIDATOR_REGISTRY_LIMIT),
+      randao_mixes: SSZMutableVector<Root> = SSZObjectFactory.INSTANCE.SSZVector(Root::class, MutableList(EPOCHS_PER_HISTORICAL_VECTOR.toInt()) { Root() }),
+      slashings: SSZMutableVector<Gwei> = SSZObjectFactory.INSTANCE.SSZVector(Gwei::class, MutableList(EPOCHS_PER_SLASHINGS_VECTOR.toInt()) { Gwei() }),
+      previous_epoch_attestations: SSZMutableList<PendingAttestation> = SSZObjectFactory.INSTANCE.SSZList(PendingAttestation::class, MAX_ATTESTATIONS * SLOTS_PER_EPOCH),
+      current_epoch_attestations: SSZMutableList<PendingAttestation> = SSZObjectFactory.INSTANCE.SSZList(PendingAttestation::class, MAX_ATTESTATIONS * SLOTS_PER_EPOCH),
       justification_bits: SSZBitVector = SSZObjectFactory.INSTANCE.SSZBitVector(MutableList(JUSTIFICATION_BITS_LENGTH.toInt()) { false }),
       previous_justified_checkpoint: Checkpoint = Checkpoint(),
       current_justified_checkpoint: Checkpoint = Checkpoint(),
       finalized_checkpoint: Checkpoint = Checkpoint(),
-      shard_states: SSZList<ShardState> = SSZObjectFactory.INSTANCE.SSZList(ShardState::class, MAX_SHARDS),
-      online_countdown: SSZList<OnlineEpochs> = SSZObjectFactory.INSTANCE.SSZList(OnlineEpochs::class, VALIDATOR_REGISTRY_LIMIT),
+      shard_states: SSZMutableList<ShardState> = SSZObjectFactory.INSTANCE.SSZList(ShardState::class, MAX_SHARDS),
+      online_countdown: SSZMutableList<OnlineEpochs> = SSZObjectFactory.INSTANCE.SSZList(OnlineEpochs::class, VALIDATOR_REGISTRY_LIMIT),
       current_light_committee: CompactCommittee = CompactCommittee(),
       next_light_committee: CompactCommittee = CompactCommittee(),
-      exposed_derived_secrets: SSZVector<ValidatorIndicesSSZList> = SSZObjectFactory.INSTANCE.SSZVector(ValidatorIndicesSSZList::class, MutableList(EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS.toInt()) { INSTANCE.ValidatorIndicesSSZList(max_size = MAX_EARLY_DERIVED_SECRET_REVEALS * SLOTS_PER_EPOCH) })
+      exposed_derived_secrets: SSZMutableVector<ValidatorIndicesSSZList> = SSZObjectFactory.INSTANCE.SSZVector(ValidatorIndicesSSZList::class, MutableList(EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS.toInt()) { INSTANCE.ValidatorIndicesSSZList(max_size = MAX_EARLY_DERIVED_SECRET_REVEALS * SLOTS_PER_EPOCH) })
   ): BeaconState
 
   fun Store(

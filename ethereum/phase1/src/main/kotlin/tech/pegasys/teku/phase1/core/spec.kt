@@ -43,10 +43,9 @@ import tech.pegasys.teku.phase1.ssz.Bytes
 import tech.pegasys.teku.phase1.ssz.Bytes32
 import tech.pegasys.teku.phase1.ssz.CDict
 import tech.pegasys.teku.phase1.ssz.SSZBitList
-import tech.pegasys.teku.phase1.ssz.SSZList
+import tech.pegasys.teku.phase1.ssz.SSZMutableList
 import tech.pegasys.teku.phase1.ssz.SSZObject
 import tech.pegasys.teku.phase1.ssz.SSZObjectFactory
-import tech.pegasys.teku.phase1.ssz.SSZVector
 import tech.pegasys.teku.phase1.ssz.Sequence
 import tech.pegasys.teku.phase1.ssz.boolean
 import tech.pegasys.teku.phase1.ssz.uint64
@@ -1540,7 +1539,7 @@ fun process_crosslinks(state: BeaconState, shard_transitions: Sequence<ShardTran
   }
 }
 
-fun get_indices_from_committee(committee: SSZList<ValidatorIndex>, bits: SSZBitList): SSZList<ValidatorIndex> {
+fun get_indices_from_committee(committee: SSZMutableList<ValidatorIndex>, bits: SSZBitList): SSZMutableList<ValidatorIndex> {
   assert((len(bits) == len(committee)))
   return SSZObjectFactory.INSTANCE.SSZList(ValidatorIndex::class, MAX_VALIDATORS_PER_COMMITTEE, enumerate(committee).filter { (i, _) -> bits[i] }.map { (_, validator_index) -> validator_index }.toMutableList())
 }
@@ -1762,9 +1761,9 @@ fun upgrade_to_phase1(pre: tech.pegasys.teku.phase1.phase0.BeaconState): BeaconS
           current_version = PHASE_1_FORK_VERSION,
           epoch = epoch),
       latest_block_header = pre.latest_block_header.toPhase1(),
-      block_roots = pre.block_roots,
-      state_roots = pre.state_roots,
-      historical_roots = pre.historical_roots,
+      block_roots = SSZObjectFactory.INSTANCE.SSZVector(Root::class, pre.block_roots),
+      state_roots = SSZObjectFactory.INSTANCE.SSZVector(Root::class, pre.state_roots),
+      historical_roots = SSZObjectFactory.INSTANCE.SSZList(Root::class, HISTORICAL_ROOTS_LIMIT, pre.historical_roots),
       eth1_data = pre.eth1_data.toPhase1(),
       eth1_data_votes = SSZObjectFactory.INSTANCE.SSZList(Eth1Data::class, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH, pre.eth1_data_votes.map {it.toPhase1()}.toMutableList()),
       eth1_deposit_index = pre.eth1_deposit_index,
@@ -1781,12 +1780,12 @@ fun upgrade_to_phase1(pre: tech.pegasys.teku.phase1.phase0.BeaconState): BeaconS
             next_custody_secret_to_reveal = get_custody_period_for_validator(ValidatorIndex(i), epoch).value.toLong().toULong(),
             max_reveal_lateness = 0uL)
       }.toMutableList()),
-      balances = pre.balances,
-      randao_mixes = pre.randao_mixes,
-      slashings = pre.slashings,
+      balances = SSZObjectFactory.INSTANCE.SSZList(Gwei::class, VALIDATOR_REGISTRY_LIMIT, pre.balances),
+      randao_mixes = SSZObjectFactory.INSTANCE.SSZVector(Root::class, pre.randao_mixes),
+      slashings = SSZObjectFactory.INSTANCE.SSZVector(Gwei::class, pre.slashings),
       previous_epoch_attestations = SSZObjectFactory.INSTANCE.SSZList(PendingAttestation::class, MAX_ATTESTATIONS * SLOTS_PER_EPOCH),
       current_epoch_attestations = SSZObjectFactory.INSTANCE.SSZList(PendingAttestation::class, MAX_ATTESTATIONS * SLOTS_PER_EPOCH),
-      justification_bits = pre.justification_bits,
+      justification_bits = SSZObjectFactory.INSTANCE.SSZBitVector(pre.justification_bits),
       previous_justified_checkpoint = pre.previous_justified_checkpoint.toPhase1(),
       current_justified_checkpoint = pre.current_justified_checkpoint.toPhase1(),
       finalized_checkpoint = pre.finalized_checkpoint.toPhase1(),

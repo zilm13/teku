@@ -47,38 +47,45 @@ interface SSZComposite {
   fun hash_tree_root(): Bytes32
 }
 
-interface SSZMutableCollection<T : Any> : Sequence<T>, SSZComposite {
+interface SSZImmutableCollection<T: Any> : Sequence<T>, SSZComposite {
   val type: KClass<T>
   operator fun get(index: ULong): T
-  operator fun set(index: ULong, item: T): T
-  operator fun set(index: Int, item: T): T = set(index.toULong(), item)
   override operator fun get(index: Int): T = get(index.toULong())
 }
 
-interface SSZList<T : Any> : SSZMutableCollection<T> {
+interface SSZMutableCollection<T : Any> : SSZImmutableCollection<T> {
+  operator fun set(index: ULong, item: T): T
+  operator fun set(index: Int, item: T): T = set(index.toULong(), item)
+}
+
+interface SSZList<T : Any> : SSZImmutableCollection<T> {
   val maxSize: ULong
+}
+
+interface SSZMutableList<T : Any> : SSZList<T>, SSZMutableCollection<T> {
   fun append(item: T)
 }
 
-interface SSZBitList : SSZList<Boolean>
-interface SSZByteList : SSZList<Byte>
-interface SSZVector<T : Any> : SSZMutableCollection<T>
-interface SSZBitVector : SSZVector<Boolean>
+interface SSZBitList : SSZMutableList<Boolean>
+interface SSZByteList : SSZMutableList<Byte>
+interface SSZVector<T : Any> : SSZImmutableCollection<T>
+interface SSZMutableVector<T : Any> : SSZVector<T>, SSZMutableCollection<T>
+interface SSZBitVector : SSZMutableVector<Boolean>
 
 interface SSZObjectFactory {
   companion object {
     var INSTANCE: SSZObjectFactory = object : SSZObjectFactory {
-      override fun <T : Any> SSZList(type: KClass<T>, maxSize: ULong, items: MutableList<T>): SSZList<T> = TODO("Not yet implemented")
+      override fun <T : Any> SSZList(type: KClass<T>, maxSize: ULong, items: MutableList<T>): SSZMutableList<T> = TODO("Not yet implemented")
       override fun SSZByteList(maxSize: ULong, items: MutableList<Byte>): SSZByteList = TODO("Not yet implemented")
       override fun SSZBitList(maxSize: ULong, items: MutableList<Boolean>): SSZBitList = TODO("Not yet implemented")
-      override fun <T : Any> SSZVector(type: KClass<T>, items: MutableList<T>): SSZVector<T>  = TODO("Not yet implemented")
+      override fun <T : Any> SSZVector(type: KClass<T>, items: MutableList<T>): SSZMutableVector<T>  = TODO("Not yet implemented")
       override fun SSZBitVector(items: MutableList<Boolean>): SSZBitVector = TODO("Not yet implemented")
     }
   }
 
-  fun <T : Any> SSZList(type: KClass<T>, maxSize: ULong, items: MutableList<T> = mutableListOf()): SSZList<T>
+  fun <T : Any> SSZList(type: KClass<T>, maxSize: ULong, items: MutableList<T> = mutableListOf()): SSZMutableList<T>
   fun SSZByteList(maxSize: ULong, items: MutableList<Byte> = mutableListOf()): SSZByteList
   fun SSZBitList(maxSize: ULong, items: MutableList<Boolean> = mutableListOf()): SSZBitList
-  fun <T : Any> SSZVector(type: KClass<T>, items: MutableList<T>): SSZVector<T>
+  fun <T : Any> SSZVector(type: KClass<T>, items: MutableList<T>): SSZMutableVector<T>
   fun SSZBitVector(items: MutableList<Boolean>): SSZBitVector
 }
