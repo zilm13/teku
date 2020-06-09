@@ -121,6 +121,21 @@ internal class ForkDelegate(
     get() = cast(v.epoch, Epoch::class)
 
   override fun hash_tree_root(): Bytes32 = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is ForkDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class ForkDataDelegate(
@@ -136,6 +151,21 @@ internal class ForkDataDelegate(
     get() = cast(v.genesisValidatorsRoot, Root::class)
 
   override fun hash_tree_root(): Bytes32 = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is ForkDataDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class CheckpointDelegate(
@@ -151,6 +181,21 @@ internal class CheckpointDelegate(
     get() = v.root
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is CheckpointDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class ValidatorDelegate(
@@ -227,6 +272,21 @@ internal class ValidatorDelegate(
     set(value) {}
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is ValidatorDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class AttestationDataDelegate(
@@ -267,6 +327,21 @@ internal class AttestationDataDelegate(
     get() = TODO("Not yet implemented")
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is AttestationDataDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class PendingAttestationDelegate(
@@ -302,6 +377,21 @@ internal class PendingAttestationDelegate(
     set(value) {}
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is PendingAttestationDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class Eth1DataDelegate(
@@ -337,6 +427,21 @@ internal class Eth1DataDelegate(
     get() = v.block_hash
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is Eth1DataDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class HistoricalBatchDelegate(
@@ -355,6 +460,21 @@ internal class HistoricalBatchDelegate(
     get() = SSZMutableVectorDelegate(v.stateRoots, Root::class)
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is HistoricalBatchDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class DepositMessageDelegate(
@@ -378,6 +498,21 @@ internal class DepositMessageDelegate(
     get() = cast(v.amount, Gwei::class)
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is DepositMessageDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class DepositDataDelegate(
@@ -408,6 +543,21 @@ internal class DepositDataDelegate(
     get() = cast(v.signature, BLSSignature::class)
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is DepositDataDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class BeaconBlockHeaderDelegate(
@@ -460,6 +610,21 @@ internal class BeaconBlockHeaderDelegate(
   ) = BeaconBlockHeaderDelegate(slot, proposer_index, parent_root, state_root, body_root)
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is BeaconBlockHeaderDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class SigningRootDelegate(
@@ -474,6 +639,21 @@ internal class SigningRootDelegate(
     get() = cast(v.domain, Domain::class)
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is SigningRootDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class AttestationDelegate(
@@ -503,6 +683,21 @@ internal class AttestationDelegate(
     get() = cast(v.aggregate_signature, BLSSignature::class)
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is AttestationDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class IndexedAttestationDelegate(
@@ -524,6 +719,21 @@ internal class IndexedAttestationDelegate(
     get() = TODO("Not yet implemented")
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is IndexedAttestationDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class AttesterSlashingDelegate(
@@ -544,6 +754,21 @@ internal class AttesterSlashingDelegate(
     get() = IndexedAttestationDelegate(v.attestation_2)
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is AttesterSlashingDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class DepositDelegate(
@@ -564,6 +789,21 @@ internal class DepositDelegate(
     get() = DepositDataDelegate(v.data)
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is DepositDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class VoluntaryExitDelegate(
@@ -584,6 +824,21 @@ internal class VoluntaryExitDelegate(
     get() = cast(v.validator_index, ValidatorIndex::class)
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is VoluntaryExitDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class SignedVoluntaryExitDelegate(
@@ -604,6 +859,21 @@ internal class SignedVoluntaryExitDelegate(
     get() = cast(v.signature, BLSSignature::class)
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is SignedVoluntaryExitDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class SignedBeaconBlockHeaderDelegate(
@@ -624,6 +894,21 @@ internal class SignedBeaconBlockHeaderDelegate(
     get() = cast(v.signature, BLSSignature::class)
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is SignedBeaconBlockHeaderDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class ProposerSlashingDelegate(
@@ -644,6 +929,21 @@ internal class ProposerSlashingDelegate(
     get() = SignedBeaconBlockHeaderDelegate(v.header_2)
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is ProposerSlashingDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class BeaconBlockBodyDelegate(
@@ -708,6 +1008,21 @@ internal class BeaconBlockBodyDelegate(
     get() = TODO("Not yet implemented")
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is BeaconBlockBodyDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class BeaconBlockDelegate(
@@ -742,6 +1057,21 @@ internal class BeaconBlockDelegate(
     get() = BeaconBlockBodyDelegate(v.body)
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is BeaconBlockDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class SignedBeaconBlockDelegate(
@@ -762,6 +1092,21 @@ internal class SignedBeaconBlockDelegate(
     get() = cast(v.signature, BLSSignature::class)
 
   override fun hash_tree_root() = v.hash_tree_root()
+
+  override fun equals(other: Any?): Boolean {
+    if (other is SignedBeaconBlockDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
 internal class BeaconStateDelegate(internal var v: TekuBeaconState) : BeaconState {
@@ -967,9 +1312,24 @@ internal class BeaconStateDelegate(internal var v: TekuBeaconState) : BeaconStat
       next_light_committee,
       exposed_derived_secrets
   )
+
+  override fun equals(other: Any?): Boolean {
+    if (other is BeaconStateDelegate) {
+      return v == other.v
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return v.hashCode()
+  }
+
+  override fun toString(): String {
+    return v.toString()
+  }
 }
 
-internal class StoreDelegate(
+internal class StoreImpl(
     override var time: uint64,
     override val genesis_time: uint64,
     override var justified_checkpoint: Checkpoint,
@@ -1291,7 +1651,7 @@ class TekuDataObjectFactory : DataObjectFactory {
       block_states: CDict<Root, BeaconState>,
       checkpoint_states: CDict<Checkpoint, BeaconState>,
       latest_messages: CDict<ValidatorIndex, LatestMessage>
-  ): Store = StoreDelegate(
+  ): Store = StoreImpl(
       time,
       genesis_time,
       justified_checkpoint,

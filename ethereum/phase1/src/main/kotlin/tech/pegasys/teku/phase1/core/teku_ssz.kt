@@ -28,30 +28,30 @@ abstract class SSZMutableCollectionDelegate<Onotole : Any, Teku : Any>(
     override final val type: KClass<Onotole>
 ) : SSZMutableCollection<Onotole> {
   internal val tekuType: KClass<Teku> = TypeConverter.match(type)
-  internal abstract val data: TekuSSZMutableCollection<Teku>
+  internal abstract val delegate: TekuSSZMutableCollection<Teku>
 
-  override val size: Int = data.size()
-  override fun contains(element: Onotole): Boolean = data.contains(cast(element, tekuType))
+  override val size: Int = delegate.size()
+  override fun contains(element: Onotole): Boolean = delegate.contains(cast(element, tekuType))
   override fun get(index: ULong): Onotole {
-    val item = cast(data[index.toInt()], type)
+    val item = cast(delegate[index.toInt()], type)
     if (item is Mutable<*>) {
       item.callback = { value -> this[index] = value as Onotole }
     }
     return item
   }
 
-  override fun indexOf(element: Onotole) = data.indexOf(cast(element, tekuType))
-  override fun isEmpty() = data.isEmpty
+  override fun indexOf(element: Onotole) = delegate.indexOf(cast(element, tekuType))
+  override fun isEmpty() = delegate.isEmpty
   override fun iterator(): MutableIterator<Onotole> = object : MutableIterator<Onotole> {
-    private val iterator = data.iterator()
+    private val iterator = delegate.iterator()
     override fun hasNext() = iterator.hasNext()
     override fun next() = cast(iterator.next(), type)
     override fun remove() = iterator.remove()
   }
 
-  override fun lastIndexOf(element: Onotole) = data.lastIndexOf(cast(element, tekuType))
+  override fun lastIndexOf(element: Onotole) = delegate.lastIndexOf(cast(element, tekuType))
   override fun subList(fromIndex: Int, toIndex: Int): List<Onotole> {
-    return data.stream()
+    return delegate.stream()
         .skip(fromIndex.toLong())
         .limit((toIndex - fromIndex + 1).toLong())
         .map { cast(it, type) }
@@ -59,8 +59,8 @@ abstract class SSZMutableCollectionDelegate<Onotole : Any, Teku : Any>(
   }
 
   override operator fun set(index: ULong, item: Onotole): Onotole {
-    val oldItem = data[index.toInt()]
-    data.set(index.toInt(), cast(item, tekuType))
+    val oldItem = delegate[index.toInt()]
+    delegate.set(index.toInt(), cast(item, tekuType))
     return cast(oldItem, type)
   }
 
@@ -70,7 +70,7 @@ abstract class SSZMutableCollectionDelegate<Onotole : Any, Teku : Any>(
 }
 
 open class SSZMutableListDelegate<Onotole : Any, Teku : Any>(
-    override val data: TekuSSZMutableList<Teku>,
+    override val delegate: TekuSSZMutableList<Teku>,
     type: KClass<Onotole>
 ) : SSZMutableList<Onotole>, SSZMutableCollectionDelegate<Onotole, Teku>(type) {
 
@@ -86,30 +86,45 @@ open class SSZMutableListDelegate<Onotole : Any, Teku : Any>(
       : this(TekuSSZList.createMutable(items), type)
 
   override val maxSize: ULong
-    get() = data.maxSize.toULong()
+    get() = delegate.maxSize.toULong()
 
   override fun append(item: Onotole) {
-    data.add(cast(item, tekuType))
+    delegate.add(cast(item, tekuType))
   }
 
   override fun hash_tree_root(): Bytes32 {
     return when (tekuType) {
       UnsignedLong::class ->
         HashTreeUtil.hash_tree_root_list_ul(
-            (data as TekuSSZList<UnsignedLong>)
+            (delegate as TekuSSZList<UnsignedLong>)
                 .map(Bytes::class.java) { SSZ.encodeUInt64(it.toLong()) }
         )
       org.apache.tuweni.bytes.Bytes32::class ->
         HashTreeUtil.hash_tree_root_list_bytes(
-            data as TekuSSZList<org.apache.tuweni.bytes.Bytes32>
+            delegate as TekuSSZList<org.apache.tuweni.bytes.Bytes32>
         )
       else ->
-        HashTreeUtil.hash_tree_root(HashTreeUtil.SSZTypes.LIST_OF_COMPOSITE, data)
+        HashTreeUtil.hash_tree_root(HashTreeUtil.SSZTypes.LIST_OF_COMPOSITE, delegate)
     }
+  }
+
+  override fun equals(other: Any?): Boolean {
+    if (other is SSZMutableListDelegate<*, *>) {
+      return other.delegate == delegate
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return delegate.hashCode()
+  }
+
+  override fun toString(): String {
+    return delegate.toString()
   }
 }
 
-class SSZBitListDelegate(internal val data: Bitlist) : SSZBitList {
+class SSZBitListDelegate(internal val delegate: Bitlist) : SSZBitList {
   override val type: KClass<Boolean> = Boolean::class
 
   constructor(items: MutableList<Boolean>, maxSize: ULong) : this(
@@ -121,17 +136,32 @@ class SSZBitListDelegate(internal val data: Bitlist) : SSZBitList {
   )
 
   override val maxSize: ULong
-    get() = data.maxSize.toULong()
-  override val size: Int = data.currentSize
-  override fun get(index: ULong): Boolean = data.getBit(index.toInt())
+    get() = delegate.maxSize.toULong()
+  override val size: Int = delegate.currentSize
+  override fun get(index: ULong): Boolean = delegate.getBit(index.toInt())
   override fun isEmpty() = size == 0
   override fun set(index: ULong, element: Boolean): Boolean {
     val oldItem = this[index.toInt()]
-    data.setBit(index.toInt())
+    delegate.setBit(index.toInt())
     return oldItem
   }
 
-  override fun hash_tree_root() = HashTreeUtil.hash_tree_root_bitlist(data)
+  override fun hash_tree_root() = HashTreeUtil.hash_tree_root_bitlist(delegate)
+
+  override fun equals(other: Any?): Boolean {
+    if (other is SSZBitListDelegate) {
+      return other.delegate == delegate
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return delegate.hashCode()
+  }
+
+  override fun toString(): String {
+    return delegate.toString()
+  }
 
   override fun append(item: Boolean) = TODO("Not yet implemented")
   override fun contains(element: Boolean) = TODO("Not yet implemented")
@@ -148,7 +178,7 @@ class SSZByteListDelegate(items: MutableList<Byte>, maxSize: ULong)
   : SSZMutableListDelegate<Bytes1, Byte>(items, maxSize, Bytes1::class), SSZByteList
 
 class SSZMutableVectorDelegate<Onotole : Any, Teku : Any>(
-    override val data: TekuSSZMutableVector<Teku>,
+    override val delegate: TekuSSZMutableVector<Teku>,
     type: KClass<Onotole>
 ) : SSZMutableVector<Onotole>, SSZMutableCollectionDelegate<Onotole, Teku>(type) {
 
@@ -171,16 +201,31 @@ class SSZMutableVectorDelegate<Onotole : Any, Teku : Any>(
   override fun hash_tree_root(): Bytes32 {
     return when (tekuType) {
       UnsignedLong::class -> {
-        val tekuList = data as TekuSSZVector<UnsignedLong>
+        val tekuList = delegate as TekuSSZVector<UnsignedLong>
         HashTreeUtil.hash_tree_root_vector_unsigned_long(tekuList)
       }
       else ->
-        HashTreeUtil.hash_tree_root(HashTreeUtil.SSZTypes.VECTOR_OF_COMPOSITE, data)
+        HashTreeUtil.hash_tree_root(HashTreeUtil.SSZTypes.VECTOR_OF_COMPOSITE, delegate)
     }
+  }
+
+  override fun equals(other: Any?): Boolean {
+    if (other is SSZMutableVectorDelegate<*, *>) {
+      return other.delegate == delegate
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return delegate.hashCode()
+  }
+
+  override fun toString(): String {
+    return delegate.toString()
   }
 }
 
-class SSZBitVectorDelegate(internal val data: Bitvector) : SSZBitVector {
+class SSZBitVectorDelegate(internal val delegate: Bitvector) : SSZBitVector {
   override val type: KClass<Boolean> = Boolean::class
 
   constructor(items: MutableList<Boolean>) : this(
@@ -191,16 +236,31 @@ class SSZBitVectorDelegate(internal val data: Bitvector) : SSZBitVector {
       )
   )
 
-  override val size: Int = data.size
-  override fun get(index: ULong): Boolean = data.getBit(index.toInt())
+  override val size: Int = delegate.size
+  override fun get(index: ULong): Boolean = delegate.getBit(index.toInt())
   override fun isEmpty() = size == 0
   override fun set(index: ULong, element: Boolean): Boolean {
     val oldItem = this[index.toInt()]
-    data.setBit(index.toInt())
+    delegate.setBit(index.toInt())
     return oldItem
   }
 
-  override fun hash_tree_root() = HashTreeUtil.hash_tree_root_bitvector(data)
+  override fun hash_tree_root() = HashTreeUtil.hash_tree_root_bitvector(delegate)
+
+  override fun equals(other: Any?): Boolean {
+    if (other is SSZBitListDelegate) {
+      return other.delegate == delegate
+    }
+    return false
+  }
+
+  override fun hashCode(): Int {
+    return delegate.hashCode()
+  }
+
+  override fun toString(): String {
+    return delegate.toString()
+  }
 
   override fun contains(element: Boolean) = TODO("Not yet implemented")
   override fun indexOf(element: Boolean) = TODO("Not yet implemented")

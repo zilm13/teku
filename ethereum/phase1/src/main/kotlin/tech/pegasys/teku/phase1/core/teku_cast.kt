@@ -133,7 +133,7 @@ interface TypeConverter {
         is TekuBytes4 -> return o.wrappedBytes as T
         is BLSPubkey -> return TekuBLSPublicKey.fromBytesCompressed(o) as T
         is TekuBLSPublicKey -> return BLSPubkey(org.apache.tuweni.bytes.Bytes48.wrap(o.toBytesCompressed())) as T
-        is ValidatorIndicesSSZListDelegate -> return o.data as T
+        is ValidatorIndicesSSZListDelegate -> return o.delegate as T
         is TekuValidatorIndicesSSZList -> return ValidatorIndicesSSZListDelegate(o, ValidatorIndex::class) as T
         is ValidatorDelegate -> return o.v as T
         is TekuValidator -> return ValidatorDelegate(o) as T
@@ -194,9 +194,9 @@ interface TypeConverter {
         is BeaconStateDelegate -> return o.v as T
         is TekuBeaconState -> return BeaconStateDelegate(o) as T
         is AttestationCustodyBitWrapper -> TODO()
-        is SSZBitListDelegate -> return o.data as T
+        is SSZBitListDelegate -> return o.delegate as T
         is TekuBitlist -> return SSZBitListDelegate(o) as T
-        is SSZBitVectorDelegate -> return o.data as T
+        is SSZBitVectorDelegate -> return o.delegate as T
         is TekuBitvector -> return SSZBitVectorDelegate(o) as T
         else -> throw IllegalArgumentException("Unknown type ${o::class::qualifiedName}")
       }
