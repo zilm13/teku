@@ -74,7 +74,7 @@ public class ShardTransition implements Merkleizable, SimpleOffsetSerializable, 
                             .toHexString()
                             .substring(2))
                 .collect(Collectors.joining())),
-        SimpleOffsetSerializer.serializeVariableCompositeList(shard_states),
+        SimpleOffsetSerializer.serializeFixedCompositeList(shard_states),
         Bytes.EMPTY);
   }
 
