@@ -1,4 +1,4 @@
-package tech.pegasys.teku.datastructures.operations;
+package tech.pegasys.teku.phase1.datastructures.operations;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.primitives.UnsignedLong;
@@ -12,7 +12,8 @@ import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.ssz.SSZ;
 import tech.pegasys.teku.bls.BLSSignature;
-import tech.pegasys.teku.datastructures.shard.ShardTransition;
+import tech.pegasys.teku.datastructures.operations.Attestation;
+import tech.pegasys.teku.phase1.datastructures.shard.ShardTransition;
 import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
 import tech.pegasys.teku.ssz.SSZTypes.SSZContainer;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;

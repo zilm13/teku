@@ -1,4 +1,4 @@
-package tech.pegasys.teku.datastructures.state;
+package tech.pegasys.teku.phase1.datastructures.state;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.primitives.UnsignedLong;

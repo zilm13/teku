@@ -1,4 +1,4 @@
-package tech.pegasys.teku.datastructures.shard;
+package tech.pegasys.teku.phase1.datastructures.shard;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.primitives.UnsignedLong;

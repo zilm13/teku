@@ -1,4 +1,4 @@
-package tech.pegasys.teku.datastructures.operations;
+package tech.pegasys.teku.phase1.datastructures.shard;
 
 import com.google.common.base.MoreObjects;
 import java.util.ArrayList;
@@ -14,12 +14,12 @@ import tech.pegasys.teku.util.hashtree.HashTreeUtil;
 import tech.pegasys.teku.util.hashtree.HashTreeUtil.SSZTypes;
 import tech.pegasys.teku.util.hashtree.Merkleizable;
 
-public class SignedCustodySlashing implements Merkleizable, SimpleOffsetSerializable, SSZContainer {
+public class SignedShardBlock implements Merkleizable, SimpleOffsetSerializable, SSZContainer {
 
-  private final CustodySlashing message;
+  private final ShardBlock message;
   private final BLSSignature signature;
 
-  public SignedCustodySlashing(CustodySlashing message, BLSSignature signature) {
+  public SignedShardBlock(ShardBlock message, BLSSignature signature) {
     this.message = message;
     this.signature = signature;
   }
@@ -50,7 +50,7 @@ public class SignedCustodySlashing implements Merkleizable, SimpleOffsetSerializ
             HashTreeUtil.hash_tree_root(SSZTypes.VECTOR_OF_BASIC, signature.toBytes())));
   }
 
-  public CustodySlashing getMessage() {
+  public ShardBlock getMessage() {
     return message;
   }
 
@@ -63,10 +63,10 @@ public class SignedCustodySlashing implements Merkleizable, SimpleOffsetSerializ
     if (this == o) {
       return true;
     }
-    if (!(o instanceof SignedCustodySlashing)) {
+    if (!(o instanceof SignedShardBlock)) {
       return false;
     }
-    SignedCustodySlashing that = (SignedCustodySlashing) o;
+    SignedShardBlock that = (SignedShardBlock) o;
     return Objects.equals(message, that.message) && Objects.equals(signature, that.signature);
   }
 
