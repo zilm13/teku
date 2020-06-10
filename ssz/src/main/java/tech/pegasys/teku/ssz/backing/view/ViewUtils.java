@@ -19,7 +19,7 @@ import org.apache.tuweni.bytes.MutableBytes;
 import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
 import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
-import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
+import tech.pegasys.teku.ssz.backing.BasicView;
 import tech.pegasys.teku.ssz.backing.ListViewRead;
 import tech.pegasys.teku.ssz.backing.ListViewWrite;
 import tech.pegasys.teku.ssz.backing.VectorViewRead;
@@ -108,24 +108,15 @@ public class ViewUtils {
    * Creates immutable list of basic type values with maxSize `list.maxSize()` from {@link SSZList}
    * value
    */
-  public static <
-          Type, View extends AbstractBasicView<Type, View>, ViewType extends BasicViewType<View>>
-      ListViewRead<? extends AbstractBasicView<Type, View>> createListOfBasicsView(
-          SSZList<? extends Type> list, ViewType viewType, Function<Type, View> viewCtor) {
-    ListViewWrite<View> viewWrite =
-        new ListViewType<View>(viewType, list.getMaxSize()).getDefault().createWritableCopy();
+  public static <TRawType, TView extends BasicView<TRawType>>
+      ListViewRead<TView> createListOfBasicsView(
+          SSZList<TRawType> list,
+          BasicViewType<TView> viewType,
+          Function<TRawType, TView> viewCtor) {
+    ListViewWrite<TView> viewWrite =
+        new ListViewType<TView>(viewType, list.getMaxSize()).getDefault().createWritableCopy();
     list.forEach(item -> viewWrite.append(viewCtor.apply(item)));
     return viewWrite.commitChanges();
-  }
-
-  /** Converts list of basic type values to {@link SSZList} value */
-  public static <Type, View extends AbstractBasicView<Type, View>> SSZList<Type> getListOfBasics(
-      Class<? extends Type> typeClass, ListViewRead<View> listView) {
-    SSZMutableList<Type> ret = SSZList.createMutable(typeClass, listView.getType().getMaxLength());
-    for (int i = 0; i < listView.size(); i++) {
-      ret.add(listView.get(i).get());
-    }
-    return ret;
   }
 
   /** Creates immutable list of bytes with maxSize `list.maxSize()` from {@link SSZList} value */
@@ -138,16 +129,6 @@ public class ViewUtils {
             .getDefault()
             .createWritableCopy();
     list.forEach(item -> ret.append(ViewUtils.createVectorFromBytes(item)));
-    return ret;
-  }
-
-  /** Converts list of bytes to {@link SSZList} value */
-  public static SSZList<Bytes> getListOfBytes(ListViewRead<VectorViewRead<ByteView>> listView) {
-    SSZMutableList<Bytes> ret =
-        SSZList.createMutable(Bytes.class, listView.getType().getMaxLength());
-    for (int i = 0; i < listView.size(); i++) {
-      ret.add(ViewUtils.getAllBytes(listView.get(i)));
-    }
     return ret;
   }
 }

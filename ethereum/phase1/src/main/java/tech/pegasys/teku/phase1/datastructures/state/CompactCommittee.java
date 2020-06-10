@@ -9,6 +9,7 @@ import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.ssz.SSZ;
 import tech.pegasys.teku.bls.BLSPublicKey;
+import tech.pegasys.teku.ssz.SSZTypes.SSZBackingList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZContainer;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
 import tech.pegasys.teku.ssz.backing.VectorViewRead;
@@ -17,6 +18,7 @@ import tech.pegasys.teku.ssz.backing.type.BasicViewTypes;
 import tech.pegasys.teku.ssz.backing.type.ContainerViewType;
 import tech.pegasys.teku.ssz.backing.type.ListViewType;
 import tech.pegasys.teku.ssz.backing.type.VectorViewType;
+import tech.pegasys.teku.ssz.backing.view.AbstractBasicView;
 import tech.pegasys.teku.ssz.backing.view.AbstractImmutableContainer;
 import tech.pegasys.teku.ssz.backing.view.BasicViews.ByteView;
 import tech.pegasys.teku.ssz.backing.view.BasicViews.UInt64View;
@@ -96,11 +98,16 @@ public class CompactCommittee extends AbstractImmutableContainer
   }
 
   public SSZList<BLSPublicKey> getPubkeys() {
-    return ViewUtils.getListOfBytes(getAny(0)).map(BLSPublicKey.class, BLSPublicKey::fromBytes);
+    return new SSZBackingList<>(
+        BLSPublicKey.class,
+        getAny(0),
+        pubKey -> ViewUtils.createVectorFromBytes(pubKey.toBytes()),
+        bytes -> BLSPublicKey.fromBytes(ViewUtils.getAllBytes(bytes)));
   }
 
   public SSZList<UnsignedLong> getCompact_validators() {
-    return ViewUtils.getListOfBasics(UnsignedLong.class, getAny(1));
+    return new SSZBackingList<>(
+        UnsignedLong.class, getAny(1), UInt64View::new, AbstractBasicView::get);
   }
 
   @Override
