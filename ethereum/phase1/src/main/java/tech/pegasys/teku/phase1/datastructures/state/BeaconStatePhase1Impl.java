@@ -29,10 +29,10 @@ import tech.pegasys.teku.datastructures.blocks.Eth1Data;
 import tech.pegasys.teku.datastructures.state.BeaconStateCache;
 import tech.pegasys.teku.datastructures.state.Checkpoint;
 import tech.pegasys.teku.datastructures.state.Fork;
-import tech.pegasys.teku.datastructures.state.PendingAttestation;
 import tech.pegasys.teku.datastructures.state.TransitionCaches;
-import tech.pegasys.teku.datastructures.state.Validator;
 import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
+import tech.pegasys.teku.phase1.datastructures.config.ConstantsPhase1;
+import tech.pegasys.teku.phase1.datastructures.shard.ShardState;
 import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZVector;
@@ -49,7 +49,7 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
     implements BeaconStatePhase1, BeaconStateCache {
 
   // The number of SimpleSerialize basic types in this SSZ Container/POJO.
-  public static final int SSZ_FIELD_COUNT = 14;
+  public static final int SSZ_FIELD_COUNT = 17;
 
   @Label("sos-ignore")
   private final TransitionCaches transitionCaches;
@@ -105,9 +105,9 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
 
   // Validator registry
   @SuppressWarnings("unused")
-  private final SSZList<Validator> validators =
+  private final SSZList<ValidatorPhase1> validators =
       SSZList.createMutable(
-          Validator.class,
+          ValidatorPhase1.class,
           Constants.VALIDATOR_REGISTRY_LIMIT); // List Bounded by VALIDATOR_REGISTRY_LIMIT
 
   @SuppressWarnings("unused")
@@ -131,16 +131,16 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
 
   // Attestations
   @SuppressWarnings("unused")
-  private final SSZList<PendingAttestation> previous_epoch_attestations =
+  private final SSZList<PendingAttestationPhase1> previous_epoch_attestations =
       SSZList.createMutable(
-          PendingAttestation.class,
+          PendingAttestationPhase1.class,
           Constants.MAX_ATTESTATIONS
               * Constants.SLOTS_PER_EPOCH); // List bounded by MAX_ATTESTATIONS * SLOTS_PER_EPOCH
 
   @SuppressWarnings("unused")
-  private final SSZList<PendingAttestation> current_epoch_attestations =
+  private final SSZList<PendingAttestationPhase1> current_epoch_attestations =
       SSZList.createMutable(
-          PendingAttestation.class,
+          PendingAttestationPhase1.class,
           Constants.MAX_ATTESTATIONS
               * Constants.SLOTS_PER_EPOCH); // List bounded by MAX_ATTESTATIONS * SLOTS_PER_EPOCH
 
@@ -159,8 +159,31 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
   @SuppressWarnings("unused")
   private final Checkpoint finalized_checkpoint = null;
 
+  // Phase 1
+  @SuppressWarnings("unused")
+  private final UnsignedLong current_epoch_start_shard = null;
+
+  @SuppressWarnings("unused")
+  private final SSZList<ShardState> shard_states =
+      SSZList.createMutable(
+          ShardState.class, ConstantsPhase1.MAX_SHARDS); //  List bounded by MAX_SHARDS
+
+  @SuppressWarnings("unused")
+  private final SSZList<Byte> online_countdown =
+      SSZList.createMutable(
+          Byte.class,
+          Constants.VALIDATOR_REGISTRY_LIMIT); //  List bounded by VALIDATOR_REGISTRY_LIMIT
+
+  @SuppressWarnings("unused")
+  private final SSZVector<ExposedValidatorIndices> exposed_derived_secrets =
+      SSZVector.createMutable(
+          ExposedValidatorIndices.class,
+          (int)
+              ConstantsPhase1.EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS); // Vector bounded by
+  // EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS
+
   @Label("sos-ignore")
-  private SSZList<Validator> validatorsCache;
+  private SSZList<ValidatorPhase1> validatorsCache;
 
   @Label("sos-ignore")
   private SSZList<UnsignedLong> balancesCache;
@@ -181,10 +204,19 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
   private SSZVector<Bytes32> randaoMixesCache;
 
   @Label("sos-ignore")
-  private SSZList<PendingAttestation> previousEpochAttestationsCache;
+  private SSZList<PendingAttestationPhase1> previousEpochAttestationsCache;
 
   @Label("sos-ignore")
-  private SSZList<PendingAttestation> currentEpochAttestationsCache;
+  private SSZList<PendingAttestationPhase1> currentEpochAttestationsCache;
+
+  @Label("sos-ignore")
+  private SSZList<ShardState> shardStatesCache;
+
+  @Label("sos-ignore")
+  private SSZList<Byte> onlineCountdownCache;
+
+  @Label("sos-ignore")
+  private SSZVector<ExposedValidatorIndices> exposedDerivedSecretsCache;
 
   public BeaconStatePhase1Impl() {
     super(BeaconStatePhase1.getSSZType());
@@ -224,7 +256,7 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
       UnsignedLong eth1_deposit_index,
 
       // Registry
-      SSZList<? extends Validator> validators,
+      SSZList<? extends ValidatorPhase1> validators,
       SSZList<UnsignedLong> balances,
 
       // Randomness
@@ -234,14 +266,22 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
       SSZVector<UnsignedLong> slashings,
 
       // Attestations
-      SSZList<PendingAttestation> previous_epoch_attestations,
-      SSZList<PendingAttestation> current_epoch_attestations,
+      SSZList<PendingAttestationPhase1> previous_epoch_attestations,
+      SSZList<PendingAttestationPhase1> current_epoch_attestations,
 
       // Finality
       Bitvector justification_bits,
       Checkpoint previous_justified_checkpoint,
       Checkpoint current_justified_checkpoint,
-      Checkpoint finalized_checkpoint) {
+      Checkpoint finalized_checkpoint,
+
+      // Phase 1
+      UnsignedLong current_epoch_start_shard,
+      SSZList<ShardState> shard_states,
+      SSZList<Byte> online_countdown,
+      CompactCommittee current_light_committee,
+      CompactCommittee next_light_committee,
+      SSZVector<ExposedValidatorIndices> exposed_derived_secrets) {
 
     super(
         BeaconStatePhase1.getSSZType(),
@@ -266,7 +306,13 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
                 justification_bits,
                 previous_justified_checkpoint,
                 current_justified_checkpoint,
-                finalized_checkpoint)
+                finalized_checkpoint,
+                current_epoch_start_shard,
+                shard_states,
+                online_countdown,
+                current_light_committee,
+                next_light_committee,
+                exposed_derived_secrets)
             .getBackingNode());
 
     transitionCaches = TransitionCaches.createNewEmpty();
@@ -288,7 +334,9 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
         + getEth1_data().getSSZFieldCount()
         + getPrevious_justified_checkpoint().getSSZFieldCount()
         + getCurrent_justified_checkpoint().getSSZFieldCount()
-        + getFinalized_checkpoint().getSSZFieldCount();
+        + getFinalized_checkpoint().getSSZFieldCount()
+        + getCurrent_light_committee().getSSZFieldCount()
+        + getNext_light_committee().getSSZFieldCount();
   }
 
   @Override
@@ -319,7 +367,12 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
         getJustification_bits().serialize(),
         SimpleOffsetSerializer.serialize(getPrevious_justified_checkpoint()),
         SimpleOffsetSerializer.serialize(getCurrent_justified_checkpoint()),
-        SimpleOffsetSerializer.serialize(getFinalized_checkpoint()));
+        SimpleOffsetSerializer.serialize(getFinalized_checkpoint()),
+        SSZ.encodeUInt64(getCurrent_epoch_start_shard().longValue()),
+        Bytes.EMPTY,
+        Bytes.EMPTY,
+        Bytes.EMPTY,
+        Bytes.EMPTY);
   }
 
   @Override
@@ -358,6 +411,15 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
         Collections.nCopies(getCurrent_justified_checkpoint().getSSZFieldCount(), Bytes.EMPTY));
     variablePartsList.addAll(
         Collections.nCopies(getFinalized_checkpoint().getSSZFieldCount(), Bytes.EMPTY));
+    variablePartsList.add(Bytes.EMPTY);
+    variablePartsList.add(SimpleOffsetSerializer.serializeFixedCompositeList(getShard_states()));
+    variablePartsList.add(
+        Bytes.fromHexString(
+            getOnline_countdown().stream()
+                .map(value -> SSZ.encodeUInt8(value & 0xFF).toHexString().substring(2))
+                .collect(Collectors.joining())));
+    variablePartsList.add(SimpleOffsetSerializer.serialize(getCurrent_light_committee()));
+    variablePartsList.add(SimpleOffsetSerializer.serialize(getNext_light_committee()));
     return variablePartsList;
   }
 
@@ -425,6 +487,12 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
         .add("previous_justified_checkpoint", state.getPrevious_justified_checkpoint())
         .add("current_justified_checkpoint", state.getCurrent_justified_checkpoint())
         .add("finalized_checkpoint", state.getFinalized_checkpoint())
+        .add("current_epoch_start_shard", state.getCurrent_epoch_start_shard())
+        .add("shard_states", state.getShard_states())
+        .add("online_countdown", state.getOnline_countdown())
+        .add("current_light_committee", state.getCurrent_light_committee())
+        .add("next_light_committee", state.getNext_light_committee())
+        .add("exposed_derived_secrets", state.getExposed_derived_secrets())
         .toString();
   }
 
@@ -438,7 +506,7 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
   }
 
   @Override
-  public SSZList<Validator> getValidators() {
+  public SSZList<ValidatorPhase1> getValidators() {
     return validatorsCache != null
         ? validatorsCache
         : (validatorsCache = BeaconStatePhase1.super.getValidators());
@@ -487,7 +555,7 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
   }
 
   @Override
-  public SSZList<PendingAttestation> getPrevious_epoch_attestations() {
+  public SSZList<PendingAttestationPhase1> getPrevious_epoch_attestations() {
     return previousEpochAttestationsCache != null
         ? previousEpochAttestationsCache
         : (previousEpochAttestationsCache =
@@ -495,9 +563,30 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
   }
 
   @Override
-  public SSZList<PendingAttestation> getCurrent_epoch_attestations() {
+  public SSZList<PendingAttestationPhase1> getCurrent_epoch_attestations() {
     return currentEpochAttestationsCache != null
         ? currentEpochAttestationsCache
         : (currentEpochAttestationsCache = BeaconStatePhase1.super.getCurrent_epoch_attestations());
+  }
+
+  @Override
+  public SSZList<ShardState> getShard_states() {
+    return shardStatesCache != null
+        ? shardStatesCache
+        : (shardStatesCache = BeaconStatePhase1.super.getShard_states());
+  }
+
+  @Override
+  public SSZList<Byte> getOnline_countdown() {
+    return onlineCountdownCache != null
+        ? onlineCountdownCache
+        : (onlineCountdownCache = BeaconStatePhase1.super.getOnline_countdown());
+  }
+
+  @Override
+  public SSZVector<ExposedValidatorIndices> getExposed_derived_secrets() {
+    return exposedDerivedSecretsCache != null
+        ? exposedDerivedSecretsCache
+        : (exposedDerivedSecretsCache = BeaconStatePhase1.super.getExposed_derived_secrets());
   }
 }

@@ -19,9 +19,7 @@ import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.datastructures.blocks.Eth1Data;
 import tech.pegasys.teku.datastructures.state.BeaconStateCache;
 import tech.pegasys.teku.datastructures.state.MutableBeaconState;
-import tech.pegasys.teku.datastructures.state.PendingAttestation;
 import tech.pegasys.teku.datastructures.state.TransitionCaches;
-import tech.pegasys.teku.datastructures.state.Validator;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableVector;
 import tech.pegasys.teku.ssz.backing.ViewRead;
@@ -42,15 +40,15 @@ class MutableBeaconStatePhase1Impl extends ContainerViewWriteImpl
   @Label("sos-ignore")
   private final boolean builder;
 
-  private SSZMutableList<Validator> validators;
+  private SSZMutableList<ValidatorPhase1> validators;
   private SSZMutableList<UnsignedLong> balances;
   private SSZMutableVector<Bytes32> blockRoots;
   private SSZMutableVector<Bytes32> stateRoots;
   private SSZMutableList<Bytes32> historicalRoots;
   private SSZMutableList<Eth1Data> eth1DataVotes;
   private SSZMutableVector<Bytes32> randaoMixes;
-  private SSZMutableList<PendingAttestation> previousEpochAttestations;
-  private SSZMutableList<PendingAttestation> currentEpochAttestations;
+  private SSZMutableList<PendingAttestationPhase1> previousEpochAttestations;
+  private SSZMutableList<PendingAttestationPhase1> currentEpochAttestations;
 
   MutableBeaconStatePhase1Impl(BeaconStatePhase1Impl backingImmutableView) {
     this(backingImmutableView, false);
@@ -104,7 +102,7 @@ class MutableBeaconStatePhase1Impl extends ContainerViewWriteImpl
   }
 
   @Override
-  public SSZMutableList<Validator> getValidators() {
+  public SSZMutableList<ValidatorPhase1> getValidators() {
     return validators != null
         ? validators
         : (validators = MutableBeaconStatePhase1.super.getValidators());
@@ -151,7 +149,7 @@ class MutableBeaconStatePhase1Impl extends ContainerViewWriteImpl
   }
 
   @Override
-  public SSZMutableList<PendingAttestation> getPrevious_epoch_attestations() {
+  public SSZMutableList<PendingAttestationPhase1> getPrevious_epoch_attestations() {
     return previousEpochAttestations != null
         ? previousEpochAttestations
         : (previousEpochAttestations =
@@ -159,7 +157,7 @@ class MutableBeaconStatePhase1Impl extends ContainerViewWriteImpl
   }
 
   @Override
-  public SSZMutableList<PendingAttestation> getCurrent_epoch_attestations() {
+  public SSZMutableList<PendingAttestationPhase1> getCurrent_epoch_attestations() {
     return currentEpochAttestations != null
         ? currentEpochAttestations
         : (currentEpochAttestations =
@@ -182,8 +180,8 @@ class MutableBeaconStatePhase1Impl extends ContainerViewWriteImpl
   }
 
   @Override
-  public <E1 extends Exception, E2 extends Exception, E3 extends Exception> BeaconStatePhase1 updated(
-      Mutator<E1, E2, E3> mutator) {
+  public <E1 extends Exception, E2 extends Exception, E3 extends Exception>
+      BeaconStatePhase1 updated(Mutator<E1, E2, E3> mutator) {
     throw new UnsupportedOperationException();
   }
 }

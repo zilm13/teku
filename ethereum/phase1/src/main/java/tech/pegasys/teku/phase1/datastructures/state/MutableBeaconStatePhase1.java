@@ -20,8 +20,7 @@ import tech.pegasys.teku.datastructures.blocks.BeaconBlockHeader;
 import tech.pegasys.teku.datastructures.blocks.Eth1Data;
 import tech.pegasys.teku.datastructures.state.Checkpoint;
 import tech.pegasys.teku.datastructures.state.Fork;
-import tech.pegasys.teku.datastructures.state.PendingAttestation;
-import tech.pegasys.teku.datastructures.state.Validator;
+import tech.pegasys.teku.phase1.datastructures.shard.ShardState;
 import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
 import tech.pegasys.teku.ssz.SSZTypes.SSZBackingList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZBackingVector;
@@ -29,6 +28,7 @@ import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableVector;
 import tech.pegasys.teku.ssz.backing.ContainerViewWriteRef;
 import tech.pegasys.teku.ssz.backing.view.AbstractBasicView;
+import tech.pegasys.teku.ssz.backing.view.BasicViews.ByteView;
 import tech.pegasys.teku.ssz.backing.view.BasicViews.Bytes32View;
 import tech.pegasys.teku.ssz.backing.view.BasicViews.UInt64View;
 import tech.pegasys.teku.ssz.backing.view.ViewUtils;
@@ -97,9 +97,9 @@ public interface MutableBeaconStatePhase1 extends BeaconStatePhase1, ContainerVi
 
   // Registry
   @Override
-  default SSZMutableList<Validator> getValidators() {
+  default SSZMutableList<ValidatorPhase1> getValidators() {
     return new SSZBackingList<>(
-        Validator.class, getAnyByRef(11), Function.identity(), Function.identity());
+        ValidatorPhase1.class, getAnyByRef(11), Function.identity(), Function.identity());
   }
 
   @Override
@@ -123,15 +123,15 @@ public interface MutableBeaconStatePhase1 extends BeaconStatePhase1, ContainerVi
 
   // Attestations
   @Override
-  default SSZMutableList<PendingAttestation> getPrevious_epoch_attestations() {
+  default SSZMutableList<PendingAttestationPhase1> getPrevious_epoch_attestations() {
     return new SSZBackingList<>(
-        PendingAttestation.class, getAnyByRef(15), Function.identity(), Function.identity());
+        PendingAttestationPhase1.class, getAnyByRef(15), Function.identity(), Function.identity());
   }
 
   @Override
-  default SSZMutableList<PendingAttestation> getCurrent_epoch_attestations() {
+  default SSZMutableList<PendingAttestationPhase1> getCurrent_epoch_attestations() {
     return new SSZBackingList<>(
-        PendingAttestation.class, getAnyByRef(16), Function.identity(), Function.identity());
+        PendingAttestationPhase1.class, getAnyByRef(16), Function.identity(), Function.identity());
   }
 
   // Finality
@@ -149,6 +149,36 @@ public interface MutableBeaconStatePhase1 extends BeaconStatePhase1, ContainerVi
 
   default void setFinalized_checkpoint(Checkpoint finalized_checkpoint) {
     set(20, finalized_checkpoint);
+  }
+
+  // Phase 1
+  default void setCurrent_epoch_start_shard(UnsignedLong current_epoch_start_shard) {
+    set(21, new UInt64View(current_epoch_start_shard));
+  }
+
+  @Override
+  default SSZMutableList<ShardState> getShard_states() {
+    return new SSZBackingList<>(
+        ShardState.class, getAnyByRef(22), Function.identity(), Function.identity());
+  }
+
+  @Override
+  default SSZMutableList<Byte> getOnline_countdown() {
+    return new SSZBackingList<>(Byte.class, getAnyByRef(23), ByteView::new, AbstractBasicView::get);
+  }
+
+  default void setCurrent_light_committee(CompactCommittee current_light_committee) {
+    set(24, current_light_committee);
+  }
+
+  default void setNext_light_committee(CompactCommittee next_light_committee) {
+    set(25, next_light_committee);
+  }
+
+  @Override
+  default SSZMutableVector<ExposedValidatorIndices> getExposed_derived_secrets() {
+    return new SSZBackingVector<>(
+        ExposedValidatorIndices.class, getAnyByRef(26), Function.identity(), Function.identity());
   }
 
   @Override
