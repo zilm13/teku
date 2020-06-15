@@ -15,9 +15,11 @@ package tech.pegasys.teku.datastructures.phase1.blocks;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.ssz.SSZ;
@@ -26,19 +28,21 @@ import tech.pegasys.teku.datastructures.blocks.Eth1Data;
 import tech.pegasys.teku.datastructures.operations.Deposit;
 import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
 import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
-import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
 import tech.pegasys.teku.datastructures.phase1.operations.AttestationPhase1;
 import tech.pegasys.teku.datastructures.phase1.operations.AttesterSlashingPhase1;
 import tech.pegasys.teku.datastructures.phase1.operations.CustodyKeyReveal;
 import tech.pegasys.teku.datastructures.phase1.operations.EarlyDerivedSecretReveal;
 import tech.pegasys.teku.datastructures.phase1.operations.SignedCustodySlashing;
 import tech.pegasys.teku.datastructures.phase1.shard.ShardTransition;
+import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
 import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
 import tech.pegasys.teku.ssz.SSZTypes.SSZContainer;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
+import tech.pegasys.teku.ssz.SSZTypes.SSZVector;
 import tech.pegasys.teku.ssz.sos.SimpleOffsetSerializable;
 import tech.pegasys.teku.util.hashtree.HashTreeUtil;
 import tech.pegasys.teku.util.hashtree.HashTreeUtil.SSZTypes;
+import tech.pegasys.teku.util.hashtree.Merkleizable;
 
 /** A Beacon block body */
 public class BeaconBlockBodyPhase1 implements SimpleOffsetSerializable, SSZContainer {
@@ -62,7 +66,7 @@ public class BeaconBlockBodyPhase1 implements SimpleOffsetSerializable, SSZConta
       custody_key_reveals; // List bounded by MAX_CUSTODY_KEY_REVEALS
   private final SSZList<EarlyDerivedSecretReveal>
       early_derived_secret_reveals; // List bounded by MAX_EARLY_DERIVED_SECRET_REVEALS
-  private final SSZList<ShardTransition> shard_transitions; // List bounded by MAX_SHARDS
+  private final SSZVector<ShardTransition> shard_transitions; // List bounded by MAX_SHARDS
   private final Bitvector
       light_client_signature_bitfield; // Vector size is LIGHT_CLIENT_COMMITTEE_SIZE
   private final BLSSignature light_client_signature;
@@ -79,7 +83,7 @@ public class BeaconBlockBodyPhase1 implements SimpleOffsetSerializable, SSZConta
       SSZList<SignedCustodySlashing> custody_slashings,
       SSZList<CustodyKeyReveal> custody_key_reveals,
       SSZList<EarlyDerivedSecretReveal> early_derived_secret_reveals,
-      SSZList<ShardTransition> shard_transitions,
+      SSZVector<ShardTransition> shard_transitions,
       Bitvector light_client_signature_bitfield,
       BLSSignature light_client_signature) {
     this.randao_reveal = randao_reveal;
@@ -113,6 +117,11 @@ public class BeaconBlockBodyPhase1 implements SimpleOffsetSerializable, SSZConta
     fixedPartsList.addAll(eth1_data.get_fixed_parts());
     fixedPartsList.addAll(List.of(SSZ.encode(writer -> writer.writeFixedBytes(graffiti))));
     fixedPartsList.addAll(Collections.nCopies(9, Bytes.EMPTY));
+    fixedPartsList.addAll(
+        shard_transitions.stream()
+            .map(SimpleOffsetSerializable::get_fixed_parts)
+            .flatMap(Collection::stream)
+            .collect(Collectors.toList()));
     fixedPartsList.addAll(List.of(light_client_signature_bitfield.serialize()));
     fixedPartsList.addAll(light_client_signature.get_fixed_parts());
     return fixedPartsList;
@@ -133,10 +142,12 @@ public class BeaconBlockBodyPhase1 implements SimpleOffsetSerializable, SSZConta
             SimpleOffsetSerializer.serializeFixedCompositeList(voluntary_exits),
             SimpleOffsetSerializer.serializeVariableCompositeList(custody_slashings),
             SimpleOffsetSerializer.serializeFixedCompositeList(custody_key_reveals),
-            SimpleOffsetSerializer.serializeFixedCompositeList(early_derived_secret_reveals),
-            SimpleOffsetSerializer.serializeVariableCompositeList(shard_transitions),
-            Bytes.EMPTY,
-            Bytes.EMPTY));
+            SimpleOffsetSerializer.serializeFixedCompositeList(early_derived_secret_reveals)));
+    variablePartsList.addAll(
+        shard_transitions.stream()
+            .map(SimpleOffsetSerializer::serialize)
+            .collect(Collectors.toList()));
+    variablePartsList.addAll(List.of(Bytes.EMPTY, Bytes.EMPTY));
     return variablePartsList;
   }
 
@@ -229,7 +240,7 @@ public class BeaconBlockBodyPhase1 implements SimpleOffsetSerializable, SSZConta
     return early_derived_secret_reveals;
   }
 
-  public SSZList<ShardTransition> getShard_transitions() {
+  public SSZVector<ShardTransition> getShard_transitions() {
     return shard_transitions;
   }
 
@@ -255,7 +266,13 @@ public class BeaconBlockBodyPhase1 implements SimpleOffsetSerializable, SSZConta
             HashTreeUtil.hash_tree_root(SSZTypes.LIST_OF_COMPOSITE, custody_slashings),
             HashTreeUtil.hash_tree_root(SSZTypes.LIST_OF_COMPOSITE, custody_key_reveals),
             HashTreeUtil.hash_tree_root(SSZTypes.LIST_OF_COMPOSITE, early_derived_secret_reveals),
-            HashTreeUtil.hash_tree_root(SSZTypes.LIST_OF_COMPOSITE, shard_transitions),
+            HashTreeUtil.hash_tree_root(
+                SSZTypes.VECTOR_OF_COMPOSITE,
+                SSZVector.createMutable(
+                    shard_transitions.stream()
+                        .map(Merkleizable::hash_tree_root)
+                        .collect(Collectors.toList()),
+                    Bytes32.class)),
             HashTreeUtil.hash_tree_root_bitvector(light_client_signature_bitfield),
             HashTreeUtil.hash_tree_root(
                 SSZTypes.VECTOR_OF_BASIC, light_client_signature.toBytes())));
