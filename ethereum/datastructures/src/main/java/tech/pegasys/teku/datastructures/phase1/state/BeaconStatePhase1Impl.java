@@ -16,6 +16,7 @@ package tech.pegasys.teku.datastructures.phase1.state;
 import com.google.common.base.MoreObjects;
 import com.google.common.primitives.UnsignedLong;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -26,13 +27,13 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.ssz.SSZ;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlockHeader;
 import tech.pegasys.teku.datastructures.blocks.Eth1Data;
+import tech.pegasys.teku.datastructures.phase1.config.ConstantsPhase1;
+import tech.pegasys.teku.datastructures.phase1.shard.ShardState;
 import tech.pegasys.teku.datastructures.state.BeaconStateCache;
 import tech.pegasys.teku.datastructures.state.Checkpoint;
 import tech.pegasys.teku.datastructures.state.Fork;
 import tech.pegasys.teku.datastructures.state.TransitionCaches;
 import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
-import tech.pegasys.teku.datastructures.phase1.config.ConstantsPhase1;
-import tech.pegasys.teku.datastructures.phase1.shard.ShardState;
 import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZVector;
@@ -43,6 +44,7 @@ import tech.pegasys.teku.ssz.backing.tree.TreeNode;
 import tech.pegasys.teku.ssz.backing.type.CompositeViewType;
 import tech.pegasys.teku.ssz.backing.type.ContainerViewType;
 import tech.pegasys.teku.ssz.backing.view.ContainerViewReadImpl;
+import tech.pegasys.teku.ssz.sos.SimpleOffsetSerializable;
 import tech.pegasys.teku.util.config.Constants;
 
 public class BeaconStatePhase1Impl extends ContainerViewReadImpl
@@ -173,6 +175,12 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
       SSZList.createMutable(
           Byte.class,
           Constants.VALIDATOR_REGISTRY_LIMIT); //  List bounded by VALIDATOR_REGISTRY_LIMIT
+
+  @SuppressWarnings("unused")
+  private final CompactCommittee current_light_committee = null;
+
+  @SuppressWarnings("unused")
+  private final CompactCommittee next_light_committee = null;
 
   @SuppressWarnings("unused")
   private final SSZVector<ExposedValidatorIndices> exposed_derived_secrets =
@@ -341,38 +349,46 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
 
   @Override
   public List<Bytes> get_fixed_parts() {
-    return List.of(
-        SSZ.encodeUInt64(getGenesis_time().longValue()),
-        getGenesis_validators_root(),
-        SSZ.encodeUInt64(getSlot().longValue()),
-        SimpleOffsetSerializer.serialize(getFork()),
-        SimpleOffsetSerializer.serialize(getLatest_block_header()),
-        SSZ.encode(writer -> writer.writeFixedBytesVector(getBlock_roots().asList())),
-        SSZ.encode(writer -> writer.writeFixedBytesVector(getState_roots().asList())),
-        Bytes.EMPTY,
-        SimpleOffsetSerializer.serialize(getEth1_data()),
-        Bytes.EMPTY,
-        SSZ.encodeUInt64(getEth1_deposit_index().longValue()),
-        Bytes.EMPTY,
-        Bytes.EMPTY,
-        SSZ.encode(writer -> writer.writeFixedBytesVector(getRandao_mixes().asList())),
-        SSZ.encode(
-            writer ->
-                writer.writeFixedBytesVector(
-                    getSlashings().stream()
-                        .map(slashing -> SSZ.encodeUInt64(slashing.longValue()))
-                        .collect(Collectors.toList()))),
-        Bytes.EMPTY,
-        Bytes.EMPTY,
-        getJustification_bits().serialize(),
-        SimpleOffsetSerializer.serialize(getPrevious_justified_checkpoint()),
-        SimpleOffsetSerializer.serialize(getCurrent_justified_checkpoint()),
-        SimpleOffsetSerializer.serialize(getFinalized_checkpoint()),
-        SSZ.encodeUInt64(getCurrent_epoch_start_shard().longValue()),
-        Bytes.EMPTY,
-        Bytes.EMPTY,
-        Bytes.EMPTY,
-        Bytes.EMPTY);
+    List<Bytes> ret = new ArrayList<>();
+    ret.addAll(
+        List.of(
+            SSZ.encodeUInt64(getGenesis_time().longValue()),
+            getGenesis_validators_root(),
+            SSZ.encodeUInt64(getSlot().longValue()),
+            SimpleOffsetSerializer.serialize(getFork()),
+            SimpleOffsetSerializer.serialize(getLatest_block_header()),
+            SSZ.encode(writer -> writer.writeFixedBytesVector(getBlock_roots().asList())),
+            SSZ.encode(writer -> writer.writeFixedBytesVector(getState_roots().asList())),
+            Bytes.EMPTY,
+            SimpleOffsetSerializer.serialize(getEth1_data()),
+            Bytes.EMPTY,
+            SSZ.encodeUInt64(getEth1_deposit_index().longValue()),
+            Bytes.EMPTY,
+            Bytes.EMPTY,
+            SSZ.encode(writer -> writer.writeFixedBytesVector(getRandao_mixes().asList())),
+            SSZ.encode(
+                writer ->
+                    writer.writeFixedBytesVector(
+                        getSlashings().stream()
+                            .map(slashing -> SSZ.encodeUInt64(slashing.longValue()))
+                            .collect(Collectors.toList()))),
+            Bytes.EMPTY,
+            Bytes.EMPTY,
+            getJustification_bits().serialize(),
+            SimpleOffsetSerializer.serialize(getPrevious_justified_checkpoint()),
+            SimpleOffsetSerializer.serialize(getCurrent_justified_checkpoint()),
+            SimpleOffsetSerializer.serialize(getFinalized_checkpoint()),
+            SSZ.encodeUInt64(getCurrent_epoch_start_shard().longValue()),
+            Bytes.EMPTY,
+            Bytes.EMPTY,
+            Bytes.EMPTY,
+            Bytes.EMPTY));
+    ret.addAll(
+        getExposed_derived_secrets().stream()
+            .map(SimpleOffsetSerializable::get_fixed_parts)
+            .flatMap(Collection::stream)
+            .collect(Collectors.toList()));
+    return ret;
   }
 
   @Override
@@ -420,6 +436,10 @@ public class BeaconStatePhase1Impl extends ContainerViewReadImpl
                 .collect(Collectors.joining())));
     variablePartsList.add(SimpleOffsetSerializer.serialize(getCurrent_light_committee()));
     variablePartsList.add(SimpleOffsetSerializer.serialize(getNext_light_committee()));
+    variablePartsList.addAll(
+        getExposed_derived_secrets().stream()
+            .map(SimpleOffsetSerializer::serialize)
+            .collect(Collectors.toList()));
     return variablePartsList;
   }
 
