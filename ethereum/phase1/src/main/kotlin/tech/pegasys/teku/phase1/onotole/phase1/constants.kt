@@ -1,8 +1,8 @@
-package tech.pegasys.teku.phase1.core
+package tech.pegasys.teku.phase1.onotole.phase1
 
-import tech.pegasys.teku.phase1.pylib.len
-import tech.pegasys.teku.phase1.pylib.pow
-import tech.pegasys.teku.phase1.pylib.pyint
+import tech.pegasys.teku.phase1.onotole.pylib.len
+import tech.pegasys.teku.phase1.onotole.pylib.pow
+import tech.pegasys.teku.phase1.onotole.pylib.pyint
 
 val GENESIS_SLOT = Slot(0uL)
 val GENESIS_EPOCH = Epoch(0uL)

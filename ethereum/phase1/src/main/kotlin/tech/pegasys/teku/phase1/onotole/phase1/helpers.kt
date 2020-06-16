@@ -1,10 +1,10 @@
-package tech.pegasys.teku.phase1.core
+package tech.pegasys.teku.phase1.onotole.phase1
 
-import tech.pegasys.teku.phase1.ssz.Bytes
-import tech.pegasys.teku.phase1.ssz.Bytes1
-import tech.pegasys.teku.phase1.ssz.Bytes32
-import tech.pegasys.teku.phase1.ssz.Bytes4
-import tech.pegasys.teku.phase1.ssz.uint64
+import tech.pegasys.teku.phase1.onotole.ssz.Bytes
+import tech.pegasys.teku.phase1.onotole.ssz.Bytes1
+import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
+import tech.pegasys.teku.phase1.onotole.ssz.Bytes4
+import tech.pegasys.teku.phase1.onotole.ssz.uint64
 
 fun ValidatorIndex(x: Int): ValidatorIndex = x.toULong()
 fun Domain(x: Bytes): Domain = Domain(Bytes32.wrap(x))

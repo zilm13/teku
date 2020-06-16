@@ -32,7 +32,7 @@ public class CustodySlashing implements Merkleizable, SimpleOffsetSerializable, 
   private final BLSSignature malefactor_secret;
   private final UnsignedLong whistleblower_index;
   private final ShardTransition shard_transition;
-  private final Attestation attestation;
+  private final AttestationPhase1 attestation;
   private final SSZList<Byte> data;
 
   public CustodySlashing(
@@ -41,7 +41,7 @@ public class CustodySlashing implements Merkleizable, SimpleOffsetSerializable, 
       BLSSignature malefactor_secret,
       UnsignedLong whistleblower_index,
       ShardTransition shard_transition,
-      Attestation attestation,
+      AttestationPhase1 attestation,
       SSZList<Byte> data) {
     this.data_index = data_index;
     this.malefactor_index = malefactor_index;
@@ -124,7 +124,7 @@ public class CustodySlashing implements Merkleizable, SimpleOffsetSerializable, 
     return shard_transition;
   }
 
-  public Attestation getAttestation() {
+  public AttestationPhase1 getAttestation() {
     return attestation;
   }
 

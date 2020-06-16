@@ -1,9 +1,9 @@
-package tech.pegasys.teku.phase1.pylib
+package tech.pegasys.teku.phase1.onotole.pylib
 
 import org.apache.tuweni.bytes.Bytes
-import tech.pegasys.teku.phase1.ssz.Bytes32
-import tech.pegasys.teku.phase1.ssz.SSZBitVector
-import tech.pegasys.teku.phase1.ssz.uint64
+import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
+import tech.pegasys.teku.phase1.onotole.ssz.SSZBitVector
+import tech.pegasys.teku.phase1.onotole.ssz.uint64
 import java.lang.Long
 import java.math.BigInteger
 import java.util.*

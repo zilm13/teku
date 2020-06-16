@@ -71,7 +71,7 @@ public class AttestationDataPhase1 extends AbstractImmutableContainer
   private final Checkpoint target = null;
 
   @SuppressWarnings("unused")
-  private final Bytes32 shard_header_root = null;
+  private final Bytes32 shard_head_root = null;
 
   @SuppressWarnings("unused")
   private final Bytes32 shard_transition_root = null;
@@ -87,7 +87,7 @@ public class AttestationDataPhase1 extends AbstractImmutableContainer
       Bytes32 beacon_block_root,
       Checkpoint source,
       Checkpoint target,
-      Bytes32 shard_header_root,
+      Bytes32 shard_head_root,
       Bytes32 shard_transition_root) {
     super(
         TYPE,
@@ -96,7 +96,7 @@ public class AttestationDataPhase1 extends AbstractImmutableContainer
         new Bytes32View(beacon_block_root),
         source,
         target,
-        new Bytes32View(shard_header_root),
+        new Bytes32View(shard_head_root),
         new Bytes32View(shard_transition_root));
   }
 
@@ -117,7 +117,7 @@ public class AttestationDataPhase1 extends AbstractImmutableContainer
     fixedPartsList.addAll(getTarget().get_fixed_parts());
     fixedPartsList.addAll(
         List.of(
-            SSZ.encode(writer -> writer.writeFixedBytes(getShard_header_root())),
+            SSZ.encode(writer -> writer.writeFixedBytes(getShard_head_root())),
             SSZ.encode(writer -> writer.writeFixedBytes(getShard_transition_root()))));
     return fixedPartsList;
   }
@@ -130,7 +130,7 @@ public class AttestationDataPhase1 extends AbstractImmutableContainer
         .add("beacon_block_root", getBeacon_block_root())
         .add("source", getSource())
         .add("target", getTarget())
-        .add("shard_header_root", getShard_header_root())
+        .add("shard_header_root", getShard_head_root())
         .add("shard_transition_root", getShard_transition_root())
         .toString();
   }
@@ -178,7 +178,7 @@ public class AttestationDataPhase1 extends AbstractImmutableContainer
     return ((Checkpoint) get(4));
   }
 
-  public Bytes32 getShard_header_root() {
+  public Bytes32 getShard_head_root() {
     return ((Bytes32View) get(5)).get();
   }
 

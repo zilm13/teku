@@ -1,16 +1,16 @@
-package tech.pegasys.teku.phase1.phase0
+package tech.pegasys.teku.phase1.onotole.phase0
 
-import tech.pegasys.teku.phase1.ssz.Bytes32
-import tech.pegasys.teku.phase1.ssz.Bytes4
-import tech.pegasys.teku.phase1.ssz.Bytes48
-import tech.pegasys.teku.phase1.ssz.Bytes96
-import tech.pegasys.teku.phase1.ssz.CBitlist
-import tech.pegasys.teku.phase1.ssz.CBitvector
-import tech.pegasys.teku.phase1.ssz.CDict
-import tech.pegasys.teku.phase1.ssz.CList
-import tech.pegasys.teku.phase1.ssz.CVector
-import tech.pegasys.teku.phase1.ssz.boolean
-import tech.pegasys.teku.phase1.ssz.uint64
+import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
+import tech.pegasys.teku.phase1.onotole.ssz.Bytes4
+import tech.pegasys.teku.phase1.onotole.ssz.Bytes48
+import tech.pegasys.teku.phase1.onotole.ssz.Bytes96
+import tech.pegasys.teku.phase1.onotole.ssz.CBitlist
+import tech.pegasys.teku.phase1.onotole.ssz.CBitvector
+import tech.pegasys.teku.phase1.onotole.ssz.CDict
+import tech.pegasys.teku.phase1.onotole.ssz.CList
+import tech.pegasys.teku.phase1.onotole.ssz.CVector
+import tech.pegasys.teku.phase1.onotole.ssz.boolean
+import tech.pegasys.teku.phase1.onotole.ssz.uint64
 
 typealias Slot = uint64
 fun Slot(x: uint64): Slot = x
