@@ -28,6 +28,8 @@ import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList as TekuSSZMutableList
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableVector as TekuSSZMutableVector
 import tech.pegasys.teku.ssz.SSZTypes.SSZVector as TekuSSZVector
 
+// TODO check SSZTypes all over the code to understand whether merklization would be correct or not
+
 abstract class SSZImmutableCollectionWrapper<Onotole : Any, Teku : Any>(
   internal val type: TypePair<Onotole, Teku>
 ) : SSZImmutableCollection<Onotole> {

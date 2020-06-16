@@ -1,5 +1,41 @@
 package tech.pegasys.teku.phase1.integration
 
+import tech.pegasys.teku.phase1.integration.datastructures.AttestationCustodyBitWrapperImpl
+import tech.pegasys.teku.phase1.integration.datastructures.AttestationDataWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.AttestationWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.AttesterSlashingWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.BeaconBlockBodyWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.BeaconBlockHeaderWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.BeaconBlockWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.BeaconStateWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.CheckpointWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.CompactCommitteeWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.CustodyKeyRevealWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.CustodySlashingWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.DepositDataWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.DepositMessageWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.DepositWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.EarlyDerivedSecretRevealWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.Eth1DataWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.ExposedValidatorIndicesWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.ForkDataWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.ForkWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.HistoricalBatchWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.IndexedAttestationWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.PendingAttestationWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.ProposerSlashingWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.ShardBlockHeaderWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.ShardBlockWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.ShardStateWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.ShardTransitionWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.SignedBeaconBlockHeaderWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.SignedBeaconBlockWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.SignedCustodySlashingWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.SignedShardBlockWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.SignedVoluntaryExitWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.SigningRootWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.ValidatorWrapper
+import tech.pegasys.teku.phase1.integration.datastructures.VoluntaryExitWrapper
 import tech.pegasys.teku.phase1.onotole.phase1.Attestation
 import tech.pegasys.teku.phase1.onotole.phase1.AttestationCustodyBitWrapper
 import tech.pegasys.teku.phase1.onotole.phase1.AttestationData
@@ -36,45 +72,6 @@ import tech.pegasys.teku.phase1.onotole.phase1.SignedVoluntaryExit
 import tech.pegasys.teku.phase1.onotole.phase1.SigningRoot
 import tech.pegasys.teku.phase1.onotole.phase1.Validator
 import tech.pegasys.teku.phase1.onotole.phase1.VoluntaryExit
-import tech.pegasys.teku.phase1.integration.datastructures.AttestationCustodyBitWrapperImpl
-import tech.pegasys.teku.phase1.integration.datastructures.AttestationDataWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.AttestationWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.AttesterSlashingWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.BeaconBlockBodyWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.BeaconBlockHeaderWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.BeaconBlockWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.BeaconStateWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.Callback
-import tech.pegasys.teku.phase1.integration.datastructures.CheckpointWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.CompactCommitteeWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.CustodyKeyRevealWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.CustodySlashingWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.DepositDataWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.DepositMessageWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.DepositWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.EarlyDerivedSecretRevealWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.Eth1DataWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.ExposedValidatorIndicesWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.ForkDataWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.ForkWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.HistoricalBatchWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.IndexedAttestationWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.Mutable
-import tech.pegasys.teku.phase1.integration.datastructures.PendingAttestationWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.ProposerSlashingWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.ShardBlockHeaderWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.ShardBlockWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.ShardStateWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.ShardTransitionWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.SignedBeaconBlockHeaderWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.SignedBeaconBlockWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.SignedCustodySlashingWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.SignedShardBlockWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.SignedVoluntaryExitWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.SigningRootWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.ValidatorWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.VoluntaryExitWrapper
-import tech.pegasys.teku.phase1.integration.datastructures.Wrapper
 import kotlin.reflect.KClass
 import tech.pegasys.teku.datastructures.blocks.BeaconBlockHeader as TekuBeaconBlockHeader
 import tech.pegasys.teku.datastructures.blocks.Eth1Data as TekuEth1Data
@@ -112,25 +109,6 @@ import tech.pegasys.teku.datastructures.state.Fork as TekuFork
 import tech.pegasys.teku.datastructures.state.ForkData as TekuForkData
 import tech.pegasys.teku.datastructures.state.HistoricalBatch as TekuHistoricalBatch
 import tech.pegasys.teku.datastructures.state.SigningRoot as TekuSigningRoot
-
-internal abstract class WrappedTypePair<Onotole : Any, TWrapper : Wrapper<Teku>, Teku : Any>(
-  override val onotole: KClass<Onotole>,
-  override val teku: KClass<Teku>
-) : TypePair<Onotole, Teku> {
-  override fun wrap(v: Teku): Onotole {
-    TODO("Implement via reflection")
-  }
-
-  fun wrap(v: Teku, onUpdate: Callback<Onotole>): Onotole {
-    val wrapped: Onotole = wrap(v)
-    if (wrapped is Mutable<*>) {
-      (wrapped as Mutable<Onotole>).callback = onUpdate
-    }
-    return wrapped
-  }
-
-  override fun unwrap(v: Onotole) = (v as TWrapper).v
-}
 
 internal val Eth1DataType =
   object : WrappedTypePair<Eth1Data, Eth1DataWrapper, TekuEth1Data>(
