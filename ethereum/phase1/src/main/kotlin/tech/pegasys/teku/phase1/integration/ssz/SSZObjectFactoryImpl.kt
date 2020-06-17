@@ -1,9 +1,9 @@
 package tech.pegasys.teku.phase1.integration.ssz
 
-import tech.pegasys.teku.phase1.integration.TypePair
-import tech.pegasys.teku.phase1.integration.resolveBasicType
-import tech.pegasys.teku.phase1.integration.resolveCompositeType
-import tech.pegasys.teku.phase1.integration.resolveSSZType
+import tech.pegasys.teku.phase1.integration.types.TypePair
+import tech.pegasys.teku.phase1.integration.types.resolveBasicType
+import tech.pegasys.teku.phase1.integration.types.resolveCompositeType
+import tech.pegasys.teku.phase1.integration.types.resolveSSZType
 import tech.pegasys.teku.phase1.onotole.ssz.SSZBitList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZBitVector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZByteList
@@ -32,7 +32,9 @@ class SSZObjectFactoryImpl : SSZObjectFactory {
     SSZBitVectorWrapper(items)
 
   private fun <Onotole : Any, Teku : Any> resolveType(type: KClass<Onotole>): TypePair<Onotole, Teku> {
-    return resolveBasicType(type) ?: resolveSSZType(type) ?: resolveCompositeType(type)
+    return resolveBasicType(type)
+      ?: resolveSSZType(type)
+      ?: resolveCompositeType(type)
     ?: throw IllegalArgumentException("Can't resolve given type ${type.qualifiedName}")
   }
 }

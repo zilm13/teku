@@ -1,9 +1,8 @@
-package tech.pegasys.teku.phase1.integration
+package tech.pegasys.teku.phase1.integration.ssz
 
 import com.google.common.primitives.UnsignedLong
 import org.apache.tuweni.ssz.SSZ
-import tech.pegasys.teku.phase1.integration.ssz.SSZListWrapper
-import tech.pegasys.teku.phase1.integration.ssz.SSZVectorWrapper
+import tech.pegasys.teku.phase1.integration.types.isBasicTypeValue
 import tech.pegasys.teku.phase1.onotole.phase1.BLSPubkey
 import tech.pegasys.teku.phase1.onotole.phase1.BLSSignature
 import tech.pegasys.teku.phase1.onotole.phase1.Root
@@ -70,18 +69,32 @@ class HashTreeRoot {
     fun sszCollection(v: SSZCollection<*>): Root {
       return when (v) {
         is SSZVectorWrapper<*, *> ->
-          HashTreeUtil.merkleize(v.collection.map { compute(it) }.toList())
+          HashTreeUtil.merkleize(v.collection.map {
+            compute(
+              it
+            )
+          }.toList())
         is SSZListWrapper<*, *> ->
-          HashTreeUtil.hash_tree_root_list_bytes(v.collection.map(Bytes32::class.java) { compute(it) })
+          HashTreeUtil.hash_tree_root_list_bytes(v.collection.map(Bytes32::class.java) {
+            compute(
+              it
+            )
+          })
         else -> throw UnsupportedOperationException("Unsupported type ${v::class.qualifiedName}")
       }
     }
 
     fun compute(v: Any): Root {
       return when (v) {
-        isBasicTypeValue(v) -> basicTypeValue(v)
-        is SSZCollection<*> -> sszCollection(v)
-        is SSZComposite -> sszCompositeTypeValue(v)
+        isBasicTypeValue(v) -> basicTypeValue(
+          v
+        )
+        is SSZCollection<*> -> sszCollection(
+          v
+        )
+        is SSZComposite -> sszCompositeTypeValue(
+          v
+        )
         else -> throw UnsupportedOperationException("Unsupported type ${v::class.qualifiedName}")
       }
     }

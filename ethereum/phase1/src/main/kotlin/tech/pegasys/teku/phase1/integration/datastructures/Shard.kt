@@ -1,13 +1,13 @@
 package tech.pegasys.teku.phase1.integration.datastructures
 
-import tech.pegasys.teku.phase1.integration.BLSSignatureType
-import tech.pegasys.teku.phase1.integration.Bytes32Type
-import tech.pegasys.teku.phase1.integration.SSZByteListType
-import tech.pegasys.teku.phase1.integration.SSZListType
-import tech.pegasys.teku.phase1.integration.SSZMutableListType
-import tech.pegasys.teku.phase1.integration.ShardBlockType
-import tech.pegasys.teku.phase1.integration.ShardStateType
-import tech.pegasys.teku.phase1.integration.UInt64Type
+import tech.pegasys.teku.phase1.integration.types.BLSSignatureType
+import tech.pegasys.teku.phase1.integration.types.Bytes32Type
+import tech.pegasys.teku.phase1.integration.types.SSZByteListType
+import tech.pegasys.teku.phase1.integration.types.SSZListType
+import tech.pegasys.teku.phase1.integration.types.SSZMutableListType
+import tech.pegasys.teku.phase1.integration.types.ShardBlockType
+import tech.pegasys.teku.phase1.integration.types.ShardStateType
+import tech.pegasys.teku.phase1.integration.types.UInt64Type
 import tech.pegasys.teku.phase1.onotole.phase1.BLSSignature
 import tech.pegasys.teku.phase1.onotole.phase1.Gwei
 import tech.pegasys.teku.phase1.onotole.phase1.Root
@@ -41,9 +41,15 @@ internal class ShardTransitionWrapper(override val v: TekuShardTransition) :
   ) : this(
     TekuShardTransition(
       UInt64Type.unwrap(start_slot),
-      SSZMutableListType(UInt64Type).unwrap(shard_block_lengths),
-      SSZMutableListType(Bytes32Type).unwrap(shard_data_roots),
-      SSZMutableListType(ShardStateType).unwrap(shard_states),
+      SSZMutableListType(
+        UInt64Type
+      ).unwrap(shard_block_lengths),
+      SSZMutableListType(
+        Bytes32Type
+      ).unwrap(shard_data_roots),
+      SSZMutableListType(
+        ShardStateType
+      ).unwrap(shard_states),
       BLSSignatureType.unwrap(proposer_signature_aggregate)
     )
   )
@@ -51,11 +57,17 @@ internal class ShardTransitionWrapper(override val v: TekuShardTransition) :
   override val start_slot: Slot
     get() = UInt64Type.wrap(v.start_slot)
   override val shard_block_lengths: SSZList<uint64>
-    get() = SSZListType(UInt64Type).wrap(v.shard_block_lengths)
+    get() = SSZListType(
+      UInt64Type
+    ).wrap(v.shard_block_lengths)
   override val shard_data_roots: SSZList<Bytes32>
-    get() = SSZListType(Bytes32Type).wrap(v.shard_data_roots)
+    get() = SSZListType(
+      Bytes32Type
+    ).wrap(v.shard_data_roots)
   override val shard_states: SSZList<ShardState>
-    get() = SSZListType(ShardStateType).wrap(v.shard_states)
+    get() = SSZListType(
+      ShardStateType
+    ).wrap(v.shard_states)
   override val proposer_signature_aggregate: BLSSignature
     get() = BLSSignatureType.wrap(v.proposer_signature_aggregate)
 

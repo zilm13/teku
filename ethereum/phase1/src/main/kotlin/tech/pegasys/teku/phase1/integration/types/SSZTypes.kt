@@ -1,4 +1,4 @@
-package tech.pegasys.teku.phase1.integration
+package tech.pegasys.teku.phase1.integration.types
 
 import tech.pegasys.teku.phase1.integration.ssz.SSZBitListWrapper
 import tech.pegasys.teku.phase1.integration.ssz.SSZBitVectorWrapper
@@ -39,7 +39,8 @@ internal class SSZByteListTypeDefinition {
   inline fun unwrap(v: SSZList<Byte>) = (v as SSZByteListWrapper).collection
 }
 
-internal val SSZByteListType = SSZByteListTypeDefinition()
+internal val SSZByteListType =
+  SSZByteListTypeDefinition()
 
 internal inline class SSZMutableListType<Onotole : Any, Teku : Any>(val type: TypePair<Onotole, Teku>) {
   fun wrap(v: TekuSSZMutableList<Teku>) = SSZMutableListWrapper(v, type)

@@ -1,4 +1,4 @@
-package tech.pegasys.teku.phase1.integration
+package tech.pegasys.teku.phase1.integration.types
 
 import tech.pegasys.teku.phase1.integration.datastructures.AttestationCustodyBitWrapperImpl
 import tech.pegasys.teku.phase1.integration.datastructures.AttestationDataWrapper
@@ -175,7 +175,8 @@ internal val VoluntaryExitType =
   ) {}
 
 internal val AttestationCustodyBitWrapperType =
-  object : SSZCompositeType<AttestationCustodyBitWrapper, TekuAttestationCustodyBitWrapper> {
+  object :
+    SSZCompositeType<AttestationCustodyBitWrapper, TekuAttestationCustodyBitWrapper> {
     override val teku = TekuAttestationCustodyBitWrapper::class
     override val onotole = AttestationCustodyBitWrapper::class
     override fun wrap(v: TekuAttestationCustodyBitWrapper) = AttestationCustodyBitWrapperImpl(

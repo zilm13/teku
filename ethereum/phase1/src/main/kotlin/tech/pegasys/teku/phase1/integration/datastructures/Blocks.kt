@@ -1,25 +1,25 @@
 package tech.pegasys.teku.phase1.integration.datastructures
 
-import tech.pegasys.teku.phase1.integration.AttestationType
-import tech.pegasys.teku.phase1.integration.AttesterSlashingType
-import tech.pegasys.teku.phase1.integration.BLSSignatureType
-import tech.pegasys.teku.phase1.integration.BeaconBlockBodyType
-import tech.pegasys.teku.phase1.integration.BeaconBlockHeaderType
-import tech.pegasys.teku.phase1.integration.BeaconBlockType
-import tech.pegasys.teku.phase1.integration.CustodyKeyRevealType
-import tech.pegasys.teku.phase1.integration.DepositType
-import tech.pegasys.teku.phase1.integration.EarlyDerivedSecretRevealType
-import tech.pegasys.teku.phase1.integration.Eth1DataType
-import tech.pegasys.teku.phase1.integration.ProposerSlashingType
-import tech.pegasys.teku.phase1.integration.SSZBitVectorType
-import tech.pegasys.teku.phase1.integration.SSZListType
-import tech.pegasys.teku.phase1.integration.SSZMutableListType
-import tech.pegasys.teku.phase1.integration.SSZMutableVectorType
-import tech.pegasys.teku.phase1.integration.SSZVectorType
-import tech.pegasys.teku.phase1.integration.ShardTransitionType
-import tech.pegasys.teku.phase1.integration.SignedCustodySlashingType
-import tech.pegasys.teku.phase1.integration.SignedVoluntaryExitType
-import tech.pegasys.teku.phase1.integration.UInt64Type
+import tech.pegasys.teku.phase1.integration.types.AttestationType
+import tech.pegasys.teku.phase1.integration.types.AttesterSlashingType
+import tech.pegasys.teku.phase1.integration.types.BLSSignatureType
+import tech.pegasys.teku.phase1.integration.types.BeaconBlockBodyType
+import tech.pegasys.teku.phase1.integration.types.BeaconBlockHeaderType
+import tech.pegasys.teku.phase1.integration.types.BeaconBlockType
+import tech.pegasys.teku.phase1.integration.types.CustodyKeyRevealType
+import tech.pegasys.teku.phase1.integration.types.DepositType
+import tech.pegasys.teku.phase1.integration.types.EarlyDerivedSecretRevealType
+import tech.pegasys.teku.phase1.integration.types.Eth1DataType
+import tech.pegasys.teku.phase1.integration.types.ProposerSlashingType
+import tech.pegasys.teku.phase1.integration.types.SSZBitVectorType
+import tech.pegasys.teku.phase1.integration.types.SSZListType
+import tech.pegasys.teku.phase1.integration.types.SSZMutableListType
+import tech.pegasys.teku.phase1.integration.types.SSZMutableVectorType
+import tech.pegasys.teku.phase1.integration.types.SSZVectorType
+import tech.pegasys.teku.phase1.integration.types.ShardTransitionType
+import tech.pegasys.teku.phase1.integration.types.SignedCustodySlashingType
+import tech.pegasys.teku.phase1.integration.types.SignedVoluntaryExitType
+import tech.pegasys.teku.phase1.integration.types.UInt64Type
 import tech.pegasys.teku.phase1.onotole.phase1.Attestation
 import tech.pegasys.teku.phase1.onotole.phase1.AttesterSlashing
 import tech.pegasys.teku.phase1.onotole.phase1.BLSSignature
@@ -229,15 +229,33 @@ internal class BeaconBlockBodyWrapper(
       BLSSignatureType.unwrap(randao_reveal),
       Eth1DataType.unwrap(eth1_data),
       graffiti,
-      SSZMutableListType(ProposerSlashingType).unwrap(proposer_slashings),
-      SSZMutableListType(AttesterSlashingType).unwrap(attester_slashings),
-      SSZMutableListType(AttestationType).unwrap(attestations),
-      SSZMutableListType(DepositType).unwrap(deposits),
-      SSZMutableListType(SignedVoluntaryExitType).unwrap(voluntary_exits),
-      SSZMutableListType(SignedCustodySlashingType).unwrap(custody_slashings),
-      SSZMutableListType(CustodyKeyRevealType).unwrap(custody_key_reveals),
-      SSZMutableListType(EarlyDerivedSecretRevealType).unwrap(early_derived_secret_reveals),
-      SSZMutableVectorType(ShardTransitionType).unwrap(shard_transitions),
+      SSZMutableListType(
+        ProposerSlashingType
+      ).unwrap(proposer_slashings),
+      SSZMutableListType(
+        AttesterSlashingType
+      ).unwrap(attester_slashings),
+      SSZMutableListType(
+        AttestationType
+      ).unwrap(attestations),
+      SSZMutableListType(
+        DepositType
+      ).unwrap(deposits),
+      SSZMutableListType(
+        SignedVoluntaryExitType
+      ).unwrap(voluntary_exits),
+      SSZMutableListType(
+        SignedCustodySlashingType
+      ).unwrap(custody_slashings),
+      SSZMutableListType(
+        CustodyKeyRevealType
+      ).unwrap(custody_key_reveals),
+      SSZMutableListType(
+        EarlyDerivedSecretRevealType
+      ).unwrap(early_derived_secret_reveals),
+      SSZMutableVectorType(
+        ShardTransitionType
+      ).unwrap(shard_transitions),
       SSZBitVectorType.unwrap(light_client_signature_bitfield),
       BLSSignatureType.unwrap(light_client_signature)
     )
@@ -250,23 +268,41 @@ internal class BeaconBlockBodyWrapper(
   override val graffiti: Bytes32
     get() = v.graffiti
   override val proposer_slashings: SSZList<ProposerSlashing>
-    get() = SSZListType(ProposerSlashingType).wrap(v.proposer_slashings)
+    get() = SSZListType(
+      ProposerSlashingType
+    ).wrap(v.proposer_slashings)
   override val attester_slashings: SSZList<AttesterSlashing>
-    get() = SSZListType(AttesterSlashingType).wrap(v.attester_slashings)
+    get() = SSZListType(
+      AttesterSlashingType
+    ).wrap(v.attester_slashings)
   override val attestations: SSZList<Attestation>
-    get() = SSZListType(AttestationType).wrap(v.attestations)
+    get() = SSZListType(
+      AttestationType
+    ).wrap(v.attestations)
   override val deposits: SSZList<Deposit>
-    get() = SSZListType(DepositType).wrap(v.deposits)
+    get() = SSZListType(
+      DepositType
+    ).wrap(v.deposits)
   override val voluntary_exits: SSZList<SignedVoluntaryExit>
-    get() = SSZListType(SignedVoluntaryExitType).wrap(v.voluntary_exits)
+    get() = SSZListType(
+      SignedVoluntaryExitType
+    ).wrap(v.voluntary_exits)
   override val custody_slashings: SSZList<SignedCustodySlashing>
-    get() = SSZListType(SignedCustodySlashingType).wrap(v.custody_slashings)
+    get() = SSZListType(
+      SignedCustodySlashingType
+    ).wrap(v.custody_slashings)
   override val custody_key_reveals: SSZList<CustodyKeyReveal>
-    get() = SSZListType(CustodyKeyRevealType).wrap(v.custody_key_reveals)
+    get() = SSZListType(
+      CustodyKeyRevealType
+    ).wrap(v.custody_key_reveals)
   override val early_derived_secret_reveals: SSZList<EarlyDerivedSecretReveal>
-    get() = SSZListType(EarlyDerivedSecretRevealType).wrap(v.early_derived_secret_reveals)
+    get() = SSZListType(
+      EarlyDerivedSecretRevealType
+    ).wrap(v.early_derived_secret_reveals)
   override val shard_transitions: SSZVector<ShardTransition>
-    get() = SSZVectorType(ShardTransitionType).wrap(v.shard_transitions)
+    get() = SSZVectorType(
+      ShardTransitionType
+    ).wrap(v.shard_transitions)
   override val light_client_signature_bitfield: SSZBitVector
     get() = SSZBitVectorType.wrap(v.light_client_signature_bitfield)
   override val light_client_signature: BLSSignature

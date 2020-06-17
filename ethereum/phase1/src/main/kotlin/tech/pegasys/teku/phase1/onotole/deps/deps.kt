@@ -1,7 +1,10 @@
 package tech.pegasys.teku.phase1.onotole.deps
 
+import org.apache.milagro.amcl.BLS381.BIG
+import org.apache.milagro.amcl.BLS381.FP2
 import org.apache.tuweni.crypto.Hash
-import tech.pegasys.teku.phase1.integration.HashTreeRoot
+import tech.pegasys.teku.phase1.integration.bls.G2Points
+import tech.pegasys.teku.phase1.integration.ssz.HashTreeRoot
 import tech.pegasys.teku.phase1.onotole.phase1.BLSSignature
 import tech.pegasys.teku.phase1.onotole.pylib.pyint
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes
@@ -9,6 +12,7 @@ import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes48
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes96
 import tech.pegasys.teku.phase1.onotole.ssz.boolean
+import java.math.BigInteger
 import tech.pegasys.teku.bls.BLS as TekuBLS
 import tech.pegasys.teku.bls.BLSPublicKey as TekuBLSPublicKey
 import tech.pegasys.teku.bls.BLSSecretKey as TekuBLSSecretKey
@@ -22,6 +26,14 @@ fun hash(a: Bytes): Bytes32 = Hash.sha2_256(a)
 fun hash(a: Bytes96): Bytes32 = hash(a.wrappedBytes)
 
 data class FQ2(val coeffs: Pair<pyint, pyint>)
+
+fun BIG.toPyInt(): pyint {
+  val bytes = ByteArray(BIG.MODBYTES)
+  this.toBytes(bytes)
+  return pyint(BigInteger(1, bytes))
+}
+
+fun FP2.toFQ2(): FQ2 = FQ2(Pair(this.a.toPyInt(), this.b.toPyInt()))
 
 object bls {
   fun Sign(privkey: pyint, message: Bytes): BLSSignature {
@@ -63,6 +75,7 @@ object bls {
   }
 
   fun signature_to_G2(signature: Bytes96): Triple<FQ2, FQ2, FQ2> {
-    TODO("Not yet implemented")
+    val p = G2Points.fromBytesCompressed(signature.wrappedBytes)
+    return Triple(p.getx().toFQ2(), p.gety().toFQ2(), p.getz().toFQ2())
   }
 }

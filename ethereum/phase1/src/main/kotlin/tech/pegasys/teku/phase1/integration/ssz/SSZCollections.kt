@@ -1,7 +1,7 @@
 package tech.pegasys.teku.phase1.integration.ssz
 
-import tech.pegasys.teku.phase1.integration.ByteType
-import tech.pegasys.teku.phase1.integration.TypePair
+import tech.pegasys.teku.phase1.integration.types.ByteType
+import tech.pegasys.teku.phase1.integration.types.TypePair
 import tech.pegasys.teku.phase1.integration.datastructures.Mutable
 import tech.pegasys.teku.phase1.integration.datastructures.Wrapper
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes1
@@ -183,7 +183,9 @@ internal class SSZBitListWrapper(override val v: Bitlist) : Wrapper<Bitlist>, SS
 }
 
 internal class SSZByteListWrapper(list: TekuSSZList<Byte>) :
-  SSZListWrapper<Bytes1, Byte>(list, ByteType), SSZByteList {
+  SSZListWrapper<Bytes1, Byte>(list,
+    ByteType
+  ), SSZByteList {
 
   constructor(items: MutableList<Byte>, maxSize: ULong) : this(
     TekuSSZList.createMutable(items, maxSize.toLong(), Byte::class.java)

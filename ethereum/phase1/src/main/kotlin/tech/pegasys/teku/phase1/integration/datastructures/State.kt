@@ -1,28 +1,28 @@
 package tech.pegasys.teku.phase1.integration.datastructures
 
 import com.google.common.primitives.UnsignedLong
-import tech.pegasys.teku.phase1.integration.AttestationDataType
-import tech.pegasys.teku.phase1.integration.BLSPublicKeyType
-import tech.pegasys.teku.phase1.integration.BeaconBlockHeaderType
-import tech.pegasys.teku.phase1.integration.Bytes32Type
-import tech.pegasys.teku.phase1.integration.Bytes4Type
-import tech.pegasys.teku.phase1.integration.CheckpointType
-import tech.pegasys.teku.phase1.integration.CompactCommitteeType
-import tech.pegasys.teku.phase1.integration.DomainTypePair
-import tech.pegasys.teku.phase1.integration.Eth1DataType
-import tech.pegasys.teku.phase1.integration.ExposedValidatorIndicesType
-import tech.pegasys.teku.phase1.integration.ForkType
-import tech.pegasys.teku.phase1.integration.PendingAttestationType
-import tech.pegasys.teku.phase1.integration.SSZBitListType
-import tech.pegasys.teku.phase1.integration.SSZBitVectorType
-import tech.pegasys.teku.phase1.integration.SSZListType
-import tech.pegasys.teku.phase1.integration.SSZMutableListType
-import tech.pegasys.teku.phase1.integration.SSZMutableVectorType
-import tech.pegasys.teku.phase1.integration.SSZVectorType
-import tech.pegasys.teku.phase1.integration.ShardStateType
-import tech.pegasys.teku.phase1.integration.UInt64Type
-import tech.pegasys.teku.phase1.integration.UInt8Type
-import tech.pegasys.teku.phase1.integration.ValidatorType
+import tech.pegasys.teku.phase1.integration.types.AttestationDataType
+import tech.pegasys.teku.phase1.integration.types.BLSPublicKeyType
+import tech.pegasys.teku.phase1.integration.types.BeaconBlockHeaderType
+import tech.pegasys.teku.phase1.integration.types.Bytes32Type
+import tech.pegasys.teku.phase1.integration.types.Bytes4Type
+import tech.pegasys.teku.phase1.integration.types.CheckpointType
+import tech.pegasys.teku.phase1.integration.types.CompactCommitteeType
+import tech.pegasys.teku.phase1.integration.types.DomainTypePair
+import tech.pegasys.teku.phase1.integration.types.Eth1DataType
+import tech.pegasys.teku.phase1.integration.types.ExposedValidatorIndicesType
+import tech.pegasys.teku.phase1.integration.types.ForkType
+import tech.pegasys.teku.phase1.integration.types.PendingAttestationType
+import tech.pegasys.teku.phase1.integration.types.SSZBitListType
+import tech.pegasys.teku.phase1.integration.types.SSZBitVectorType
+import tech.pegasys.teku.phase1.integration.types.SSZListType
+import tech.pegasys.teku.phase1.integration.types.SSZMutableListType
+import tech.pegasys.teku.phase1.integration.types.SSZMutableVectorType
+import tech.pegasys.teku.phase1.integration.types.SSZVectorType
+import tech.pegasys.teku.phase1.integration.types.ShardStateType
+import tech.pegasys.teku.phase1.integration.types.UInt64Type
+import tech.pegasys.teku.phase1.integration.types.UInt8Type
+import tech.pegasys.teku.phase1.integration.types.ValidatorType
 import tech.pegasys.teku.phase1.integration.ssz.copyTo
 import tech.pegasys.teku.phase1.onotole.phase1.AttestationData
 import tech.pegasys.teku.phase1.onotole.phase1.BLSPubkey
@@ -406,15 +406,23 @@ internal class HistoricalBatchWrapper(
   constructor(block_roots: SSZMutableVector<Root>, state_roots: SSZMutableVector<Root>)
       : this(
     TekuHistoricalBatch(
-      SSZMutableVectorType(Bytes32Type).unwrap(block_roots),
-      SSZMutableVectorType(Bytes32Type).unwrap(state_roots)
+      SSZMutableVectorType(
+        Bytes32Type
+      ).unwrap(block_roots),
+      SSZMutableVectorType(
+        Bytes32Type
+      ).unwrap(state_roots)
     )
   )
 
   override val block_roots: SSZVector<Root>
-    get() = SSZVectorType(Bytes32Type).wrap(v.blockRoots)
+    get() = SSZVectorType(
+      Bytes32Type
+    ).wrap(v.blockRoots)
   override val state_roots: SSZVector<Root>
-    get() = SSZVectorType(Bytes32Type).wrap(v.stateRoots)
+    get() = SSZVectorType(
+      Bytes32Type
+    ).wrap(v.stateRoots)
 
   override fun hash_tree_root() = v.hash_tree_root()
 
@@ -469,15 +477,23 @@ internal class CompactCommitteeWrapper(override val v: TekuCompactCommittee) :
   constructor(pubkeys: SSZMutableList<BLSPubkey>, compact_validators: SSZMutableList<uint64>)
       : this(
     tech.pegasys.teku.datastructures.phase1.state.CompactCommittee(
-      SSZMutableListType(BLSPublicKeyType).unwrap(pubkeys),
-      SSZMutableListType(UInt64Type).unwrap(compact_validators)
+      SSZMutableListType(
+        BLSPublicKeyType
+      ).unwrap(pubkeys),
+      SSZMutableListType(
+        UInt64Type
+      ).unwrap(compact_validators)
     )
   )
 
   override val pubkeys: SSZList<BLSPubkey>
-    get() = SSZListType(BLSPublicKeyType).wrap(v.pubkeys)
+    get() = SSZListType(
+      BLSPublicKeyType
+    ).wrap(v.pubkeys)
   override val compact_validators: SSZList<uint64>
-    get() = SSZListType(UInt64Type).wrap(v.compact_validators)
+    get() = SSZListType(
+      UInt64Type
+    ).wrap(v.compact_validators)
 
   override fun hash_tree_root() = v.hash_tree_root()
 
@@ -586,18 +602,26 @@ internal class BeaconStateWrapper(override var v: TekuBeaconState) : Wrapper<Tek
       this.v.latest_block_header = BeaconBlockHeaderType.unwrap(value)
     }
   override val block_roots: SSZMutableVector<Root>
-    get() = SSZMutableVectorType(Bytes32Type).wrap(v.block_roots)
+    get() = SSZMutableVectorType(
+      Bytes32Type
+    ).wrap(v.block_roots)
   override val state_roots: SSZMutableVector<Root>
-    get() = SSZMutableVectorType(Bytes32Type).wrap(v.state_roots)
+    get() = SSZMutableVectorType(
+      Bytes32Type
+    ).wrap(v.state_roots)
   override val historical_roots: SSZMutableList<Root>
-    get() = SSZMutableListType(Bytes32Type).wrap(v.historical_roots)
+    get() = SSZMutableListType(
+      Bytes32Type
+    ).wrap(v.historical_roots)
   override var eth1_data: Eth1Data
     get() = Eth1DataType.wrap(v.eth1_data) { value -> this.eth1_data = value }
     set(value) {
       v.eth1_data = Eth1DataType.unwrap(value)
     }
   override var eth1_data_votes: SSZMutableList<Eth1Data>
-    get() = SSZMutableListType(Eth1DataType).wrap(v.eth1_data_votes)
+    get() = SSZMutableListType(
+      Eth1DataType
+    ).wrap(v.eth1_data_votes)
     set(value) {
       v.eth1_data_votes.clear()
       value.copyTo(v.eth1_data_votes)
@@ -608,21 +632,33 @@ internal class BeaconStateWrapper(override var v: TekuBeaconState) : Wrapper<Tek
       v.eth1_deposit_index = UInt64Type.unwrap(value)
     }
   override val validators: SSZMutableList<Validator>
-    get() = SSZMutableListType(ValidatorType).wrap(v.validators)
+    get() = SSZMutableListType(
+      ValidatorType
+    ).wrap(v.validators)
   override val balances: SSZMutableList<Gwei>
-    get() = SSZMutableListType(UInt64Type).wrap(v.balances)
+    get() = SSZMutableListType(
+      UInt64Type
+    ).wrap(v.balances)
   override val randao_mixes: SSZMutableVector<Root>
-    get() = SSZMutableVectorType(Bytes32Type).wrap(v.randao_mixes)
+    get() = SSZMutableVectorType(
+      Bytes32Type
+    ).wrap(v.randao_mixes)
   override val slashings: SSZMutableVector<Gwei>
-    get() = SSZMutableVectorType(UInt64Type).wrap(v.slashings)
+    get() = SSZMutableVectorType(
+      UInt64Type
+    ).wrap(v.slashings)
   override var previous_epoch_attestations: SSZMutableList<PendingAttestation>
-    get() = SSZMutableListType(PendingAttestationType).wrap(v.previous_epoch_attestations)
+    get() = SSZMutableListType(
+      PendingAttestationType
+    ).wrap(v.previous_epoch_attestations)
     set(value) {
       v.previous_epoch_attestations.clear()
       value.copyTo(v.previous_epoch_attestations)
     }
   override var current_epoch_attestations: SSZMutableList<PendingAttestation>
-    get() = SSZMutableListType(PendingAttestationType).wrap(v.current_epoch_attestations)
+    get() = SSZMutableListType(
+      PendingAttestationType
+    ).wrap(v.current_epoch_attestations)
     set(value) {
       v.current_epoch_attestations.clear()
       value.copyTo(v.current_epoch_attestations)
@@ -645,9 +681,13 @@ internal class BeaconStateWrapper(override var v: TekuBeaconState) : Wrapper<Tek
       v.finalized_checkpoint = CheckpointType.unwrap(value)
     }
   override val shard_states: SSZMutableList<ShardState>
-    get() = SSZMutableListType(ShardStateType).wrap(v.shard_states)
+    get() = SSZMutableListType(
+      ShardStateType
+    ).wrap(v.shard_states)
   override val online_countdown: SSZMutableList<OnlineEpochs>
-    get() = SSZMutableListType(UInt8Type).wrap(v.online_countdown)
+    get() = SSZMutableListType(
+      UInt8Type
+    ).wrap(v.online_countdown)
   override var current_light_committee: CompactCommittee
     get() = CompactCommitteeType.wrap(v.current_light_committee)
     set(value) {
@@ -659,7 +699,9 @@ internal class BeaconStateWrapper(override var v: TekuBeaconState) : Wrapper<Tek
       v.next_light_committee = CompactCommitteeType.unwrap(value)
     }
   override val exposed_derived_secrets: SSZMutableVector<ExposedValidatorIndices>
-    get() = SSZMutableVectorType(ExposedValidatorIndicesType).wrap(v.exposed_derived_secrets)
+    get() = SSZMutableVectorType(
+      ExposedValidatorIndicesType
+    ).wrap(v.exposed_derived_secrets)
 
   override fun hash_tree_root() = v.hash_tree_root()
 

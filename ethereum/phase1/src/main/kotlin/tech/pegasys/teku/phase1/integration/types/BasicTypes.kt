@@ -1,4 +1,4 @@
-package tech.pegasys.teku.phase1.integration
+package tech.pegasys.teku.phase1.integration.types
 
 import com.google.common.primitives.UnsignedLong
 import org.apache.tuweni.bytes.Bytes48
@@ -18,72 +18,83 @@ import tech.pegasys.teku.bls.BLSPublicKey as TekuBLSPublicKey
 import tech.pegasys.teku.bls.BLSSignature as TekuBLSSignature
 import tech.pegasys.teku.ssz.SSZTypes.Bytes4 as TekuBytes4
 
-internal interface BasicType<Onotole : Any, Teku : Any> : TypePair<Onotole, Teku>
+internal interface BasicType<Onotole : Any, Teku : Any> :
+  TypePair<Onotole, Teku>
 
-internal val BooleanType = object : BasicType<boolean, Boolean> {
+internal val BooleanType = object :
+  BasicType<boolean, Boolean> {
   override val teku = Boolean::class
   override val onotole = boolean::class
   inline override fun wrap(v: Boolean) = v
   inline override fun unwrap(v: boolean) = v
 }
 
-internal val UInt8Type = object : BasicType<uint8, Byte> {
+internal val UInt8Type = object :
+  BasicType<uint8, Byte> {
   override val teku = Byte::class
   override val onotole = uint8::class
   inline override fun wrap(v: Byte) = v.toUByte()
   inline override fun unwrap(v: uint8) = v.toByte()
 }
 
-internal val UInt64Type = object : BasicType<uint64, UnsignedLong> {
+internal val UInt64Type = object :
+  BasicType<uint64, UnsignedLong> {
   override val teku = UnsignedLong::class
   override val onotole = uint64::class
   inline override fun wrap(v: UnsignedLong) = v.toLong().toULong()
   inline override fun unwrap(v: uint64) = UnsignedLong.valueOf(v.toLong())
 }
 
-internal val ByteType = object : BasicType<Byte, Byte> {
+internal val ByteType = object :
+  BasicType<Byte, Byte> {
   override val teku = Byte::class
   override val onotole = Byte::class
   inline override fun wrap(v: Byte) = v
   inline override fun unwrap(v: Byte) = v
 }
 
-internal val Bytes4Type = object : BasicType<Bytes4, TekuBytes4> {
+internal val Bytes4Type = object :
+  BasicType<Bytes4, TekuBytes4> {
   override val teku = TekuBytes4::class
   override val onotole = Bytes4::class
   inline override fun wrap(v: TekuBytes4) = v
   inline override fun unwrap(v: Bytes4) = v
 }
 
-internal val Bytes32Type = object : BasicType<Bytes32, TekuBytes32> {
+internal val Bytes32Type = object :
+  BasicType<Bytes32, TekuBytes32> {
   override val teku = TekuBytes32::class
   override val onotole = Bytes32::class
   inline override fun wrap(v: TekuBytes32) = v
   inline override fun unwrap(v: Bytes32) = v
 }
 
-internal val BytesType = object : BasicType<Bytes, TekuBytes> {
+internal val BytesType = object :
+  BasicType<Bytes, TekuBytes> {
   override val teku = TekuBytes::class
   override val onotole = Bytes::class
   inline override fun wrap(v: TekuBytes) = v
   inline override fun unwrap(v: Bytes) = v
 }
 
-internal val BLSPublicKeyType = object : BasicType<BLSPubkey, TekuBLSPublicKey> {
+internal val BLSPublicKeyType = object :
+  BasicType<BLSPubkey, TekuBLSPublicKey> {
   override val teku = TekuBLSPublicKey::class
   override val onotole = BLSPubkey::class
   override fun wrap(v: TekuBLSPublicKey) = BLSPubkey(Bytes48.wrap(v.toBytesCompressed()))
   override fun unwrap(v: BLSPubkey) = TekuBLSPublicKey.fromBytesCompressed(v)
 }
 
-internal val BLSSignatureType = object : BasicType<BLSSignature, TekuBLSSignature> {
+internal val BLSSignatureType = object :
+  BasicType<BLSSignature, TekuBLSSignature> {
   override val teku = TekuBLSSignature::class
   override val onotole = BLSSignature::class
   inline override fun wrap(v: TekuBLSSignature) = BLSSignature(v.toBytes())
   inline override fun unwrap(v: BLSSignature) = TekuBLSSignature.fromBytes(v.wrappedBytes)
 }
 
-internal val DomainTypePair = object : BasicType<Domain, Bytes> {
+internal val DomainTypePair = object :
+  BasicType<Domain, Bytes> {
   override val teku = TekuBytes::class
   override val onotole = Domain::class
   inline override fun wrap(v: Bytes) = Domain(Bytes32.wrap(v))

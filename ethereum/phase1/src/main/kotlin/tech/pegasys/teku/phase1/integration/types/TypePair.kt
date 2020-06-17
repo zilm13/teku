@@ -1,4 +1,4 @@
-package tech.pegasys.teku.phase1.integration
+package tech.pegasys.teku.phase1.integration.types
 
 import tech.pegasys.teku.phase1.integration.datastructures.Callback
 import tech.pegasys.teku.phase1.integration.datastructures.Mutable
@@ -18,7 +18,8 @@ internal interface TypePair<Onotole : Any, Teku : Any> {
   }
 }
 
-internal interface SSZCompositeType<Onotole : SSZComposite, Teku : Any> : TypePair<Onotole, Teku>
+internal interface SSZCompositeType<Onotole : SSZComposite, Teku : Any> :
+  TypePair<Onotole, Teku>
 
 internal abstract class WrappedTypePair<Onotole : SSZComposite, TWrapper : Wrapper<Teku>, Teku : Any>(
   override val onotole: KClass<Onotole>,
