@@ -175,7 +175,7 @@ internal val VoluntaryExitType =
   ) {}
 
 internal val AttestationCustodyBitWrapperType =
-  object : TypePair<AttestationCustodyBitWrapper, TekuAttestationCustodyBitWrapper> {
+  object : SSZCompositeType<AttestationCustodyBitWrapper, TekuAttestationCustodyBitWrapper> {
     override val teku = TekuAttestationCustodyBitWrapper::class
     override val onotole = AttestationCustodyBitWrapper::class
     override fun wrap(v: TekuAttestationCustodyBitWrapper) = AttestationCustodyBitWrapperImpl(

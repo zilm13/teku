@@ -1,5 +1,6 @@
 package tech.pegasys.teku.phase1.onotole.ssz
 
+import tech.pegasys.teku.phase1.onotole.phase1.Root
 import kotlin.reflect.KClass
 import org.apache.tuweni.bytes.Bytes as TuweniBytes
 import org.apache.tuweni.bytes.Bytes32 as TuweniBytes32
@@ -44,20 +45,20 @@ fun <T> CVector() = mutableListOf<T>()
 fun <K, V> CDict() = mutableMapOf<K, V>()
 
 interface SSZComposite {
-  fun hash_tree_root(): Bytes32
+  fun hash_tree_root(): Root
 }
 
-interface SSZImmutableCollection<T: Any> : Sequence<T>, SSZComposite {
+interface SSZCollection<T: Any> : Sequence<T> {
   operator fun get(index: ULong): T
   override operator fun get(index: Int): T = get(index.toULong())
 }
 
-interface SSZMutableCollection<T : Any> : SSZImmutableCollection<T> {
+interface SSZMutableCollection<T : Any> : SSZCollection<T> {
   operator fun set(index: ULong, item: T): T
   operator fun set(index: Int, item: T): T = set(index.toULong(), item)
 }
 
-interface SSZList<T : Any> : SSZImmutableCollection<T> {
+interface SSZList<T : Any> : SSZCollection<T> {
   val maxSize: ULong
 }
 
@@ -65,11 +66,11 @@ interface SSZMutableList<T : Any> : SSZList<T>, SSZMutableCollection<T> {
   fun append(item: T)
 }
 
-interface SSZBitList : SSZMutableList<Boolean>
+interface SSZBitList : SSZMutableList<Boolean>, SSZComposite
 interface SSZByteList : SSZList<Byte>
-interface SSZVector<T : Any> : SSZImmutableCollection<T>
+interface SSZVector<T : Any> : SSZCollection<T>
 interface SSZMutableVector<T : Any> : SSZVector<T>, SSZMutableCollection<T>
-interface SSZBitVector : SSZMutableVector<Boolean>
+interface SSZBitVector : SSZMutableVector<Boolean>, SSZComposite
 
 interface SSZObjectFactory {
   fun <T : Any> SSZList(type: KClass<T>, maxSize: ULong, items: MutableList<T> = mutableListOf()): SSZMutableList<T>

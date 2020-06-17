@@ -88,7 +88,7 @@ typealias OnlineEpochs = uint8
 fun OnlineEpochs(x: uint8): OnlineEpochs = x
 fun OnlineEpochs() = OnlineEpochs(0u.toUByte())
 
-interface ExposedValidatorIndices : SSZMutableList<ValidatorIndex>
+interface ExposedValidatorIndices : SSZMutableList<ValidatorIndex>, SSZComposite
 
 interface Fork : SSZComposite {
   val previous_version: Version

@@ -1,6 +1,24 @@
 package tech.pegasys.teku.phase1.integration.datastructures
 
-import com.google.common.primitives.UnsignedLong
+import tech.pegasys.teku.phase1.integration.AttestationDataType
+import tech.pegasys.teku.phase1.integration.AttestationType
+import tech.pegasys.teku.phase1.integration.BLSPublicKeyType
+import tech.pegasys.teku.phase1.integration.BLSSignatureType
+import tech.pegasys.teku.phase1.integration.Bytes32Type
+import tech.pegasys.teku.phase1.integration.CheckpointType
+import tech.pegasys.teku.phase1.integration.CustodySlashingType
+import tech.pegasys.teku.phase1.integration.DepositDataType
+import tech.pegasys.teku.phase1.integration.IndexedAttestationType
+import tech.pegasys.teku.phase1.integration.SSZBitListType
+import tech.pegasys.teku.phase1.integration.SSZByteListType
+import tech.pegasys.teku.phase1.integration.SSZListType
+import tech.pegasys.teku.phase1.integration.SSZMutableListType
+import tech.pegasys.teku.phase1.integration.SSZMutableVectorType
+import tech.pegasys.teku.phase1.integration.SSZVectorType
+import tech.pegasys.teku.phase1.integration.ShardTransitionType
+import tech.pegasys.teku.phase1.integration.SignedBeaconBlockHeaderType
+import tech.pegasys.teku.phase1.integration.UInt64Type
+import tech.pegasys.teku.phase1.integration.VoluntaryExitType
 import tech.pegasys.teku.phase1.onotole.phase1.Attestation
 import tech.pegasys.teku.phase1.onotole.phase1.AttestationCustodyBitWrapper
 import tech.pegasys.teku.phase1.onotole.phase1.AttestationData
@@ -27,26 +45,6 @@ import tech.pegasys.teku.phase1.onotole.phase1.SignedVoluntaryExit
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
 import tech.pegasys.teku.phase1.onotole.phase1.ValidatorIndex
 import tech.pegasys.teku.phase1.onotole.phase1.VoluntaryExit
-import tech.pegasys.teku.phase1.integration.AttestationDataType
-import tech.pegasys.teku.phase1.integration.AttestationType
-import tech.pegasys.teku.phase1.integration.BLSPublicKeyType
-import tech.pegasys.teku.phase1.integration.BLSSignatureType
-import tech.pegasys.teku.phase1.integration.Bytes32Type
-import tech.pegasys.teku.phase1.integration.CheckpointType
-import tech.pegasys.teku.phase1.integration.CustodySlashingType
-import tech.pegasys.teku.phase1.integration.DepositDataType
-import tech.pegasys.teku.phase1.integration.IndexedAttestationType
-import tech.pegasys.teku.phase1.integration.SSZBitListType
-import tech.pegasys.teku.phase1.integration.ShardTransitionType
-import tech.pegasys.teku.phase1.integration.SignedBeaconBlockHeaderType
-import tech.pegasys.teku.phase1.integration.UInt64Type
-import tech.pegasys.teku.phase1.integration.VoluntaryExitType
-import tech.pegasys.teku.phase1.integration.ssz.SSZBitListWrapper
-import tech.pegasys.teku.phase1.integration.ssz.SSZByteListWrapper
-import tech.pegasys.teku.phase1.integration.ssz.SSZListWrapper
-import tech.pegasys.teku.phase1.integration.ssz.SSZMutableListWrapper
-import tech.pegasys.teku.phase1.integration.ssz.SSZMutableVectorWrapper
-import tech.pegasys.teku.phase1.integration.ssz.SSZVectorWrapper
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
 import tech.pegasys.teku.phase1.onotole.ssz.SSZBitList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZByteList
@@ -71,7 +69,6 @@ import tech.pegasys.teku.datastructures.phase1.operations.CustodySlashing as Tek
 import tech.pegasys.teku.datastructures.phase1.operations.EarlyDerivedSecretReveal as TekuEarlyDerivedSecretReveal
 import tech.pegasys.teku.datastructures.phase1.operations.IndexedAttestationPhase1 as TekuIndexedAttestation
 import tech.pegasys.teku.datastructures.phase1.operations.SignedCustodySlashing as TekuSignedCustodySlashing
-import tech.pegasys.teku.ssz.SSZTypes.Bitlist as TekuBitlist
 
 internal class AttestationDataWrapper(
   override val v: TekuAttestationData
@@ -226,17 +223,17 @@ internal class AttestationWrapper(
     TekuAttestation(
       SSZBitListType.unwrap(aggregation_bits),
       AttestationDataType.unwrap(data),
-      (custody_bits_blocks as SSZMutableListWrapper<SSZBitList, TekuBitlist>).collection,
+      SSZMutableListType(SSZBitListType).unwrap(custody_bits_blocks),
       BLSSignatureType.unwrap(signature)
     )
   )
 
   override val aggregation_bits: SSZBitList
-    get() = SSZBitListWrapper(v.aggregation_bits)
+    get() = SSZBitListType.wrap(v.aggregation_bits)
   override val data: AttestationData
     get() = AttestationDataType.wrap(v.data)
   override val custody_bits_blocks: SSZList<SSZBitList>
-    get() = SSZListWrapper(v.custody_bits_blocks, SSZBitListType)
+    get() = SSZListType(SSZBitListType).wrap(v.custody_bits_blocks)
   override val signature: BLSSignature
     get() = BLSSignatureType.wrap(v.aggregate_signature)
 
@@ -265,13 +262,13 @@ internal class IndexedAttestationWrapper(
   constructor(committee: SSZMutableList<ValidatorIndex>, attestation: Attestation)
       : this(
     TekuIndexedAttestation(
-      (committee as SSZMutableListWrapper<ValidatorIndex, UnsignedLong>).collection,
+      SSZMutableListType(UInt64Type).unwrap(committee),
       AttestationType.unwrap(attestation)
     )
   )
 
   override val committee: SSZList<ValidatorIndex>
-    get() = SSZListWrapper(v.committee, UInt64Type)
+    get() = SSZListType(UInt64Type).wrap(v.committee)
   override val attestation: Attestation
     get() = AttestationType.wrap(v.attestation)
 
@@ -335,13 +332,13 @@ internal class DepositWrapper(
   constructor(proof: SSZMutableVector<Bytes32>, data: DepositData)
       : this(
     TekuDeposit(
-      (proof as SSZMutableVectorWrapper<Bytes32, Bytes32>).collection,
+      SSZMutableVectorType(Bytes32Type).unwrap(proof),
       DepositDataType.unwrap(data)
     )
   )
 
   override val proof: SSZVector<Bytes32>
-    get() = SSZVectorWrapper(v.proof, Bytes32Type)
+    get() = SSZVectorType(Bytes32Type).wrap(v.proof)
   override val data: DepositData
     get() = DepositDataType.wrap(v.data)
 
@@ -568,7 +565,7 @@ internal class CustodySlashingWrapper(override val v: TekuCustodySlashing) :
       UInt64Type.unwrap(whistleblower_index),
       ShardTransitionType.unwrap(shard_transition),
       AttestationType.unwrap(attestation),
-      (data as SSZByteListWrapper).collection
+      SSZByteListType.unwrap(data)
     )
   )
 
@@ -585,7 +582,7 @@ internal class CustodySlashingWrapper(override val v: TekuCustodySlashing) :
   override val attestation: Attestation
     get() = AttestationType.wrap(v.attestation)
   override val data: SSZByteList
-    get() = SSZByteListWrapper(v.data)
+    get() = SSZByteListType.wrap(v.data)
 
   override fun hash_tree_root() = v.hash_tree_root()
 

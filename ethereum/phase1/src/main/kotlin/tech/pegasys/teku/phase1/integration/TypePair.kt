@@ -3,6 +3,7 @@ package tech.pegasys.teku.phase1.integration
 import tech.pegasys.teku.phase1.integration.datastructures.Callback
 import tech.pegasys.teku.phase1.integration.datastructures.Mutable
 import tech.pegasys.teku.phase1.integration.datastructures.Wrapper
+import tech.pegasys.teku.phase1.onotole.ssz.SSZComposite
 import kotlin.reflect.KClass
 
 internal interface TypePair<Onotole : Any, Teku : Any> {
@@ -11,13 +12,19 @@ internal interface TypePair<Onotole : Any, Teku : Any> {
 
   fun wrap(v: Teku): Onotole
   fun unwrap(v: Onotole): Teku
+
+  fun toStringHelper(): String {
+    return "TypePair(onotole=$onotole, teku=$teku)"
+  }
 }
 
-internal abstract class WrappedTypePair<Onotole : Any, TWrapper : Wrapper<Teku>, Teku : Any>(
+internal interface SSZCompositeType<Onotole : SSZComposite, Teku : Any> : TypePair<Onotole, Teku>
+
+internal abstract class WrappedTypePair<Onotole : SSZComposite, TWrapper : Wrapper<Teku>, Teku : Any>(
   override val onotole: KClass<Onotole>,
   override val teku: KClass<Teku>,
   private val wrapper: KClass<TWrapper>
-) : TypePair<Onotole, Teku> {
+) : SSZCompositeType<Onotole, Teku> {
   override fun wrap(v: Teku): Onotole {
     return wrapper.java.getConstructor(teku.java).newInstance(v) as Onotole
   }
@@ -31,4 +38,6 @@ internal abstract class WrappedTypePair<Onotole : Any, TWrapper : Wrapper<Teku>,
   }
 
   override fun unwrap(v: Onotole) = (v as TWrapper).v
+
+  override fun toString() = toStringHelper()
 }
