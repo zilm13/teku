@@ -51,8 +51,8 @@ internal val ByteType = object : BasicType<Byte, Byte> {
 internal val Bytes4Type = object : BasicType<Bytes4, TekuBytes4> {
   override val teku = TekuBytes4::class
   override val onotole = Bytes4::class
-  inline override fun wrap(v: TekuBytes4) = v.wrappedBytes
-  inline override fun unwrap(v: Bytes4) = TekuBytes4(v)
+  inline override fun wrap(v: TekuBytes4) = v
+  inline override fun unwrap(v: Bytes4) = v
 }
 
 internal val Bytes32Type = object : BasicType<Bytes32, TekuBytes32> {
@@ -80,7 +80,7 @@ internal val BLSSignatureType = object : BasicType<BLSSignature, TekuBLSSignatur
   override val teku = TekuBLSSignature::class
   override val onotole = BLSSignature::class
   inline override fun wrap(v: TekuBLSSignature) = BLSSignature(v.toBytes())
-  inline override fun unwrap(v: BLSSignature) = TekuBLSSignature.fromBytes(v)
+  inline override fun unwrap(v: BLSSignature) = TekuBLSSignature.fromBytes(v.wrappedBytes)
 }
 
 internal val DomainTypePair = object : BasicType<Domain, Bytes> {
@@ -95,11 +95,9 @@ internal fun <Onotole : Any, Teku : Any> resolveBasicType(type: KClass<Onotole>)
     uint8::class -> UInt8Type
     uint64::class -> UInt64Type
     boolean::class -> BooleanType
-    // TODO resolve ambiguity: Bytes
     BLSSignature::class -> BLSSignatureType
     BLSPubkey::class -> BLSPublicKeyType
     Bytes32::class -> Bytes32Type
-    // TODO resolve ambiguity: Bytes
     Bytes4::class -> Bytes4Type
     Bytes::class -> BytesType
     Domain::class -> DomainTypePair
@@ -113,7 +111,6 @@ internal fun isBasicTypeValue(v: Any): Boolean {
     is UnsignedLong -> true
     is TekuBLSSignature -> true
     is TekuBLSPublicKey -> true
-    is TekuBytes4 -> true
     is uint8 -> true
     is uint64 -> true
     is boolean -> true
@@ -122,7 +119,6 @@ internal fun isBasicTypeValue(v: Any): Boolean {
     is Bytes32 -> true
     is Bytes4 -> true
     is Bytes -> true
-    is Domain -> true
     else -> false
   }
 }

@@ -2,6 +2,7 @@ package tech.pegasys.teku.phase1.onotole.pylib
 
 import org.apache.tuweni.bytes.Bytes
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
+import tech.pegasys.teku.phase1.onotole.ssz.Bytes4
 import tech.pegasys.teku.phase1.onotole.ssz.SSZBitVector
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
 import java.lang.Long
@@ -111,6 +112,7 @@ fun <T> Iterable<T>.count(x: T): uint64 {
 }
 
 operator fun Bytes.plus(b: Bytes) = Bytes.concatenate(this, b)
+operator fun Bytes4.plus(b: Bytes) = Bytes.concatenate(this.wrappedBytes, b)
 
 operator fun uint64.unaryMinus(): Int = -this.toInt()
 

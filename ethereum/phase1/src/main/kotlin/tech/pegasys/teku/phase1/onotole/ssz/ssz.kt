@@ -5,6 +5,7 @@ import kotlin.reflect.KClass
 import org.apache.tuweni.bytes.Bytes as TuweniBytes
 import org.apache.tuweni.bytes.Bytes32 as TuweniBytes32
 import org.apache.tuweni.bytes.Bytes48 as TuweniBytes48
+import tech.pegasys.teku.ssz.SSZTypes.Bytes4 as TekuBytes4
 
 typealias SSZObject = Any
 
@@ -14,10 +15,10 @@ typealias uint64 = ULong
 
 typealias Bytes = TuweniBytes
 typealias Bytes1 = Byte
-typealias Bytes4 = TuweniBytes
+typealias Bytes4 = TekuBytes4
 typealias Bytes32 = TuweniBytes32
 typealias Bytes48 = TuweniBytes48
-typealias Bytes96 = TuweniBytes
+data class Bytes96(val wrappedBytes: Bytes)
 
 typealias Bitlist = BooleanArray
 typealias CBitlist = List<Boolean>
@@ -31,11 +32,11 @@ typealias CDict<K, V> = MutableMap<K, V>
 typealias Sequence<T> = List<T>
 typealias Vector<T> = MutableList<T>
 
-fun Bytes4(): Bytes4 = TuweniBytes.fromHexString("0x00000000")
+fun Bytes4(): Bytes4 = Bytes4.fromHexString("0x00000000")
 fun Bytes32(): Bytes32 = Bytes32.ZERO
 fun Bytes32(x: List<Byte>): Bytes32 = Bytes32.wrap(x.toByteArray())
 fun Bytes48(): Bytes48 = Bytes48.ZERO
-fun Bytes96(): Bytes96 = TuweniBytes.concatenate(Bytes48.ZERO, Bytes48.ZERO)
+fun Bytes96(): Bytes96 = Bytes96(TuweniBytes.concatenate(Bytes48.ZERO, Bytes48.ZERO))
 
 fun CBitlist() = listOf<Boolean>()
 fun CBitvector(): CBitvector = mutableListOf<Boolean>()

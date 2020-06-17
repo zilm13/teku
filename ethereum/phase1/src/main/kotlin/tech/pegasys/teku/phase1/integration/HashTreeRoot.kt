@@ -6,11 +6,9 @@ import tech.pegasys.teku.phase1.integration.ssz.SSZListWrapper
 import tech.pegasys.teku.phase1.integration.ssz.SSZVectorWrapper
 import tech.pegasys.teku.phase1.onotole.phase1.BLSPubkey
 import tech.pegasys.teku.phase1.onotole.phase1.BLSSignature
-import tech.pegasys.teku.phase1.onotole.phase1.Domain
 import tech.pegasys.teku.phase1.onotole.phase1.Root
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
-import tech.pegasys.teku.phase1.onotole.ssz.Bytes4
 import tech.pegasys.teku.phase1.onotole.ssz.SSZCollection
 import tech.pegasys.teku.phase1.onotole.ssz.SSZComposite
 import tech.pegasys.teku.phase1.onotole.ssz.boolean
@@ -55,9 +53,10 @@ class HashTreeRoot {
         )
         is boolean -> HashTreeUtil.hash_tree_root(HashTreeUtil.SSZTypes.BASIC, SSZ.encodeBoolean(v))
         is Bytes -> HashTreeUtil.hash_tree_root(HashTreeUtil.SSZTypes.VECTOR_OF_BASIC, v)
-        is BLSSignature -> HashTreeUtil.hash_tree_root(HashTreeUtil.SSZTypes.VECTOR_OF_BASIC, v)
-        is Bytes4 -> HashTreeUtil.hash_tree_root(HashTreeUtil.SSZTypes.VECTOR_OF_BASIC, v)
-        is Domain -> HashTreeUtil.hash_tree_root(HashTreeUtil.SSZTypes.VECTOR_OF_BASIC, v)
+        is BLSSignature -> HashTreeUtil.hash_tree_root(
+          HashTreeUtil.SSZTypes.VECTOR_OF_BASIC,
+          v.wrappedBytes
+        )
         is BLSPubkey -> HashTreeUtil.hash_tree_root(HashTreeUtil.SSZTypes.VECTOR_OF_BASIC, v)
         is Bytes32 -> HashTreeUtil.hash_tree_root(HashTreeUtil.SSZTypes.VECTOR_OF_BASIC, v)
         else -> throw UnsupportedOperationException("Unsupported type ${v::class.qualifiedName}")
