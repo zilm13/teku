@@ -2471,12 +2471,8 @@ class Phase1Spec(val DATA: DataObjectFactory, val SSZ: SSZObjectFactory) {
   fun tech.pegasys.teku.phase1.onotole.phase0.Checkpoint.toPhase1() =
     DATA.Checkpoint(epoch = this.epoch, root = this.root)
 
-  fun get_current_epoch(state: tech.pegasys.teku.phase1.onotole.phase0.BeaconState): Epoch {
-    return compute_epoch_at_slot(state.slot)
-  }
-
   fun upgrade_to_phase1(pre: tech.pegasys.teku.phase1.onotole.phase0.BeaconState): BeaconState {
-    var epoch = get_current_epoch(pre)
+    var epoch = tech.pegasys.teku.phase1.onotole.phase0.get_current_epoch(pre)
     var post = DATA.BeaconState(
       genesis_time = pre.genesis_time,
       slot = pre.slot,
@@ -2486,13 +2482,9 @@ class Phase1Spec(val DATA: DataObjectFactory, val SSZ: SSZObjectFactory) {
         epoch = epoch
       ),
       latest_block_header = pre.latest_block_header.toPhase1(),
-      block_roots = SSZ.SSZVector(Root::class, pre.block_roots),
-      state_roots = SSZ.SSZVector(Root::class, pre.state_roots),
-      historical_roots = SSZ.SSZList(
-        Root::class,
-        HISTORICAL_ROOTS_LIMIT,
-        pre.historical_roots
-      ),
+      block_roots = SSZ.SSZVector(pre.block_roots),
+      state_roots = SSZ.SSZVector(pre.state_roots),
+      historical_roots = SSZ.SSZList(pre.historical_roots),
       eth1_data = pre.eth1_data.toPhase1(),
       eth1_data_votes = SSZ.SSZList(
         Eth1Data::class,
@@ -2521,9 +2513,9 @@ class Phase1Spec(val DATA: DataObjectFactory, val SSZ: SSZObjectFactory) {
           )
         }.toMutableList()
       ),
-      balances = SSZ.SSZList(Gwei::class, VALIDATOR_REGISTRY_LIMIT, pre.balances),
-      randao_mixes = SSZ.SSZVector(Root::class, pre.randao_mixes),
-      slashings = SSZ.SSZVector(Gwei::class, pre.slashings),
+      balances = SSZ.SSZList(pre.balances),
+      randao_mixes = SSZ.SSZVector(pre.randao_mixes),
+      slashings = SSZ.SSZVector(pre.slashings),
       previous_epoch_attestations = SSZ.SSZList(
         PendingAttestation::class,
         MAX_ATTESTATIONS * SLOTS_PER_EPOCH
@@ -2532,7 +2524,7 @@ class Phase1Spec(val DATA: DataObjectFactory, val SSZ: SSZObjectFactory) {
         PendingAttestation::class,
         MAX_ATTESTATIONS * SLOTS_PER_EPOCH
       ),
-      justification_bits = SSZ.SSZBitVector(pre.justification_bits),
+      justification_bits = pre.justification_bits,
       previous_justified_checkpoint = pre.previous_justified_checkpoint.toPhase1(),
       current_justified_checkpoint = pre.current_justified_checkpoint.toPhase1(),
       finalized_checkpoint = pre.finalized_checkpoint.toPhase1(),

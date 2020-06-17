@@ -75,8 +75,10 @@ interface SSZBitVector : SSZMutableVector<Boolean>, SSZComposite
 
 interface SSZObjectFactory {
   fun <T : Any> SSZList(type: KClass<T>, maxSize: ULong, items: MutableList<T> = mutableListOf()): SSZMutableList<T>
+  fun <T : Any> SSZList(immutable: SSZList<T>): SSZMutableList<T>
   fun SSZByteList(maxSize: ULong, items: MutableList<Byte> = mutableListOf()): SSZByteList
   fun SSZBitList(maxSize: ULong, items: MutableList<Boolean> = mutableListOf()): SSZBitList
   fun <T : Any> SSZVector(type: KClass<T>, items: MutableList<T>): SSZMutableVector<T>
+  fun <T : Any> SSZVector(immutable: SSZVector<T>): SSZMutableVector<T>
   fun SSZBitVector(items: MutableList<Boolean>): SSZBitVector
 }

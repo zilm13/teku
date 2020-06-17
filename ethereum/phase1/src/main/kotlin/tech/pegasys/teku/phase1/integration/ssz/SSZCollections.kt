@@ -1,9 +1,9 @@
 package tech.pegasys.teku.phase1.integration.ssz
 
-import tech.pegasys.teku.phase1.integration.types.ByteType
-import tech.pegasys.teku.phase1.integration.types.TypePair
 import tech.pegasys.teku.phase1.integration.datastructures.Mutable
 import tech.pegasys.teku.phase1.integration.datastructures.Wrapper
+import tech.pegasys.teku.phase1.integration.types.ByteType
+import tech.pegasys.teku.phase1.integration.types.TypePair
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes1
 import tech.pegasys.teku.phase1.onotole.ssz.SSZBitList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZBitVector
@@ -100,6 +100,12 @@ internal open class SSZMutableListWrapper<Onotole : Any, Teku : Any>(
   type: TypePair<Onotole, Teku>
 ) : SSZMutableList<Onotole>, SSZListWrapper<Onotole, Teku>(collection, type) {
 
+  constructor(immutable: SSZList<Onotole>) : this(
+    TekuSSZList.createMutable(
+      (immutable as SSZListWrapper<Onotole, Teku>).collection
+    ), immutable.type
+  )
+
   constructor(
     items: MutableList<Onotole>,
     maxSize: ULong,
@@ -183,7 +189,8 @@ internal class SSZBitListWrapper(override val v: Bitlist) : Wrapper<Bitlist>, SS
 }
 
 internal class SSZByteListWrapper(list: TekuSSZList<Byte>) :
-  SSZListWrapper<Bytes1, Byte>(list,
+  SSZListWrapper<Bytes1, Byte>(
+    list,
     ByteType
   ), SSZByteList {
 
@@ -208,6 +215,14 @@ internal class SSZMutableVectorWrapper<Onotole : Any, Teku : Any>(
   override val collection: TekuSSZMutableVector<Teku>,
   type: TypePair<Onotole, Teku>
 ) : SSZMutableVector<Onotole>, SSZVectorWrapper<Onotole, Teku>(collection, type) {
+
+  constructor(immutable: SSZVector<Onotole>) : this(
+    TekuSSZVector.createMutable(
+      (immutable as SSZVectorWrapper<Onotole, Teku>).collection.asList(),
+      immutable.type.teku.java
+    ),
+    immutable.type
+  )
 
   constructor(items: MutableList<Onotole>, type: TypePair<Onotole, Teku>)
       : this(

@@ -18,6 +18,10 @@ internal interface TypePair<Onotole : Any, Teku : Any> {
   }
 }
 
+internal interface ReadOnlyTypePair<Onotole : Any, Teku : Any> : TypePair<Onotole, Teku> {
+  override fun unwrap(v: Onotole): Teku = throw UnsupportedOperationException()
+}
+
 internal interface SSZCompositeType<Onotole : SSZComposite, Teku : Any> :
   TypePair<Onotole, Teku>
 
