@@ -5,7 +5,7 @@ import tech.pegasys.teku.phase1.integration.datastructures.Mutable
 import tech.pegasys.teku.phase1.integration.datastructures.Wrapper
 import kotlin.reflect.KClass
 
-interface TypePair<Onotole : Any, Teku : Any> {
+internal interface TypePair<Onotole : Any, Teku : Any> {
   val teku: KClass<Teku>
   val onotole: KClass<Onotole>
 
@@ -15,10 +15,11 @@ interface TypePair<Onotole : Any, Teku : Any> {
 
 internal abstract class WrappedTypePair<Onotole : Any, TWrapper : Wrapper<Teku>, Teku : Any>(
   override val onotole: KClass<Onotole>,
-  override val teku: KClass<Teku>
+  override val teku: KClass<Teku>,
+  private val wrapper: KClass<TWrapper>
 ) : TypePair<Onotole, Teku> {
   override fun wrap(v: Teku): Onotole {
-    TODO("Implement via reflection")
+    return wrapper.java.getConstructor(teku.java).newInstance(v) as Onotole
   }
 
   fun wrap(v: Teku, onUpdate: Callback<Onotole>): Onotole {

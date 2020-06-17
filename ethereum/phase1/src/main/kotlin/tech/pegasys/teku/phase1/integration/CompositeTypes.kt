@@ -113,55 +113,65 @@ import tech.pegasys.teku.datastructures.state.SigningRoot as TekuSigningRoot
 internal val Eth1DataType =
   object : WrappedTypePair<Eth1Data, Eth1DataWrapper, TekuEth1Data>(
     Eth1Data::class,
-    TekuEth1Data::class
+    TekuEth1Data::class,
+    Eth1DataWrapper::class
   ) {}
 
 internal val BeaconBlockHeaderType =
   object : WrappedTypePair<BeaconBlockHeader, BeaconBlockHeaderWrapper, TekuBeaconBlockHeader>
-    (BeaconBlockHeader::class, TekuBeaconBlockHeader::class) {}
+    (BeaconBlockHeader::class, TekuBeaconBlockHeader::class, BeaconBlockHeaderWrapper::class) {}
 
 internal val SignedBeaconBlockHeaderType = object :
   WrappedTypePair<SignedBeaconBlockHeader, SignedBeaconBlockHeaderWrapper, TekuSignedBeaconBlockHeader>(
-    SignedBeaconBlockHeader::class, TekuSignedBeaconBlockHeader::class
+    SignedBeaconBlockHeader::class,
+    TekuSignedBeaconBlockHeader::class,
+    SignedBeaconBlockHeaderWrapper::class
   ) {}
 
 internal val BeaconBlockBodyType =
   object : WrappedTypePair<BeaconBlockBody, BeaconBlockBodyWrapper, TekuBeaconBlockBody>
-    (BeaconBlockBody::class, TekuBeaconBlockBody::class) {}
+    (BeaconBlockBody::class, TekuBeaconBlockBody::class, BeaconBlockBodyWrapper::class) {}
 
 internal val BeaconBlockType =
   object : WrappedTypePair<BeaconBlock, BeaconBlockWrapper, TekuBeaconBlock>
-    (BeaconBlock::class, TekuBeaconBlock::class) {}
+    (BeaconBlock::class, TekuBeaconBlock::class, BeaconBlockWrapper::class) {}
 
 internal val SignedBeaconBlockType =
   object : WrappedTypePair<SignedBeaconBlock, SignedBeaconBlockWrapper, TekuSignedBeaconBlock>
-    (SignedBeaconBlock::class, TekuSignedBeaconBlock::class) {}
+    (SignedBeaconBlock::class, TekuSignedBeaconBlock::class, SignedBeaconBlockWrapper::class) {}
 
 internal val DepositType = object :
-  WrappedTypePair<Deposit, DepositWrapper, TekuDeposit>(Deposit::class, TekuDeposit::class) {}
+  WrappedTypePair<Deposit, DepositWrapper, TekuDeposit>(
+    Deposit::class,
+    TekuDeposit::class,
+    DepositWrapper::class
+  ) {}
 
 internal val DepositDataType =
   object : WrappedTypePair<DepositData, DepositDataWrapper, TekuDepositData>(
     DepositData::class,
-    TekuDepositData::class
+    TekuDepositData::class,
+    DepositDataWrapper::class
   ) {}
 
 internal val DepositMessageType =
   object : WrappedTypePair<DepositMessage, DepositMessageWrapper, TekuDepositMessage>(
     DepositMessage::class,
-    TekuDepositMessage::class
+    TekuDepositMessage::class,
+    DepositMessageWrapper::class
   ) {}
 
 internal val SignedVoluntaryExitType = object :
   WrappedTypePair<SignedVoluntaryExit, SignedVoluntaryExitWrapper, TekuSignedVoluntaryExit>(
     SignedVoluntaryExit::class,
-    TekuSignedVoluntaryExit::class
+    TekuSignedVoluntaryExit::class,
+    SignedVoluntaryExitWrapper::class
   ) {}
 
 internal val VoluntaryExitType =
   object : WrappedTypePair<VoluntaryExit, VoluntaryExitWrapper, TekuVoluntaryExit>(
     VoluntaryExit::class,
-    TekuVoluntaryExit::class
+    TekuVoluntaryExit::class, VoluntaryExitWrapper::class
   ) {}
 
 internal val AttestationCustodyBitWrapperType =
@@ -184,136 +194,165 @@ internal val AttestationCustodyBitWrapperType =
 internal val AttestationDataType =
   object : WrappedTypePair<AttestationData, AttestationDataWrapper, TekuAttestationData>(
     AttestationData::class,
-    TekuAttestationData::class
+    TekuAttestationData::class,
+    AttestationDataWrapper::class
   ) {}
 
 internal val AttestationType =
   object : WrappedTypePair<Attestation, AttestationWrapper, TekuAttestation>(
     Attestation::class,
-    TekuAttestation::class
+    TekuAttestation::class,
+    AttestationWrapper::class
   ) {}
 
 internal val AttesterSlashingType =
   object : WrappedTypePair<AttesterSlashing, AttesterSlashingWrapper, TekuAttesterSlashing>(
     AttesterSlashing::class,
-    TekuAttesterSlashing::class
+    TekuAttesterSlashing::class,
+    AttesterSlashingWrapper::class
   ) {}
 
 internal val ProposerSlashingType =
   object : WrappedTypePair<ProposerSlashing, ProposerSlashingWrapper, TekuProposerSlashing>(
-    ProposerSlashing::class, TekuProposerSlashing::class
+    ProposerSlashing::class, TekuProposerSlashing::class, ProposerSlashingWrapper::class
   ) {}
 
 internal val CustodyKeyRevealType =
   object : WrappedTypePair<CustodyKeyReveal, CustodyKeyRevealWrapper, TekuCustodyKeyReveal>(
     CustodyKeyReveal::class,
-    TekuCustodyKeyReveal::class
+    TekuCustodyKeyReveal::class,
+    CustodyKeyRevealWrapper::class
   ) {}
 
 internal val CustodySlashingType =
   object : WrappedTypePair<CustodySlashing, CustodySlashingWrapper, TekuCustodySlashing>(
     CustodySlashing::class,
-    TekuCustodySlashing::class
+    TekuCustodySlashing::class,
+    CustodySlashingWrapper::class
   ) {}
 
 internal val EarlyDerivedSecretRevealType = object :
   WrappedTypePair<EarlyDerivedSecretReveal, EarlyDerivedSecretRevealWrapper, TekuEarlyDerivedSecretReveal>(
     EarlyDerivedSecretReveal::class,
-    TekuEarlyDerivedSecretReveal::class
+    TekuEarlyDerivedSecretReveal::class,
+    EarlyDerivedSecretRevealWrapper::class
   ) {}
 
 internal val IndexedAttestationType = object :
   WrappedTypePair<IndexedAttestation, IndexedAttestationWrapper, TekuIndexedAttestation>(
     IndexedAttestation::class,
-    TekuIndexedAttestation::class
+    TekuIndexedAttestation::class,
+    IndexedAttestationWrapper::class
   ) {}
 
 internal val SignedCustodySlashingType = object :
   WrappedTypePair<SignedCustodySlashing, SignedCustodySlashingWrapper, TekuSignedCustodySlashing>(
     SignedCustodySlashing::class,
-    TekuSignedCustodySlashing::class
+    TekuSignedCustodySlashing::class,
+    SignedCustodySlashingWrapper::class
   ) {}
 
 internal val ShardBlockType =
   object : WrappedTypePair<ShardBlock, ShardBlockWrapper, TekuShardBlock>(
     ShardBlock::class,
-    TekuShardBlock::class
+    TekuShardBlock::class,
+    ShardBlockWrapper::class
   ) {}
 
 internal val ShardBlockHeaderType =
   object : WrappedTypePair<ShardBlockHeader, ShardBlockHeaderWrapper, TekuShardBlockHeader>(
     ShardBlockHeader::class,
-    TekuShardBlockHeader::class
+    TekuShardBlockHeader::class,
+    ShardBlockHeaderWrapper::class
   ) {}
 
 internal val ShardStateType =
   object : WrappedTypePair<ShardState, ShardStateWrapper, TekuShardState>(
     ShardState::class,
-    TekuShardState::class
+    TekuShardState::class,
+    ShardStateWrapper::class
   ) {}
 
 internal val ShardTransitionType =
   object : WrappedTypePair<ShardTransition, ShardTransitionWrapper, TekuShardTransition>(
     ShardTransition::class,
-    TekuShardTransition::class
+    TekuShardTransition::class,
+    ShardTransitionWrapper::class
   ) {}
 
 internal val SignedShardBlockType =
   object : WrappedTypePair<SignedShardBlock, SignedShardBlockWrapper, TekuSignedShardBlock>(
     SignedShardBlock::class,
-    TekuSignedShardBlock::class
+    TekuSignedShardBlock::class,
+    SignedShardBlockWrapper::class
   ) {}
 
 internal val ExposedValidatorIndicesType = object :
   WrappedTypePair<ExposedValidatorIndices, ExposedValidatorIndicesWrapper, TekuExposedValidatorIndices>(
-    ExposedValidatorIndices::class, TekuExposedValidatorIndices::class
+    ExposedValidatorIndices::class,
+    TekuExposedValidatorIndices::class,
+    ExposedValidatorIndicesWrapper::class
   ) {}
 
 internal val BeaconStateType =
   object : WrappedTypePair<BeaconState, BeaconStateWrapper, TekuBeaconState>(
     BeaconState::class,
-    TekuBeaconState::class
+    TekuBeaconState::class,
+    BeaconStateWrapper::class
   ) {}
 
 internal val PendingAttestationType = object :
   WrappedTypePair<PendingAttestation, PendingAttestationWrapper, TekuPendingAttestation>(
     PendingAttestation::class,
-    TekuPendingAttestation::class
+    TekuPendingAttestation::class,
+    PendingAttestationWrapper::class
   ) {}
 
 internal val ValidatorType =
   object : WrappedTypePair<Validator, ValidatorWrapper, TekuValidator>(
     Validator::class,
-    TekuValidator::class
+    TekuValidator::class,
+    ValidatorWrapper::class
   ) {}
 
 internal val CheckpointType =
   object : WrappedTypePair<Checkpoint, CheckpointWrapper, TekuCheckpoint>(
     Checkpoint::class,
-    TekuCheckpoint::class
+    TekuCheckpoint::class,
+    CheckpointWrapper::class
   ) {}
 
 internal val ForkType =
-  object : WrappedTypePair<Fork, ForkWrapper, TekuFork>(Fork::class, TekuFork::class) {}
+  object : WrappedTypePair<Fork, ForkWrapper, TekuFork>(
+    Fork::class,
+    TekuFork::class,
+    ForkWrapper::class
+  ) {}
 
 internal val ForkDataType = object :
-  WrappedTypePair<ForkData, ForkDataWrapper, TekuForkData>(ForkData::class, TekuForkData::class) {}
+  WrappedTypePair<ForkData, ForkDataWrapper, TekuForkData>(
+    ForkData::class,
+    TekuForkData::class,
+    ForkDataWrapper::class
+  ) {}
 
 internal val HistoricalBatchType =
   object : WrappedTypePair<HistoricalBatch, HistoricalBatchWrapper, TekuHistoricalBatch>(
     HistoricalBatch::class,
-    TekuHistoricalBatch::class
+    TekuHistoricalBatch::class,
+    HistoricalBatchWrapper::class
   ) {}
 
 internal val SigningRootType =
   object : WrappedTypePair<SigningRoot, SigningRootWrapper, TekuSigningRoot>(
     SigningRoot::class,
-    TekuSigningRoot::class
+    TekuSigningRoot::class,
+    SigningRootWrapper::class
   ) {}
 
 internal val CompactCommitteeType = object :
   WrappedTypePair<CompactCommittee, CompactCommitteeWrapper, TekuCompactCommittee>(
-    CompactCommittee::class, TekuCompactCommittee::class
+    CompactCommittee::class, TekuCompactCommittee::class, CompactCommitteeWrapper::class
   ) {}
 
 internal fun <Onotole : Any, Teku : Any> resolveCompositeType(type: KClass<Onotole>): TypePair<Onotole, Teku>? {

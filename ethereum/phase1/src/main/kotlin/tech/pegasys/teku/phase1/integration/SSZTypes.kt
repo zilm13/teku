@@ -9,12 +9,12 @@ import tech.pegasys.teku.ssz.SSZTypes.Bitvector
 import kotlin.reflect.KClass
 
 internal val SSZBitListType = object : WrappedTypePair<SSZBitList, SSZBitListWrapper, Bitlist>(
-  SSZBitList::class, Bitlist::class
+  SSZBitList::class, Bitlist::class, SSZBitListWrapper::class
 ) {}
 
 internal val SSZBitVectorType =
   object : WrappedTypePair<SSZBitVector, SSZBitVectorWrapper, Bitvector>
-    (SSZBitVector::class, Bitvector::class) {}
+    (SSZBitVector::class, Bitvector::class, SSZBitVectorWrapper::class) {}
 
 
 internal fun <Onotole : Any, Teku : Any> resolveSSZType(type: KClass<Onotole>): TypePair<Onotole, Teku>? {

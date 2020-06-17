@@ -30,7 +30,7 @@ import tech.pegasys.teku.ssz.SSZTypes.SSZVector as TekuSSZVector
 
 // TODO check SSZTypes all over the code to understand whether merklization would be correct or not
 
-abstract class SSZImmutableCollectionWrapper<Onotole : Any, Teku : Any>(
+internal abstract class SSZImmutableCollectionWrapper<Onotole : Any, Teku : Any>(
   internal val type: TypePair<Onotole, Teku>
 ) : SSZImmutableCollection<Onotole> {
   internal abstract val collection: TekuSSZImmutableCollection<Teku>
@@ -66,7 +66,7 @@ abstract class SSZImmutableCollectionWrapper<Onotole : Any, Teku : Any>(
   override fun listIterator(index: Int): MutableListIterator<Onotole> = TODO("Not yet implemented")
 }
 
-abstract class SSZMutableCollectionWrapper<Onotole : Any, Teku : Any>(
+internal abstract class SSZMutableCollectionWrapper<Onotole : Any, Teku : Any>(
   internal val type: TypePair<Onotole, Teku>
 ) : SSZMutableCollection<Onotole> {
   internal abstract val collection: TekuSSZMutableCollection<Teku>
@@ -112,7 +112,7 @@ abstract class SSZMutableCollectionWrapper<Onotole : Any, Teku : Any>(
   override fun listIterator(index: Int): MutableListIterator<Onotole> = TODO("Not yet implemented")
 }
 
-open class SSZListWrapper<Onotole : Any, Teku : Any>(
+internal open class SSZListWrapper<Onotole : Any, Teku : Any>(
   override val collection: TekuSSZList<Teku>,
   type: TypePair<Onotole, Teku>
 ) : SSZList<Onotole>, SSZImmutableCollectionWrapper<Onotole, Teku>(type) {
@@ -161,7 +161,7 @@ open class SSZListWrapper<Onotole : Any, Teku : Any>(
   }
 }
 
-open class SSZMutableListWrapper<Onotole : Any, Teku : Any>(
+internal open class SSZMutableListWrapper<Onotole : Any, Teku : Any>(
   override val collection: TekuSSZMutableList<Teku>,
   type: TypePair<Onotole, Teku>
 ) : SSZMutableList<Onotole>, SSZMutableCollectionWrapper<Onotole, Teku>(type) {
@@ -217,7 +217,7 @@ open class SSZMutableListWrapper<Onotole : Any, Teku : Any>(
   }
 }
 
-class SSZBitListWrapper(override val v: Bitlist) : Wrapper<Bitlist>, SSZBitList {
+internal class SSZBitListWrapper(override val v: Bitlist) : Wrapper<Bitlist>, SSZBitList {
 
   constructor(items: MutableList<Boolean>, maxSize: ULong) : this(
     MutableList(1) { items }.map<MutableList<Boolean>, Bitlist> { list ->
@@ -266,7 +266,7 @@ class SSZBitListWrapper(override val v: Bitlist) : Wrapper<Bitlist>, SSZBitList 
   override fun subList(fromIndex: Int, toIndex: Int) = TODO("Not yet implemented")
 }
 
-class SSZByteListWrapper(list: TekuSSZList<Byte>) :
+internal class SSZByteListWrapper(list: TekuSSZList<Byte>) :
   SSZListWrapper<Bytes1, Byte>(list, object : TypePair<Byte, Byte> {
     override val teku = Byte::class
     override val onotole = Byte::class
@@ -279,7 +279,7 @@ class SSZByteListWrapper(list: TekuSSZList<Byte>) :
   )
 }
 
-class SSZVectorWrapper<Onotole : Any, Teku : Any>(
+internal class SSZVectorWrapper<Onotole : Any, Teku : Any>(
   override val collection: TekuSSZVector<Teku>,
   type: TypePair<Onotole, Teku>
 ) : SSZVector<Onotole>, SSZImmutableCollectionWrapper<Onotole, Teku>(type) {
@@ -317,7 +317,7 @@ class SSZVectorWrapper<Onotole : Any, Teku : Any>(
   }
 }
 
-class SSZMutableVectorWrapper<Onotole : Any, Teku : Any>(
+internal class SSZMutableVectorWrapper<Onotole : Any, Teku : Any>(
   override val collection: TekuSSZMutableVector<Teku>,
   type: TypePair<Onotole, Teku>
 ) : SSZMutableVector<Onotole>, SSZMutableCollectionWrapper<Onotole, Teku>(type) {
@@ -355,7 +355,7 @@ class SSZMutableVectorWrapper<Onotole : Any, Teku : Any>(
   }
 }
 
-class SSZBitVectorWrapper(override val v: Bitvector) : Wrapper<Bitvector>, SSZBitVector {
+internal class SSZBitVectorWrapper(override val v: Bitvector) : Wrapper<Bitvector>, SSZBitVector {
   constructor(items: MutableList<Boolean>) : this(
     Bitvector(
       items.mapIndexed { i, v -> Pair(i, v) }.filter { p -> p.second }
@@ -400,7 +400,7 @@ class SSZBitVectorWrapper(override val v: Bitvector) : Wrapper<Bitvector>, SSZBi
   override fun subList(fromIndex: Int, toIndex: Int) = TODO("Not yet implemented")
 }
 
-fun <Onotole : Any, Teku : Any> SSZMutableCollection<Onotole>.copyTo(
+internal fun <Onotole : Any, Teku : Any> SSZMutableCollection<Onotole>.copyTo(
   to: TekuSSZMutableCollection<Teku>
 ) {
   (this as SSZMutableCollectionWrapper<Onotole, Teku>).forEachIndexed { i, item ->
