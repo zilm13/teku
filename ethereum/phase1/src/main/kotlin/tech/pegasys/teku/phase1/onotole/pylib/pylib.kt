@@ -3,16 +3,17 @@ package tech.pegasys.teku.phase1.onotole.pylib
 import org.apache.tuweni.bytes.Bytes
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes4
-import tech.pegasys.teku.phase1.onotole.ssz.SSZBitVector
+import tech.pegasys.teku.phase1.onotole.ssz.SSZBitlist
+import tech.pegasys.teku.phase1.onotole.ssz.SSZBitvector
+import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableBitvector
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
 import java.lang.Long
 import java.math.BigInteger
 import java.util.*
-import kotlin.test.fail
-
-
 typealias pybytes = Bytes
 typealias pybool = Boolean
+typealias PyList<T> = MutableList<T>
+typealias PyDict<K,V> = MutableMap<K,V>
 
 inline class pyint(val value: BigInteger) {
   constructor(x: uint64) : this(x.toLong().toBigInteger())
@@ -29,6 +30,8 @@ inline class pyint(val value: BigInteger) {
   operator fun times(b: uint64) = pyint(value.times(b.toLong().toBigInteger()))
   operator fun plus(b: pyint) = pyint(value.plus(b.value))
   operator fun plus(b: uint64) = pyint(value.plus(b.toLong().toBigInteger()))
+  operator fun minus(b: pyint) = pyint(value.minus(b.value))
+  operator fun minus(b: uint64) = pyint(value.minus(b.toLong().toBigInteger()))
 }
 
 data class Tuple2<A : Comparable<A>, B : Comparable<B>>(val a: A, val b: B) : Comparable<Tuple2<A, B>> {
@@ -44,7 +47,7 @@ data class Tuple2<A : Comparable<A>, B : Comparable<B>>(val a: A, val b: B) : Co
 
 fun <T> len(c: Collection<T>) = c.size.toULong()
 fun len(c: BitSet) = c.size().toLong()
-// fun len(c: Bitlist) = c.size
+//fun len(c: Bitlist) = c.size
 
 fun <T> any(c: Collection<T>) = c.any()
 fun all(c: Collection<Boolean>) = c.all { it }
@@ -88,23 +91,19 @@ fun <T> Iterable<T>.intersection(b: Iterable<T>) = this.intersect(b)
 fun BitSet.slice(from: Int, to: Int) = (from until to).map { this[it] }
 fun Bytes.slice(a: uint64, b: uint64) = this.slice(a.toInt(), b.toInt())
 fun <T> List<T>.slice(a: uint64, b: uint64) = this.subList(a.toInt(), b.toInt())
-fun <T> MutableList<T>.updateSlice(f: uint64, t: uint64, x: List<T>) {
-  for (i in f until t) {
-    this[i] = x[i]
-  }
-}
-fun SSZBitVector.updateSlice(f: uint64, t: uint64, x: List<Boolean>) {
+fun SSZMutableBitvector.updateSlice(f: uint64, t: uint64, x: List<Boolean>) {
   for (i in f until t) {
     this[i] = x[i]
   }
 }
 
 operator fun <T> List<T>.get(index: uint64) = get(index.toInt())
-operator fun <A> Pair<A, A>.get(i: uint64) = if (i == 0uL) first else if (i == 1uL) second else fail("bad index " + i)
+operator fun <A> Pair<A, A>.get(i: uint64) = if (i == 0uL) first else if (i == 1uL) second else throw IllegalArgumentException("bad index " + i)
 operator fun pybytes.get(index: uint64) = get(index.toInt())
 
 operator fun <T> MutableList<T>.set(index: uint64, value: T) = set(index.toInt(), value)
-operator fun SSZBitVector.set(i: uint64, v: uint64) = this.set(i, pybool(v))
+operator fun MutableList<Boolean>.set(i: uint64, v: uint64) = this.set(i, pybool(v))
+operator fun SSZMutableBitvector.set(i: uint64, v: uint64) = this.set(i, pybool(v))
 
 fun <T> Iterable<T>.count(x: T): uint64 {
   fun pred(a: T): Boolean = a == x
@@ -145,10 +144,20 @@ fun <T> MutableList<T>.append(a: T) {
   this.add(a)
 }
 
+operator fun <T> PyList<T>.times(dup: uint64): PyList<T> = List(dup.toInt()) { this }.flatten().toMutableList()
+
 fun <T> List<T>.index(a: T) = this.indexOf(a)
 
-fun <K, V> Map<K, V>.keys() = this.keys
+fun <T> List<T>.toPyList(): PyList<T> = this.toMutableList()
+fun <T> PyList() = mutableListOf<T>()
+fun <T> PyList(vararg elts: T) = mutableListOf(*elts)
 
+fun <K,V> List<Pair<K,V>>.toPyDict(): PyDict<K,V> = this.toMap().toMutableMap()
+fun <K,V> PyDict() = mutableMapOf<K,V>()
+fun <K,V> PyDict(vararg pairs: Pair<K, V>) = mutableMapOf(*pairs)
+
+fun <K, V> Map<K, V>.keys() = this.keys
+fun <K, V> Map<K, V>.items() = this.entries
 
 fun uint64.pow(b: uint64): uint64 = Math.pow(this.toDouble(), b.toDouble()).toULong()
 fun uint64.bit_length(): pyint {
@@ -158,4 +167,10 @@ fun uint64.bit_length(): pyint {
 fun uint64.to_bytes(length: uint64, endiannes: String): pybytes = TODO()
 fun from_bytes(data: pybytes, endiannes: String): uint64 = TODO()
 
+fun pyint.to_bytes(length: uint64, endiannes: String): pybytes = TODO()
+
 operator fun <T> Pair<T, T>.contains(a: T) = this.first == a || this.second == a
+fun <T,U> Pair<T,T>.map(f: (T) -> U): List<U> = listOf(f(first), f(second))
+
+fun pybytes(s: String): pybytes = Bytes.fromHexString("0x" + s)
+fun pybytes.join(c: Iterable<pybytes>): pybytes = TODO()

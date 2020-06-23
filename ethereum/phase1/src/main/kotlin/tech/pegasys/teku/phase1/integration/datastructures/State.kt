@@ -1,778 +1,787 @@
 package tech.pegasys.teku.phase1.integration.datastructures
 
-import com.google.common.primitives.UnsignedLong
-import tech.pegasys.teku.phase1.integration.types.AttestationDataType
-import tech.pegasys.teku.phase1.integration.types.BLSPublicKeyType
-import tech.pegasys.teku.phase1.integration.types.BeaconBlockHeaderType
-import tech.pegasys.teku.phase1.integration.types.Bytes32Type
-import tech.pegasys.teku.phase1.integration.types.Bytes4Type
-import tech.pegasys.teku.phase1.integration.types.CheckpointType
-import tech.pegasys.teku.phase1.integration.types.CompactCommitteeType
-import tech.pegasys.teku.phase1.integration.types.DomainTypePair
-import tech.pegasys.teku.phase1.integration.types.Eth1DataType
-import tech.pegasys.teku.phase1.integration.types.ExposedValidatorIndicesType
-import tech.pegasys.teku.phase1.integration.types.ForkType
-import tech.pegasys.teku.phase1.integration.types.PendingAttestationType
-import tech.pegasys.teku.phase1.integration.types.SSZBitListType
-import tech.pegasys.teku.phase1.integration.types.SSZBitVectorType
-import tech.pegasys.teku.phase1.integration.types.SSZListType
-import tech.pegasys.teku.phase1.integration.types.SSZMutableListType
-import tech.pegasys.teku.phase1.integration.types.SSZMutableVectorType
-import tech.pegasys.teku.phase1.integration.types.SSZVectorType
-import tech.pegasys.teku.phase1.integration.types.ShardStateType
-import tech.pegasys.teku.phase1.integration.types.UInt64Type
-import tech.pegasys.teku.phase1.integration.types.UInt8Type
-import tech.pegasys.teku.phase1.integration.types.ValidatorType
-import tech.pegasys.teku.phase1.integration.ssz.copyTo
-import tech.pegasys.teku.phase1.onotole.phase1.AttestationData
+import org.apache.tuweni.bytes.Bytes48
+import tech.pegasys.teku.phase1.integration.ssz.SSZAbstractCollection
+import tech.pegasys.teku.phase1.integration.ssz.SSZBitlistImpl
+import tech.pegasys.teku.phase1.integration.ssz.SSZListImpl
+import tech.pegasys.teku.phase1.integration.ssz.SSZMutableBitvectorImpl
+import tech.pegasys.teku.phase1.integration.ssz.SSZMutableListImpl
+import tech.pegasys.teku.phase1.integration.ssz.SSZMutableVectorImpl
+import tech.pegasys.teku.phase1.integration.ssz.SSZVectorImpl
+import tech.pegasys.teku.phase1.integration.Bytes48Type
+import tech.pegasys.teku.phase1.integration.getBasicValue
+import tech.pegasys.teku.phase1.integration.toUInt64
+import tech.pegasys.teku.phase1.integration.toUnsignedLong
+import tech.pegasys.teku.phase1.integration.wrapBasicValue
+import tech.pegasys.teku.phase1.integration.wrapValues
 import tech.pegasys.teku.phase1.onotole.phase1.BLSPubkey
-import tech.pegasys.teku.phase1.onotole.phase1.BeaconBlockHeader
-import tech.pegasys.teku.phase1.onotole.phase1.BeaconState
-import tech.pegasys.teku.phase1.onotole.phase1.Checkpoint
-import tech.pegasys.teku.phase1.onotole.phase1.CompactCommittee
 import tech.pegasys.teku.phase1.onotole.phase1.Domain
+import tech.pegasys.teku.phase1.onotole.phase1.EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS
+import tech.pegasys.teku.phase1.onotole.phase1.EPOCHS_PER_ETH1_VOTING_PERIOD
+import tech.pegasys.teku.phase1.onotole.phase1.EPOCHS_PER_HISTORICAL_VECTOR
+import tech.pegasys.teku.phase1.onotole.phase1.EPOCHS_PER_SLASHINGS_VECTOR
 import tech.pegasys.teku.phase1.onotole.phase1.Epoch
-import tech.pegasys.teku.phase1.onotole.phase1.Eth1Data
-import tech.pegasys.teku.phase1.onotole.phase1.ExposedValidatorIndices
-import tech.pegasys.teku.phase1.onotole.phase1.Fork
-import tech.pegasys.teku.phase1.onotole.phase1.ForkData
 import tech.pegasys.teku.phase1.onotole.phase1.Gwei
-import tech.pegasys.teku.phase1.onotole.phase1.HistoricalBatch
+import tech.pegasys.teku.phase1.onotole.phase1.HISTORICAL_ROOTS_LIMIT
+import tech.pegasys.teku.phase1.onotole.phase1.JUSTIFICATION_BITS_LENGTH
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_ATTESTATIONS
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_CUSTODY_CHUNK_CHALLENGE_RECORDS
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_EARLY_DERIVED_SECRET_REVEALS
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_SHARDS
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_VALIDATORS_PER_COMMITTEE
 import tech.pegasys.teku.phase1.onotole.phase1.OnlineEpochs
-import tech.pegasys.teku.phase1.onotole.phase1.PendingAttestation
 import tech.pegasys.teku.phase1.onotole.phase1.Root
-import tech.pegasys.teku.phase1.onotole.phase1.ShardState
-import tech.pegasys.teku.phase1.onotole.phase1.SigningRoot
+import tech.pegasys.teku.phase1.onotole.phase1.SLOTS_PER_EPOCH
+import tech.pegasys.teku.phase1.onotole.phase1.SLOTS_PER_HISTORICAL_ROOT
+import tech.pegasys.teku.phase1.onotole.phase1.Shard
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
-import tech.pegasys.teku.phase1.onotole.phase1.Validator
+import tech.pegasys.teku.phase1.onotole.phase1.VALIDATOR_REGISTRY_LIMIT
 import tech.pegasys.teku.phase1.onotole.phase1.ValidatorIndex
 import tech.pegasys.teku.phase1.onotole.phase1.Version
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
-import tech.pegasys.teku.phase1.onotole.ssz.SSZBitList
-import tech.pegasys.teku.phase1.onotole.ssz.SSZBitVector
+import tech.pegasys.teku.phase1.onotole.ssz.Bytes4
+import tech.pegasys.teku.phase1.onotole.ssz.SSZBitlist
+import tech.pegasys.teku.phase1.onotole.ssz.SSZBitvector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZList
+import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableBitvector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableVector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZVector
 import tech.pegasys.teku.phase1.onotole.ssz.boolean
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
-import java.util.stream.Collectors
-import tech.pegasys.teku.datastructures.phase1.state.CompactCommittee as TekuCompactCommittee
-import tech.pegasys.teku.datastructures.phase1.state.ExposedValidatorIndices as TekuExposedValidatorIndices
-import tech.pegasys.teku.datastructures.phase1.state.MutableBeaconStatePhase1 as TekuBeaconState
-import tech.pegasys.teku.datastructures.phase1.state.PendingAttestationPhase1 as TekuPendingAttestation
-import tech.pegasys.teku.datastructures.phase1.state.ValidatorPhase1 as TekuValidator
-import tech.pegasys.teku.datastructures.state.Checkpoint as TekuCheckpoint
-import tech.pegasys.teku.datastructures.state.Fork as TekuFork
-import tech.pegasys.teku.datastructures.state.ForkData as TekuForkData
-import tech.pegasys.teku.datastructures.state.HistoricalBatch as TekuHistoricalBatch
-import tech.pegasys.teku.datastructures.state.SigningRoot as TekuSigningRoot
-import tech.pegasys.teku.ssz.SSZTypes.SSZList as TekuSSZList
+import tech.pegasys.teku.ssz.backing.ContainerViewRead
+import tech.pegasys.teku.ssz.backing.ListViewRead
+import tech.pegasys.teku.ssz.backing.ListViewWrite
+import tech.pegasys.teku.ssz.backing.VectorViewRead
+import tech.pegasys.teku.ssz.backing.VectorViewWrite
+import tech.pegasys.teku.ssz.backing.tree.TreeNode
+import tech.pegasys.teku.ssz.backing.type.BasicViewTypes
+import tech.pegasys.teku.ssz.backing.type.ContainerViewType
+import tech.pegasys.teku.ssz.backing.type.ListViewType
+import tech.pegasys.teku.ssz.backing.type.VectorViewType
+import tech.pegasys.teku.ssz.backing.view.AbstractImmutableContainer
+import tech.pegasys.teku.ssz.backing.view.AbstractMutableContainer
+import tech.pegasys.teku.ssz.backing.view.BasicViews.BitView
+import tech.pegasys.teku.ssz.backing.view.BasicViews.ByteView
+import tech.pegasys.teku.ssz.backing.view.BasicViews.Bytes32View
+import tech.pegasys.teku.ssz.backing.view.BasicViews.UInt64View
+import tech.pegasys.teku.ssz.backing.view.ViewUtils
+import tech.pegasys.teku.util.config.Constants
 
-internal class ExposedValidatorIndicesWrapper(
-  override var v: TekuExposedValidatorIndices,
-  onUpdate: Callback<ExposedValidatorIndicesWrapper>? = null
-) : Wrapper<TekuExposedValidatorIndices>, ExposedValidatorIndices,
-  Mutable<ExposedValidatorIndicesWrapper>(onUpdate) {
-  constructor(items: MutableList<ValidatorIndex>, maxSize: ULong)
-      : this(
-    TekuExposedValidatorIndices(
-      TekuSSZList.createMutable(
-        items.map { UInt64Type.unwrap(it) }.toList(),
-        maxSize.toLong(),
-        UnsignedLong::class.java
-      )
+class Fork : AbstractImmutableContainer {
+  val previous_version: Version
+    get() = getBasicValue(get(0))
+  val current_version: Version
+    get() = getBasicValue(get(1))
+  val epoch: Epoch
+    get() = getBasicValue(get(2))
+
+  constructor(previous_version: Bytes4, current_version: Bytes4, epoch: Epoch) : super(
+    TYPE,
+    *wrapValues(
+      previous_version,
+      current_version,
+      epoch
     )
   )
 
-  override val maxSize: ULong
-    get() = v.indices.maxSize.toULong()
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun get(index: ULong): ValidatorIndex = UInt64Type.wrap(v.indices.get(index.toInt()))
+  constructor() : super(TYPE)
 
-  override val size: Int
-    get() = v.size()
-
-  override fun contains(element: ValidatorIndex): Boolean =
-    v.indices.contains(UInt64Type.unwrap(element))
-
-  override fun indexOf(element: ValidatorIndex): Int =
-    v.indices.indexOf(UInt64Type.unwrap(element))
-
-  override fun isEmpty(): Boolean = v.indices.isEmpty
-
-  override fun iterator(): MutableIterator<ValidatorIndex> =
-    object : MutableIterator<ValidatorIndex> {
-      private val iterator = v.indices.iterator()
-      override fun hasNext() = iterator.hasNext()
-      override fun next() = UInt64Type.wrap(iterator.next())
-      override fun remove() = iterator.remove()
-    }
-
-  override fun lastIndexOf(element: ValidatorIndex): Int =
-    v.indices.lastIndexOf(UInt64Type.unwrap(element))
-
-  override fun subList(fromIndex: Int, toIndex: Int): List<ValidatorIndex> {
-    return v.indices.stream()
-      .skip(fromIndex.toLong())
-      .limit((toIndex - fromIndex + 1).toLong())
-      .map { UInt64Type.wrap(it) }
-      .collect(Collectors.toList())
+  companion object {
+    val TYPE = ContainerViewType<Fork>(
+      listOf(BasicViewTypes.BYTES4_TYPE, BasicViewTypes.BYTES4_TYPE, BasicViewTypes.UINT64_TYPE),
+      ::Fork
+    )
   }
-
-  override fun hash_tree_root(): Bytes32 = v.hash_tree_root()
-
-  override fun set(index: ULong, newValue: ValidatorIndex): ValidatorIndex {
-    val oldValue = UInt64Type.wrap(v.indices.get(index.toInt()))
-    val writableCopy = TekuSSZList.createMutable(v.indices)
-    writableCopy.set(index.toInt(), UInt64Type.unwrap(newValue))
-    v = TekuExposedValidatorIndices(writableCopy)
-    onUpdate(this)
-    return oldValue
-  }
-
-  override fun append(item: ValidatorIndex) {
-    val writableCopy = TekuSSZList.createMutable(v.indices)
-    writableCopy.add(UInt64Type.unwrap(item))
-    v = TekuExposedValidatorIndices(writableCopy)
-    onUpdate(this)
-  }
-
-  override fun listIterator() = throw UnsupportedOperationException()
-  override fun listIterator(index: Int) = throw UnsupportedOperationException()
-  override fun containsAll(elements: Collection<ValidatorIndex>) =
-    throw UnsupportedOperationException()
 }
 
-internal class ForkWrapper(
-  override val v: TekuFork
-) : Wrapper<TekuFork>, Fork {
+class ForkData : AbstractImmutableContainer {
+  val current_version: Version
+    get() = getBasicValue(get(0))
+  val genesis_validators_root: Root
+    get() = getBasicValue(get(1))
 
-  constructor(previous_version: Version, current_version: Version, epoch: Epoch)
-      : this(
-    TekuFork(
-      Bytes4Type.unwrap(previous_version),
-      Bytes4Type.unwrap(current_version),
-      UInt64Type.unwrap(epoch)
+  constructor(current_version: Version, genesis_validators_root: Root) : super(
+    TYPE,
+    *wrapValues(
+      current_version,
+      genesis_validators_root
     )
   )
 
-  override val previous_version: Version
-    get() = Bytes4Type.wrap(v.previous_version)
-  override val current_version: Version
-    get() = Bytes4Type.wrap(v.current_version)
-  override val epoch: Epoch
-    get() = UInt64Type.wrap(v.epoch)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root(): Bytes32 = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is ForkWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<ForkData>(
+      listOf(BasicViewTypes.BYTES4_TYPE, BasicViewTypes.BYTES32_TYPE),
+      ::ForkData
+    )
   }
 }
 
-internal class ForkDataWrapper(
-  override val v: TekuForkData
-) : Wrapper<TekuForkData>, ForkData {
+class Checkpoint : AbstractImmutableContainer {
+  val epoch: Epoch
+    get() = getBasicValue(get(0))
+  val root: Root
+    get() = getBasicValue(get(1))
 
-  constructor(current_version: Version, genesis_validators_root: Root)
-      : this(TekuForkData(Bytes4Type.unwrap(current_version), genesis_validators_root))
+  constructor(epoch: Epoch, root: Root) : super(TYPE, *wrapValues(
+    epoch,
+    root
+  )
+  )
 
-  override val current_version: Version
-    get() = Bytes4Type.wrap(v.currentVersion)
-  override val genesis_validators_root: Root
-    get() = Bytes32Type.wrap(v.genesisValidatorsRoot)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root(): Bytes32 = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is ForkDataWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType(
+      listOf(BasicViewTypes.UINT64_TYPE, BasicViewTypes.BYTES32_TYPE), ::Checkpoint
+    )
   }
 }
 
-internal class CheckpointWrapper(
-  override val v: TekuCheckpoint
-) : Wrapper<TekuCheckpoint>, Checkpoint {
-
-  constructor(epoch: Epoch, root: Root)
-      : this(TekuCheckpoint(UInt64Type.unwrap(epoch), root))
-
-  override val epoch: Epoch
-    get() = UInt64Type.wrap(v.epoch)
-  override val root: Root
-    get() = Bytes32Type.wrap(v.root)
-
-  override fun hash_tree_root() = v.hash_tree_root()
-
-  override fun equals(other: Any?): Boolean {
-    if (other is CheckpointWrapper) {
-      return v == other.v
+class Validator : AbstractMutableContainer {
+  val pubkey: BLSPubkey
+    get() = BLSPubkey(Bytes48.wrap(ViewUtils.getAllBytes(getAny(0))))
+  val withdrawal_credentials: Bytes32
+    get() = getBasicValue(get(1))
+  var effective_balance: Gwei
+    get() = getBasicValue(get(2))
+    set(value) {
+      set(1, wrapBasicValue(value))
     }
-    return false
-  }
+  var slashed: boolean
+    get() = getBasicValue(get(3))
+    set(value) {
+      set(2, wrapBasicValue(value))
+    }
+  var activation_eligibility_epoch: Epoch
+    get() = getBasicValue(get(4))
+    set(value) {
+      set(3, wrapBasicValue(value))
+    }
+  var activation_epoch: Epoch
+    get() = getBasicValue(get(5))
+    set(value) {
+      set(4, wrapBasicValue(value))
+    }
+  var exit_epoch: Epoch
+    get() = getBasicValue(get(6))
+    set(value) {
+      set(5, wrapBasicValue(value))
+    }
+  var withdrawable_epoch: Epoch
+    get() = getBasicValue(get(7))
+    set(value) {
+      set(6, wrapBasicValue(value))
+    }
+  var next_custody_secret_to_reveal: uint64
+    get() = getBasicValue(get(8))
+    set(value) {
+      set(7, wrapBasicValue(value))
+    }
+  var all_custody_secrets_revealed_epoch: Epoch
+    get() = getBasicValue(get(9))
+    set(value) {
+      set(8, wrapBasicValue(value))
+    }
 
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
-  }
-}
-
-internal class ValidatorWrapper(
-  override var v: TekuValidator,
-  onUpdate: Callback<Validator>? = null
-) : Wrapper<TekuValidator>, Validator, Mutable<Validator>(onUpdate) {
   constructor(
     pubkey: BLSPubkey,
     withdrawal_credentials: Bytes32,
     effective_balance: Gwei,
-    slashed: boolean,
+    slashed: boolean = false,
     activation_eligibility_epoch: Epoch,
     activation_epoch: Epoch,
     exit_epoch: Epoch,
     withdrawable_epoch: Epoch,
     next_custody_secret_to_reveal: uint64,
-    max_reveal_lateness: Epoch
-  ) : this(
-    v = TekuValidator(
-      BLSPublicKeyType.unwrap(pubkey),
+    all_custody_secrets_revealed_epoch: Epoch
+  ) : super(
+    TYPE,
+    *wrapValues(
+      pubkey,
       withdrawal_credentials,
-      UInt64Type.unwrap(effective_balance),
+      effective_balance,
       slashed,
-      UInt64Type.unwrap(activation_eligibility_epoch),
-      UInt64Type.unwrap(activation_epoch),
-      UInt64Type.unwrap(exit_epoch),
-      UInt64Type.unwrap(withdrawable_epoch),
-      UInt64Type.unwrap(next_custody_secret_to_reveal),
-      UInt64Type.unwrap(max_reveal_lateness)
+      activation_eligibility_epoch,
+      activation_epoch,
+      exit_epoch,
+      withdrawable_epoch,
+      next_custody_secret_to_reveal,
+      all_custody_secrets_revealed_epoch
     )
   )
 
-  override val pubkey
-    get() = BLSPublicKeyType.wrap(v.pubkey)
-  override val withdrawal_credentials: Bytes32
-    get() = v.withdrawal_credentials
-  override var effective_balance: Gwei
-    get() = UInt64Type.wrap(v.effective_balance)
-    set(value) {
-      v = v.withEffective_balance(UInt64Type.unwrap(value))
-      onUpdate(this)
-    }
-  override var slashed: boolean
-    get() = v.isSlashed
-    set(value) {
-      v = v.withSlashed(value)
-      onUpdate(this)
-    }
-  override var activation_eligibility_epoch: Epoch
-    get() = UInt64Type.wrap(v.activation_eligibility_epoch)
-    set(value) {
-      v = v.withActivation_eligibility_epoch(UInt64Type.unwrap(value))
-      onUpdate(this)
-    }
-  override var activation_epoch: Epoch
-    get() = UInt64Type.wrap(v.activation_epoch)
-    set(value) {
-      v = v.withActivation_epoch(UInt64Type.unwrap(value))
-      onUpdate(this)
-    }
-  override var exit_epoch: Epoch
-    get() = UInt64Type.wrap(v.exit_epoch)
-    set(value) {
-      v = v.withExit_epoch(UInt64Type.unwrap(value))
-      onUpdate(this)
-    }
-  override var withdrawable_epoch: Epoch
-    get() = UInt64Type.wrap(v.withdrawable_epoch)
-    set(value) {
-      v = v.withWithdrawable_epoch(UInt64Type.unwrap(value))
-      onUpdate(this)
-    }
-  override var next_custody_secret_to_reveal: uint64
-    get() = UInt64Type.wrap(v.next_custody_secret_to_reveal)
-    set(value) {
-      v = v.withNext_custody_secret_to_reveal(UInt64Type.unwrap(value))
-      onUpdate(this)
-    }
-  override var max_reveal_lateness: Epoch
-    get() = UInt64Type.wrap(v.max_reveal_lateness)
-    set(value) {
-      v = v.withMax_reveal_lateness(UInt64Type.unwrap(value))
-      onUpdate(this)
-    }
+  constructor(type: ContainerViewType<out ContainerViewRead>?, backingNode: TreeNode?) : super(
+    type,
+    backingNode
+  )
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is ValidatorWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<Validator>(
+      listOf(
+        VectorViewType<ByteView>(BasicViewTypes.BYTE_TYPE, 48),
+        BasicViewTypes.BYTES32_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.BIT_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE
+      ), ::Validator
+    )
   }
 }
 
-internal class PendingAttestationWrapper(
-  override var v: TekuPendingAttestation,
-  onUpdate: Callback<PendingAttestation>? = null
-) : Wrapper<TekuPendingAttestation>, PendingAttestation, Mutable<PendingAttestation>(onUpdate) {
+class PendingAttestation : AbstractMutableContainer {
+  val aggregation_bits: SSZBitlist
+    get() = SSZBitlistImpl(getAny(0))
+  val data: AttestationData
+    get() = getAny(1)
+  val inclusion_delay: Slot
+    get() = (get(2) as UInt64View).get().toUInt64()
+  val proposer_index: ValidatorIndex
+    get() = (get(3) as UInt64View).get().toUInt64()
+  var crosslink_success: boolean
+    get() = (get(4) as BitView).get()
+    set(value) {
+      set(4, BitView(value))
+    }
 
   constructor(
-    aggregation_bits: SSZBitList,
+    aggregation_bits: SSZBitlist,
     data: AttestationData,
     inclusion_delay: Slot,
     proposer_index: ValidatorIndex,
     crosslink_success: boolean
-  ) : this(
-    TekuPendingAttestation(
-      SSZBitListType.unwrap(aggregation_bits),
-      AttestationDataType.unwrap(data),
-      UInt64Type.unwrap(inclusion_delay),
-      UInt64Type.unwrap(proposer_index),
-      crosslink_success
-    )
+  ) : super(
+    TYPE,
+    (aggregation_bits as SSZAbstractCollection<*, *>).view,
+    data,
+    UInt64View(inclusion_delay.toUnsignedLong()),
+    UInt64View(proposer_index.toUnsignedLong()),
+    BitView(crosslink_success)
   )
 
-  override val aggregation_bits: SSZBitList
-    get() = SSZBitListType.wrap(v.aggregation_bits)
-  override val data: AttestationData
-    get() = AttestationDataType.wrap(v.data)
-  override val inclusion_delay: Slot
-    get() = UInt64Type.wrap(v.inclusion_delay)
-  override val proposer_index: ValidatorIndex
-    get() = UInt64Type.wrap(v.proposer_index)
-  override var crosslink_success: boolean
-    get() = v.crosslink_success
-    set(value) {
-      v = TekuPendingAttestation(
-        v.aggregation_bits, v.data, v.inclusion_delay, v.proposer_index, value
-      )
-      onUpdate(this)
-    }
-
-  override fun hash_tree_root() = v.hash_tree_root()
-
-  override fun equals(other: Any?): Boolean {
-    if (other is PendingAttestationWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
-  }
-}
-
-internal class HistoricalBatchWrapper(
-  override val v: TekuHistoricalBatch
-) : Wrapper<TekuHistoricalBatch>, HistoricalBatch {
-
-  constructor(block_roots: SSZMutableVector<Root>, state_roots: SSZMutableVector<Root>)
-      : this(
-    TekuHistoricalBatch(
-      SSZMutableVectorType(
-        Bytes32Type
-      ).unwrap(block_roots),
-      SSZMutableVectorType(
-        Bytes32Type
-      ).unwrap(state_roots)
-    )
+  constructor(type: ContainerViewType<PendingAttestation>, backingNode: TreeNode) : super(
+    type,
+    backingNode
   )
 
-  override val block_roots: SSZVector<Root>
-    get() = SSZVectorType(
-      Bytes32Type
-    ).wrap(v.blockRoots)
-  override val state_roots: SSZVector<Root>
-    get() = SSZVectorType(
-      Bytes32Type
-    ).wrap(v.stateRoots)
-
-  override fun hash_tree_root() = v.hash_tree_root()
-
-  override fun equals(other: Any?): Boolean {
-    if (other is HistoricalBatchWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
-  }
-}
-
-internal class SigningRootWrapper(
-  override val v: TekuSigningRoot
-) : Wrapper<TekuSigningRoot>, SigningRoot {
-
-  constructor(object_root: Root, domain: Domain) : this(TekuSigningRoot(object_root, domain))
-
-  override val object_root: Root
-    get() = Bytes32Type.wrap(v.objectRoot)
-  override val domain: Domain
-    get() = DomainTypePair.wrap(v.domain)
-
-  override fun hash_tree_root() = v.hash_tree_root()
-
-  override fun equals(other: Any?): Boolean {
-    if (other is SigningRootWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
-  }
-}
-
-internal class CompactCommitteeWrapper(override val v: TekuCompactCommittee) :
-  Wrapper<TekuCompactCommittee>, CompactCommittee {
-
-  constructor(pubkeys: SSZMutableList<BLSPubkey>, compact_validators: SSZMutableList<uint64>)
-      : this(
-    tech.pegasys.teku.datastructures.phase1.state.CompactCommittee(
-      SSZMutableListType(
-        BLSPublicKeyType
-      ).unwrap(pubkeys),
-      SSZMutableListType(
-        UInt64Type
-      ).unwrap(compact_validators)
-    )
-  )
-
-  override val pubkeys: SSZList<BLSPubkey>
-    get() = SSZListType(
-      BLSPublicKeyType
-    ).wrap(v.pubkeys)
-  override val compact_validators: SSZList<uint64>
-    get() = SSZListType(
-      UInt64Type
-    ).wrap(v.compact_validators)
-
-  override fun hash_tree_root() = v.hash_tree_root()
-
-  override fun equals(other: Any?): Boolean {
-    if (other is CompactCommitteeWrapper) {
-      return other.v == v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
-  }
-}
-
-
-internal class BeaconStateWrapper(override var v: TekuBeaconState) : Wrapper<TekuBeaconState>,
-  BeaconState {
+  constructor() : super(TYPE)
 
   companion object {
-    fun create(
-      genesis_time: uint64,
-      genesis_validators_root: Root,
-      slot: Slot,
-      fork: Fork,
-      latest_block_header: BeaconBlockHeader,
-      block_roots: SSZMutableVector<Root>,
-      state_roots: SSZMutableVector<Root>,
-      historical_roots: SSZMutableList<Root>,
-      eth1_data: Eth1Data,
-      eth1_data_votes: SSZMutableList<Eth1Data>,
-      eth1_deposit_index: uint64,
-      validators: SSZMutableList<Validator>,
-      balances: SSZMutableList<Gwei>,
-      randao_mixes: SSZMutableVector<Root>,
-      slashings: SSZMutableVector<Gwei>,
-      previous_epoch_attestations: SSZMutableList<PendingAttestation>,
-      current_epoch_attestations: SSZMutableList<PendingAttestation>,
-      justification_bits: SSZBitVector,
-      previous_justified_checkpoint: Checkpoint,
-      current_justified_checkpoint: Checkpoint,
-      finalized_checkpoint: Checkpoint,
-      shard_states: SSZMutableList<ShardState>,
-      online_countdown: SSZMutableList<OnlineEpochs>,
-      current_light_committee: CompactCommittee,
-      next_light_committee: CompactCommittee,
-      exposed_derived_secrets: SSZMutableVector<ExposedValidatorIndices>
-    ): BeaconState {
-      val v = TekuBeaconState.createBuilder()
-      v.genesis_time = UInt64Type.unwrap(genesis_time)
-      v.genesis_validators_root = genesis_validators_root
-      v.slot = UInt64Type.unwrap(slot)
-      v.fork = ForkType.unwrap(fork)
-      v.latest_block_header = BeaconBlockHeaderType.unwrap(latest_block_header)
-      block_roots.copyTo(v.block_roots)
-      state_roots.copyTo(v.state_roots)
-      historical_roots.copyTo(v.historical_roots)
-      v.eth1_data = Eth1DataType.unwrap(eth1_data)
-      eth1_data_votes.copyTo(v.eth1_data_votes)
-      v.eth1_deposit_index = UInt64Type.unwrap(eth1_deposit_index)
-      validators.copyTo(v.validators)
-      balances.copyTo(v.balances)
-      randao_mixes.copyTo(v.randao_mixes)
-      slashings.copyTo(v.slashings)
-      previous_epoch_attestations.copyTo(v.previous_epoch_attestations)
-      current_epoch_attestations.copyTo(v.current_epoch_attestations)
-      v.justification_bits = SSZBitVectorType.unwrap(justification_bits)
-      v.previous_justified_checkpoint = CheckpointType.unwrap(previous_justified_checkpoint)
-      v.current_justified_checkpoint = CheckpointType.unwrap(current_justified_checkpoint)
-      v.finalized_checkpoint = CheckpointType.unwrap(finalized_checkpoint)
-      shard_states.copyTo(v.shard_states)
-      online_countdown.copyTo(v.online_countdown)
-      v.current_light_committee = CompactCommitteeType.unwrap(current_light_committee)
-      v.next_light_committee = CompactCommitteeType.unwrap(next_light_committee)
-      exposed_derived_secrets.copyTo(v.exposed_derived_secrets)
-      return BeaconStateWrapper(v)
-    }
+    val TYPE = ContainerViewType(
+      listOf(
+        ListViewType<BitView>(
+          BasicViewTypes.BIT_TYPE,
+          Constants.MAX_VALIDATORS_PER_COMMITTEE.toLong()
+        ),
+        AttestationData.TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.BIT_TYPE
+      ), ::PendingAttestation
+    )
   }
+}
 
-  override val genesis_time: uint64
-    get() = UInt64Type.wrap(v.genesis_time)
-  override var genesis_validators_root: Root
-    get() = Bytes32Type.wrap(v.genesis_validators_root)
-    set(value) {
-      v.genesis_validators_root = value
-    }
-  override var slot: Slot
-    get() = UInt64Type.wrap(v.slot)
-    set(value) {
-      v.slot = UInt64Type.unwrap(value)
-    }
-  override var fork: Fork
-    get() = ForkType.wrap(v.fork)
-    set(value) {
-      v.fork = ForkType.unwrap(value)
-    }
-  override var latest_block_header: BeaconBlockHeader
-    get() = BeaconBlockHeaderType.wrap(v.latest_block_header) { value ->
-      this.latest_block_header = value
-    }
-    set(value) {
-      this.v.latest_block_header = BeaconBlockHeaderType.unwrap(value)
-    }
-  override val block_roots: SSZMutableVector<Root>
-    get() = SSZMutableVectorType(
-      Bytes32Type
-    ).wrap(v.block_roots)
-  override val state_roots: SSZMutableVector<Root>
-    get() = SSZMutableVectorType(
-      Bytes32Type
-    ).wrap(v.state_roots)
-  override val historical_roots: SSZMutableList<Root>
-    get() = SSZMutableListType(
-      Bytes32Type
-    ).wrap(v.historical_roots)
-  override var eth1_data: Eth1Data
-    get() = Eth1DataType.wrap(v.eth1_data) { value -> this.eth1_data = value }
-    set(value) {
-      v.eth1_data = Eth1DataType.unwrap(value)
-    }
-  override var eth1_data_votes: SSZMutableList<Eth1Data>
-    get() = SSZMutableListType(
-      Eth1DataType
-    ).wrap(v.eth1_data_votes)
-    set(value) {
-      v.eth1_data_votes.clear()
-      value.copyTo(v.eth1_data_votes)
-    }
-  override var eth1_deposit_index: uint64
-    get() = UInt64Type.wrap(v.eth1_deposit_index)
-    set(value) {
-      v.eth1_deposit_index = UInt64Type.unwrap(value)
-    }
-  override val validators: SSZMutableList<Validator>
-    get() = SSZMutableListType(
-      ValidatorType
-    ).wrap(v.validators)
-  override val balances: SSZMutableList<Gwei>
-    get() = SSZMutableListType(
-      UInt64Type
-    ).wrap(v.balances)
-  override val randao_mixes: SSZMutableVector<Root>
-    get() = SSZMutableVectorType(
-      Bytes32Type
-    ).wrap(v.randao_mixes)
-  override val slashings: SSZMutableVector<Gwei>
-    get() = SSZMutableVectorType(
-      UInt64Type
-    ).wrap(v.slashings)
-  override var previous_epoch_attestations: SSZMutableList<PendingAttestation>
-    get() = SSZMutableListType(
-      PendingAttestationType
-    ).wrap(v.previous_epoch_attestations)
-    set(value) {
-      v.previous_epoch_attestations.clear()
-      value.copyTo(v.previous_epoch_attestations)
-    }
-  override var current_epoch_attestations: SSZMutableList<PendingAttestation>
-    get() = SSZMutableListType(
-      PendingAttestationType
-    ).wrap(v.current_epoch_attestations)
-    set(value) {
-      v.current_epoch_attestations.clear()
-      value.copyTo(v.current_epoch_attestations)
-    }
-  override val justification_bits: SSZBitVector
-    get() = SSZBitVectorType.wrap(v.justification_bits)
-  override var previous_justified_checkpoint: Checkpoint
-    get() = CheckpointType.wrap(v.previous_justified_checkpoint)
-    set(value) {
-      v.previous_justified_checkpoint = CheckpointType.unwrap(value)
-    }
-  override var current_justified_checkpoint: Checkpoint
-    get() = CheckpointType.wrap(v.current_justified_checkpoint)
-    set(value) {
-      v.current_justified_checkpoint = CheckpointType.unwrap(value)
-    }
-  override var finalized_checkpoint: Checkpoint
-    get() = CheckpointType.wrap(v.finalized_checkpoint)
-    set(value) {
-      v.finalized_checkpoint = CheckpointType.unwrap(value)
-    }
-  override val shard_states: SSZMutableList<ShardState>
-    get() = SSZMutableListType(
-      ShardStateType
-    ).wrap(v.shard_states)
-  override val online_countdown: SSZMutableList<OnlineEpochs>
-    get() = SSZMutableListType(
-      UInt8Type
-    ).wrap(v.online_countdown)
-  override var current_light_committee: CompactCommittee
-    get() = CompactCommitteeType.wrap(v.current_light_committee)
-    set(value) {
-      v.current_light_committee = CompactCommitteeType.unwrap(value)
-    }
-  override var next_light_committee: CompactCommittee
-    get() = CompactCommitteeType.wrap(v.next_light_committee)
-    set(value) {
-      v.next_light_committee = CompactCommitteeType.unwrap(value)
-    }
-  override val exposed_derived_secrets: SSZMutableVector<ExposedValidatorIndices>
-    get() = SSZMutableVectorType(
-      ExposedValidatorIndicesType
-    ).wrap(v.exposed_derived_secrets)
+class HistoricalBatch : AbstractImmutableContainer {
+  val block_roots: SSZVector<Root>
+    get() = SSZVectorImpl(getAny(0), Bytes32View::get)
+  val state_roots: SSZVector<Root>
+    get() = SSZVectorImpl(getAny(1), Bytes32View::get)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor(type: ContainerViewType<HistoricalBatch>, backingNode: TreeNode) :
+      super(type, backingNode)
 
-  override fun copy(
+  constructor(block_roots: SSZVector<Root>, state_roots: SSZVector<Root>) :
+      super(
+        TYPE,
+        (block_roots as SSZAbstractCollection<*, *>).view,
+        (state_roots as SSZAbstractCollection<*, *>).view
+      )
+
+  constructor() : super(TYPE)
+
+  companion object {
+    val TYPE = ContainerViewType(
+      listOf(
+        VectorViewType<Root>(
+          BasicViewTypes.BYTES32_TYPE,
+          HISTORICAL_ROOTS_LIMIT.toLong()
+        ),
+        VectorViewType<Root>(
+          BasicViewTypes.BYTES32_TYPE,
+          HISTORICAL_ROOTS_LIMIT.toLong()
+        )
+      ), ::HistoricalBatch
+    )
+  }
+}
+
+class SigningRoot : AbstractImmutableContainer {
+  val object_root: Root
+    get() = (get(0) as Bytes32View).get()
+  val domain: Domain
+    get() = (get(1) as Bytes32View).get()
+
+  constructor(object_root: Root, domain: Domain) : super(
+    TYPE,
+    Bytes32View(object_root),
+    Bytes32View(domain)
+  )
+
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>,
+    backingNode: TreeNode
+  ) : super(type, backingNode)
+
+  constructor() : super(TYPE)
+
+  companion object {
+    val TYPE = ContainerViewType(
+      listOf(BasicViewTypes.BYTES32_TYPE, BasicViewTypes.BYTES32_TYPE),
+      ::SigningRoot
+    )
+  }
+}
+
+class CompactCommittee : AbstractImmutableContainer {
+  val pubkeys: SSZList<BLSPubkey>
+    get() = SSZListImpl<BLSPubkey, VectorViewRead<ByteView>>(getAny(0)) { v ->
+      BLSPubkey(
+        Bytes48.wrap(
+          ViewUtils.getAllBytes(v)
+        )
+      )
+    }
+  val compact_validators: SSZList<uint64>
+    get() = SSZListImpl<uint64, UInt64View>(getAny(1)) { v -> v.get().toUInt64() }
+
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>,
+    backingNode: TreeNode
+  ) : super(type, backingNode)
+
+  constructor(
+    pubkeys: SSZList<BLSPubkey>,
+    compact_validators: SSZList<uint64>
+  ) : super(
+    TYPE,
+    (pubkeys as SSZAbstractCollection<*, *>).view,
+    (compact_validators as SSZAbstractCollection<*, *>).view
+  )
+
+  constructor(
+    pubkeys: List<BLSPubkey>,
+    compact_validators: List<uint64>
+  ) : this(
+    SSZListImpl<BLSPubkey, VectorViewRead<ByteView>>(
+      Bytes48Type,
+      MAX_VALIDATORS_PER_COMMITTEE,
+      pubkeys,
+      { v -> getBasicValue(v) },
+      { u -> wrapBasicValue(u) }
+    ),
+    SSZListImpl<uint64, UInt64View>(
+      BasicViewTypes.UINT64_TYPE,
+      MAX_VALIDATORS_PER_COMMITTEE,
+      compact_validators,
+      { v -> getBasicValue(v) },
+      { u -> wrapBasicValue(u) }
+    )
+  )
+
+  constructor() : super(TYPE)
+
+  companion object {
+    val TYPE = ContainerViewType<CompactCommittee>(
+      listOf(
+        ListViewType<VectorViewRead<ByteView>>(Bytes48Type, MAX_VALIDATORS_PER_COMMITTEE.toLong()),
+        ListViewType<UInt64View>(BasicViewTypes.UINT64_TYPE, MAX_VALIDATORS_PER_COMMITTEE.toLong())
+      ),
+      ::CompactCommittee
+    )
+  }
+}
+
+class CustodyChunkChallengeRecord : AbstractImmutableContainer {
+  val challenge_index: uint64
+    get() = getBasicValue(get(0))
+  val challenger_index: ValidatorIndex
+    get() = getBasicValue(get(1))
+  val responder_index: ValidatorIndex
+    get() = getBasicValue(get(2))
+  val inclusion_epoch: Epoch
+    get() = getBasicValue(get(3))
+  val data_root: Root
+    get() = getBasicValue(get(4))
+  val chunk_index: uint64
+    get() = getBasicValue(get(5))
+
+  constructor(
+    challenge_index: uint64,
+    challenger_index: ValidatorIndex,
+    responder_index: ValidatorIndex,
+    inclusion_epoch: Epoch,
+    data_root: Root,
+    chunk_index: uint64
+  ) : super(
+    TYPE,
+    *wrapValues(
+      challenge_index,
+      challenger_index,
+      responder_index,
+      inclusion_epoch,
+      data_root,
+      chunk_index
+    )
+  )
+
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
+
+  constructor() : super(TYPE)
+
+  companion object {
+    val TYPE = ContainerViewType<CustodyChunkChallengeRecord>(
+      listOf(
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.BYTES32_TYPE,
+        BasicViewTypes.UINT64_TYPE
+      ),
+      ::CustodyChunkChallengeRecord
+    )
+  }
+}
+
+class BeaconState : AbstractMutableContainer {
+  var genesis_time: uint64
+    get() = getBasicValue(get(0))
+    set(value) = set(0,
+      wrapBasicValue(value)
+    )
+  var genesis_validators_root: Root
+    get() = getBasicValue(get(1))
+    set(value) = set(1,
+      wrapBasicValue(value)
+    )
+  var slot: Slot
+    get() = getBasicValue(get(2))
+    set(value) {
+      set(2, wrapBasicValue(value))
+    }
+  var fork: Fork
+    get() = getAny(3)
+    set(value) {
+      set(3, value)
+    }
+  var latest_block_header: BeaconBlockHeader
+    get() = getAny(4)
+    set(value) {
+      set(4, value)
+    }
+  val block_roots: SSZMutableVector<Root>
+    get() = SSZMutableVectorImpl(getAnyByRef(5), Bytes32View::get, ::Bytes32View)
+  val state_roots: SSZMutableVector<Root>
+    get() = SSZMutableVectorImpl(getAnyByRef(6), Bytes32View::get, ::Bytes32View)
+  val historical_roots: SSZMutableList<Root>
+    get() = SSZMutableListImpl(getAnyByRef(7), Bytes32View::get, ::Bytes32View)
+  var eth1_data: Eth1Data
+    get() = getAnyByRef(8)
+    set(value) {
+      set(8, value)
+    }
+  var eth1_data_votes: SSZMutableList<Eth1Data>
+    get() = SSZMutableListImpl<Eth1Data, Eth1Data>(getAnyByRef(9), { v -> v }, { v -> v })
+    set(value) {
+      set(9, (value as SSZAbstractCollection<*, *>).view)
+    }
+  var eth1_deposit_index: uint64
+    get() = getBasicValue(get(10))
+    set(value) {
+      set(10, wrapBasicValue(value))
+    }
+  val validators: SSZMutableList<Validator>
+    get() = SSZMutableListImpl<Validator, Validator>(getAnyByRef(11), { v -> v }, { v -> v })
+  val balances: SSZMutableList<Gwei>
+    get() = SSZMutableListImpl<Gwei, UInt64View>(
+      getAnyByRef(12),
+      { v -> getBasicValue(v) },
+      { v -> wrapBasicValue(v) })
+  var randao_mixes: SSZMutableVector<Root>
+    get() = SSZMutableVectorImpl(getAnyByRef(13), Bytes32View::get, ::Bytes32View)
+    set(value) = set(13, (value as SSZAbstractCollection<*, *>).view)
+  val slashings: SSZMutableVector<Gwei>
+    get() = SSZMutableVectorImpl<Gwei, UInt64View>(
+      getAnyByRef(14),
+      { v -> getBasicValue(v) },
+      { v -> wrapBasicValue(v) })
+  var previous_epoch_attestations: SSZMutableList<PendingAttestation>
+    get() = SSZMutableListImpl<PendingAttestation, PendingAttestation>(
+      getAnyByRef(15),
+      { v -> v },
+      { v -> v })
+    set(value) {
+      set(15, (value as SSZAbstractCollection<*, *>).view)
+    }
+  var current_epoch_attestations: SSZMutableList<PendingAttestation>
+    get() = SSZMutableListImpl<PendingAttestation, PendingAttestation>(
+      getAnyByRef(16),
+      { v -> v },
+      { v -> v })
+    set(value) {
+      set(16, (value as SSZAbstractCollection<*, *>).view)
+    }
+  val justification_bits: SSZMutableBitvector
+    get() = SSZMutableBitvectorImpl(getAnyByRef<VectorViewWrite<BitView>>(17))
+  var previous_justified_checkpoint: Checkpoint
+    get() = getAny(18)
+    set(value) {
+      set(18, value)
+    }
+  var current_justified_checkpoint: Checkpoint
+    get() = getAny(19)
+    set(value) {
+      set(19, value)
+    }
+  var finalized_checkpoint: Checkpoint
+    get() = getAny(20)
+    set(value) = set(20, value)
+  var current_epoch_start_shard: Shard
+    get() = getBasicValue(get(21))
+    set(value) = set(21,
+      wrapBasicValue(value)
+    )
+  val shard_states: SSZMutableList<ShardState>
+    get() = SSZMutableListImpl<ShardState, ShardState>(
+      getAnyByRef(22),
+      { v -> v },
+      { v -> v })
+  val online_countdown: SSZMutableList<OnlineEpochs>
+    get() = SSZMutableListImpl<OnlineEpochs, ByteView>(
+      getAnyByRef(23),
+      { v -> getBasicValue(v) },
+      { v -> wrapBasicValue(v) })
+  var current_light_committee: CompactCommittee
+    get() = getAny(24)
+    set(value) {
+      set(24, value)
+    }
+  var next_light_committee: CompactCommittee
+    get() = getAny(25)
+    set(value) {
+      set(25, value)
+    }
+  val exposed_derived_secrets: SSZMutableVector<SSZMutableList<ValidatorIndex>>
+    get() = SSZMutableVectorImpl<SSZMutableList<ValidatorIndex>, ListViewWrite<UInt64View>>(
+      getAnyByRef(26),
+      { v ->
+        SSZMutableListImpl(
+          v,
+          { u ->
+            getBasicValue<ValidatorIndex>(
+              u
+            )
+          },
+          { u -> wrapBasicValue(u) })
+      },
+      { v -> (v as SSZMutableListImpl<ValidatorIndex, UInt64View>).view }
+    )
+  var custody_chunk_challenge_records: SSZMutableList<CustodyChunkChallengeRecord>
+    get() = SSZMutableListImpl<CustodyChunkChallengeRecord, CustodyChunkChallengeRecord>(
+      getAnyByRef(27), { v -> v }, { v -> v })
+    set(value) {
+      set(27, (value as SSZAbstractCollection<*, *>).view)
+    }
+  var custody_chunk_challenge_index: uint64
+    get() = getBasicValue(get(28))
+    set(value) {
+      set(28, wrapBasicValue(value))
+    }
+
+  constructor(
     genesis_time: uint64,
-    genesis_validators_root: Root,
+    genesis_validators_root: Root = Root(),
     slot: Slot,
     fork: Fork,
     latest_block_header: BeaconBlockHeader,
-    block_roots: SSZMutableVector<Root>,
-    state_roots: SSZMutableVector<Root>,
-    historical_roots: SSZMutableList<Root>,
+    block_roots: SSZVector<Root>,
+    state_roots: SSZVector<Root>,
+    historical_roots: SSZList<Root>,
     eth1_data: Eth1Data,
-    eth1_data_votes: SSZMutableList<Eth1Data>,
+    eth1_data_votes: SSZList<Eth1Data>,
     eth1_deposit_index: uint64,
-    validators: SSZMutableList<Validator>,
-    balances: SSZMutableList<Gwei>,
-    randao_mixes: SSZMutableVector<Root>,
-    slashings: SSZMutableVector<Gwei>,
-    previous_epoch_attestations: SSZMutableList<PendingAttestation>,
-    current_epoch_attestations: SSZMutableList<PendingAttestation>,
-    justification_bits: SSZBitVector,
+    validators: SSZList<Validator>,
+    balances: SSZList<Gwei>,
+    randao_mixes: SSZVector<Root>,
+    slashings: SSZVector<Gwei>,
+    previous_epoch_attestations: SSZList<PendingAttestation>,
+    current_epoch_attestations: SSZList<PendingAttestation>,
+    justification_bits: SSZBitvector,
     previous_justified_checkpoint: Checkpoint,
     current_justified_checkpoint: Checkpoint,
     finalized_checkpoint: Checkpoint,
-    shard_states: SSZMutableList<ShardState>,
-    online_countdown: SSZMutableList<OnlineEpochs>,
+    current_epoch_start_shard: Shard,
+    shard_states: SSZList<ShardState>,
+    online_countdown: SSZList<OnlineEpochs>,
     current_light_committee: CompactCommittee,
     next_light_committee: CompactCommittee,
-    exposed_derived_secrets: SSZMutableVector<ExposedValidatorIndices>
-  ): BeaconState = create(
-    genesis_time,
-    genesis_validators_root,
-    slot,
-    fork,
-    latest_block_header,
-    block_roots,
-    state_roots,
-    historical_roots,
-    eth1_data,
-    eth1_data_votes,
-    eth1_deposit_index,
-    validators,
-    balances,
-    randao_mixes,
-    slashings,
-    previous_epoch_attestations,
-    current_epoch_attestations,
-    justification_bits,
-    previous_justified_checkpoint,
-    current_justified_checkpoint,
-    finalized_checkpoint,
-    shard_states,
-    online_countdown,
-    current_light_committee,
-    next_light_committee,
-    exposed_derived_secrets
+    exposed_derived_secrets: SSZVector<SSZList<ValidatorIndex>>,
+    custody_chunk_challenge_records: SSZList<CustodyChunkChallengeRecord> = SSZListImpl(
+      ListViewType<CustodyChunkChallengeRecord>(
+        CustodyChunkChallengeRecord.TYPE,
+        MAX_CUSTODY_CHUNK_CHALLENGE_RECORDS.toLong()
+      ).default
+    ) { v -> v },
+    custody_chunk_challenge_index: uint64 = 0uL
+  ) : super(
+    TYPE,
+    *wrapValues(
+      genesis_time,
+      genesis_validators_root,
+      slot,
+      fork,
+      latest_block_header,
+      block_roots,
+      state_roots,
+      historical_roots,
+      eth1_data,
+      eth1_data_votes,
+      eth1_deposit_index,
+      validators,
+      balances,
+      randao_mixes,
+      slashings,
+      previous_epoch_attestations,
+      current_epoch_attestations,
+      justification_bits,
+      previous_justified_checkpoint,
+      current_justified_checkpoint,
+      finalized_checkpoint,
+      current_epoch_start_shard,
+      shard_states,
+      online_countdown,
+      current_light_committee,
+      next_light_committee,
+      exposed_derived_secrets,
+      custody_chunk_challenge_records,
+      custody_chunk_challenge_index
+    )
   )
 
-  override fun equals(other: Any?): Boolean {
-    if (other is BeaconStateWrapper) {
-      return v == other.v
-    }
-    return false
+  constructor(
+    genesis_time: uint64,
+    fork: Fork,
+    latest_block_header: BeaconBlockHeader,
+    eth1_data: Eth1Data,
+    randao_mixes: SSZMutableVector<Root>
+  ) : this() {
+    this.genesis_time = genesis_time
+    this.fork = fork
+    this.latest_block_header = latest_block_header
+    this.eth1_data = eth1_data
+    this.randao_mixes = randao_mixes
   }
 
-  override fun hashCode(): Int {
-    return v.hashCode()
+  constructor(type: ContainerViewType<out ContainerViewRead>?, backingNode: TreeNode?) : super(
+    type,
+    backingNode
+  )
+
+  constructor() : super(TYPE)
+
+  companion object {
+    val TYPE = ContainerViewType<BeaconState>(
+      listOf(
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.BYTES32_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        Fork.TYPE,
+        BeaconBlockHeader.TYPE,
+        VectorViewType<Bytes32View>(
+          BasicViewTypes.BYTES32_TYPE,
+          SLOTS_PER_HISTORICAL_ROOT.toLong()
+        ),
+        VectorViewType<Bytes32View>(
+          BasicViewTypes.BYTES32_TYPE,
+          SLOTS_PER_HISTORICAL_ROOT.toLong()
+        ),
+        ListViewType<Bytes32View>(BasicViewTypes.BYTES32_TYPE, HISTORICAL_ROOTS_LIMIT.toLong()),
+        Eth1Data.TYPE,
+        ListViewType<Eth1Data>(
+          Eth1Data.TYPE,
+          (EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH).toLong()
+        ),
+        BasicViewTypes.UINT64_TYPE,
+        ListViewType<Validator>(Validator.TYPE, VALIDATOR_REGISTRY_LIMIT.toLong()),
+        ListViewType<UInt64View>(BasicViewTypes.UINT64_TYPE, VALIDATOR_REGISTRY_LIMIT.toLong()),
+        VectorViewType<Bytes32View>(
+          BasicViewTypes.BYTES32_TYPE,
+          EPOCHS_PER_HISTORICAL_VECTOR.toLong()
+        ),
+        VectorViewType<UInt64View>(
+          BasicViewTypes.UINT64_TYPE,
+          EPOCHS_PER_SLASHINGS_VECTOR.toLong()
+        ),
+        ListViewType<PendingAttestation>(
+          PendingAttestation.TYPE,
+          (MAX_ATTESTATIONS * SLOTS_PER_EPOCH).toLong()
+        ),
+        ListViewType<PendingAttestation>(
+          PendingAttestation.TYPE,
+          (MAX_ATTESTATIONS * SLOTS_PER_EPOCH).toLong()
+        ),
+        VectorViewType<BitView>(BasicViewTypes.BIT_TYPE, JUSTIFICATION_BITS_LENGTH.toLong()),
+        Checkpoint.TYPE,
+        Checkpoint.TYPE,
+        Checkpoint.TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        ListViewType<ShardState>(ShardState.TYPE, MAX_SHARDS.toLong()),
+        ListViewType<UInt64View>(BasicViewTypes.UINT64_TYPE, VALIDATOR_REGISTRY_LIMIT.toLong()),
+        CompactCommittee.TYPE,
+        CompactCommittee.TYPE,
+        VectorViewType<ListViewRead<UInt64View>>(
+          ListViewType<UInt64View>(
+            BasicViewTypes.UINT64_TYPE,
+            (MAX_EARLY_DERIVED_SECRET_REVEALS * SLOTS_PER_EPOCH).toLong()
+          ), EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS.toLong()
+        ),
+        ListViewType<CustodyChunkChallengeRecord>(
+          CustodyChunkChallengeRecord.TYPE,
+          MAX_CUSTODY_CHUNK_CHALLENGE_RECORDS.toLong()
+        ),
+        BasicViewTypes.UINT64_TYPE
+      ),
+      ::BeaconState
+    )
   }
 
-  override fun toString(): String {
-    return v.toString()
-  }
+  fun copy(): BeaconState = BeaconState(TYPE, this.backingNode)
 }

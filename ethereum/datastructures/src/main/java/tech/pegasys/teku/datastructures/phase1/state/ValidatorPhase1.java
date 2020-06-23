@@ -40,7 +40,7 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
     implements ContainerViewRead, SimpleOffsetSerializable, Merkleizable, SSZContainer {
 
   // The number of SimpleSerialize basic types in this SSZ Container/POJO.
-  public static final int SSZ_FIELD_COUNT = 10;
+  public static final int SSZ_FIELD_COUNT = 11;
   public static final ContainerViewType<ValidatorPhase1> TYPE =
       new ContainerViewType<>(
           List.of(
@@ -92,7 +92,7 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
   private final UnsignedLong next_custody_secret_to_reveal = null;
 
   @SuppressWarnings("unused")
-  private final UnsignedLong max_reveal_lateness = null;
+  private final UnsignedLong all_custody_secrets_revealed_epoch = null;
 
   private ValidatorPhase1(ContainerViewType<ValidatorPhase1> type, TreeNode backingNode) {
     super(type, backingNode);
@@ -108,7 +108,7 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
       UnsignedLong exit_epoch,
       UnsignedLong withdrawable_epoch,
       UnsignedLong next_custody_secret_to_reveal,
-      UnsignedLong max_reveal_lateness) {
+      UnsignedLong all_custody_secrets_revealed_epoch) {
     super(
         TYPE,
         ViewUtils.createVectorFromBytes(pubkey.toBytes()),
@@ -120,7 +120,7 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
         new UInt64View(exit_epoch),
         new UInt64View(withdrawable_epoch),
         new UInt64View(next_custody_secret_to_reveal),
-        new UInt64View(max_reveal_lateness));
+        new UInt64View(all_custody_secrets_revealed_epoch));
   }
 
   public ValidatorPhase1(ValidatorPhase1 validator) {
@@ -150,7 +150,7 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
             SSZ.encodeUInt64(getExit_epoch().longValue()),
             SSZ.encodeUInt64(getWithdrawable_epoch().longValue()),
             SSZ.encodeUInt64(getNext_custody_secret_to_reveal().longValue()),
-            SSZ.encodeUInt64(getMax_reveal_lateness().longValue())));
+            SSZ.encodeUInt64(getAll_custody_secrets_revealed_epoch().longValue())));
     return fixedPartsList;
   }
 
@@ -166,7 +166,7 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
         .add("exit_epoch", getExit_epoch())
         .add("withdrawable_epoch", getWithdrawable_epoch())
         .add("next_custody_secret_to_reveal", getNext_custody_secret_to_reveal())
-        .add("max_reveal_lateness", getMax_reveal_lateness())
+        .add("all_custody_secrets_revealed_epoch", getAll_custody_secrets_revealed_epoch())
         .toString();
   }
 
@@ -180,7 +180,7 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
       UnsignedLong exit_epoch,
       UnsignedLong withdrawable_epoch,
       UnsignedLong next_custody_secret_to_reveal,
-      UnsignedLong max_reveal_lateness) {
+      UnsignedLong all_custody_secrets_revealed_epoch) {
     return new ValidatorPhase1(
         pubkey,
         withdrawal_credentials,
@@ -191,7 +191,7 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
         exit_epoch,
         withdrawable_epoch,
         next_custody_secret_to_reveal,
-        max_reveal_lateness);
+        all_custody_secrets_revealed_epoch);
   }
 
   public BLSPublicKey getPubkey() {
@@ -230,8 +230,8 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
     return ((UInt64View) get(8)).get();
   }
 
-  public UnsignedLong getMax_reveal_lateness() {
-    return ((UInt64View) get(9)).get();
+  public UnsignedLong getAll_custody_secrets_revealed_epoch() {
+    return ((UInt64View) get(10)).get();
   }
 
   public ValidatorPhase1 withEffective_balance(UnsignedLong effective_balance) {
@@ -245,7 +245,7 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
         getExit_epoch(),
         getWithdrawable_epoch(),
         getNext_custody_secret_to_reveal(),
-        getMax_reveal_lateness());
+        getAll_custody_secrets_revealed_epoch());
   }
 
   public ValidatorPhase1 withSlashed(boolean slashed) {
@@ -259,7 +259,7 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
         getExit_epoch(),
         getWithdrawable_epoch(),
         getNext_custody_secret_to_reveal(),
-        getMax_reveal_lateness());
+        getAll_custody_secrets_revealed_epoch());
   }
 
   public ValidatorPhase1 withActivation_eligibility_epoch(
@@ -274,7 +274,7 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
         getExit_epoch(),
         getWithdrawable_epoch(),
         getNext_custody_secret_to_reveal(),
-        getMax_reveal_lateness());
+        getAll_custody_secrets_revealed_epoch());
   }
 
   public ValidatorPhase1 withActivation_epoch(UnsignedLong activation_epoch) {
@@ -288,7 +288,7 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
         getExit_epoch(),
         getWithdrawable_epoch(),
         getNext_custody_secret_to_reveal(),
-        getMax_reveal_lateness());
+        getAll_custody_secrets_revealed_epoch());
   }
 
   public ValidatorPhase1 withExit_epoch(UnsignedLong exit_epoch) {
@@ -302,7 +302,7 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
         exit_epoch,
         getWithdrawable_epoch(),
         getNext_custody_secret_to_reveal(),
-        getMax_reveal_lateness());
+        getAll_custody_secrets_revealed_epoch());
   }
 
   public ValidatorPhase1 withWithdrawable_epoch(UnsignedLong withdrawable_epoch) {
@@ -316,7 +316,7 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
         getExit_epoch(),
         withdrawable_epoch,
         getNext_custody_secret_to_reveal(),
-        getMax_reveal_lateness());
+        getAll_custody_secrets_revealed_epoch());
   }
 
   public ValidatorPhase1 withNext_custody_secret_to_reveal(
@@ -331,10 +331,11 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
         getExit_epoch(),
         getWithdrawable_epoch(),
         next_custody_secret_to_reveal,
-        getMax_reveal_lateness());
+        getAll_custody_secrets_revealed_epoch());
   }
 
-  public ValidatorPhase1 withMax_reveal_lateness(UnsignedLong max_reveal_lateness) {
+  public ValidatorPhase1 withAll_custody_secrets_revealed_epoch(
+      UnsignedLong all_custody_secrets_revealed_epoch) {
     return create(
         getPubkey(),
         getWithdrawal_credentials(),
@@ -345,7 +346,7 @@ public class ValidatorPhase1 extends AbstractImmutableContainer
         getExit_epoch(),
         getWithdrawable_epoch(),
         getNext_custody_secret_to_reveal(),
-        max_reveal_lateness);
+        all_custody_secrets_revealed_epoch);
   }
 
   @Override

@@ -1,294 +1,280 @@
 package tech.pegasys.teku.phase1.integration.datastructures
 
-import tech.pegasys.teku.phase1.integration.types.BLSSignatureType
-import tech.pegasys.teku.phase1.integration.types.Bytes32Type
-import tech.pegasys.teku.phase1.integration.types.SSZByteListType
-import tech.pegasys.teku.phase1.integration.types.SSZListType
-import tech.pegasys.teku.phase1.integration.types.SSZMutableListType
-import tech.pegasys.teku.phase1.integration.types.ShardBlockType
-import tech.pegasys.teku.phase1.integration.types.ShardStateType
-import tech.pegasys.teku.phase1.integration.types.UInt64Type
+import tech.pegasys.teku.phase1.integration.ssz.SSZAbstractCollection
+import tech.pegasys.teku.phase1.integration.ssz.SSZByteListImpl
+import tech.pegasys.teku.phase1.integration.ssz.SSZListImpl
+import tech.pegasys.teku.phase1.integration.Bytes96Type
+import tech.pegasys.teku.phase1.integration.getBasicValue
+import tech.pegasys.teku.phase1.integration.toUInt64
+import tech.pegasys.teku.phase1.integration.toUnsignedLong
+import tech.pegasys.teku.phase1.integration.wrapValues
 import tech.pegasys.teku.phase1.onotole.phase1.BLSSignature
 import tech.pegasys.teku.phase1.onotole.phase1.Gwei
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_SHARD_BLOCKS_PER_ATTESTATION
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_SHARD_BLOCK_SIZE
 import tech.pegasys.teku.phase1.onotole.phase1.Root
-import tech.pegasys.teku.phase1.onotole.phase1.ShardBlock
-import tech.pegasys.teku.phase1.onotole.phase1.ShardBlockHeader
-import tech.pegasys.teku.phase1.onotole.phase1.ShardState
-import tech.pegasys.teku.phase1.onotole.phase1.ShardTransition
-import tech.pegasys.teku.phase1.onotole.phase1.SignedShardBlock
+import tech.pegasys.teku.phase1.onotole.phase1.Shard
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
 import tech.pegasys.teku.phase1.onotole.phase1.ValidatorIndex
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
+import tech.pegasys.teku.phase1.onotole.ssz.Bytes96
 import tech.pegasys.teku.phase1.onotole.ssz.SSZByteList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZList
-import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableList
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
-import tech.pegasys.teku.datastructures.phase1.shard.ShardBlock as TekuShardBlock
-import tech.pegasys.teku.datastructures.phase1.shard.ShardBlockHeader as TekuShardBlockHeader
-import tech.pegasys.teku.datastructures.phase1.shard.ShardState as TekuShardState
-import tech.pegasys.teku.datastructures.phase1.shard.ShardTransition as TekuShardTransition
-import tech.pegasys.teku.datastructures.phase1.shard.SignedShardBlock as TekuSignedShardBlock
+import tech.pegasys.teku.ssz.backing.ContainerViewRead
+import tech.pegasys.teku.ssz.backing.tree.TreeNode
+import tech.pegasys.teku.ssz.backing.type.BasicViewTypes
+import tech.pegasys.teku.ssz.backing.type.ContainerViewType
+import tech.pegasys.teku.ssz.backing.type.ListViewType
+import tech.pegasys.teku.ssz.backing.view.AbstractImmutableContainer
+import tech.pegasys.teku.ssz.backing.view.AbstractMutableContainer
+import tech.pegasys.teku.ssz.backing.view.BasicViews.ByteView
+import tech.pegasys.teku.ssz.backing.view.BasicViews.Bytes32View
+import tech.pegasys.teku.ssz.backing.view.BasicViews.UInt64View
+import tech.pegasys.teku.ssz.backing.view.ViewUtils
 
-internal class ShardTransitionWrapper(override val v: TekuShardTransition) :
-  Wrapper<TekuShardTransition>, ShardTransition {
+class ShardTransition : AbstractImmutableContainer {
+  val start_slot: Slot
+    get() = (get(0) as UInt64View).get().toUInt64()
+  val shard_block_lengths: SSZList<uint64>
+    get() = SSZListImpl<uint64, UInt64View>(getAny(1)) { v -> v.get().toUInt64() }
+  val shard_data_roots: SSZList<Root>
+    get() = SSZListImpl(getAny(2), Bytes32View::get)
+  val shard_states: SSZList<ShardState>
+    get() = SSZListImpl<ShardState, ShardState>(getAny(3)) { v -> v }
+  val proposer_signature_aggregate: BLSSignature
+    get() = Bytes96(ViewUtils.getAllBytes(getAny(4)))
 
   constructor(
     start_slot: Slot,
-    shard_block_lengths: SSZMutableList<uint64>,
-    shard_data_roots: SSZMutableList<Bytes32>,
-    shard_states: SSZMutableList<ShardState>,
+    shard_block_lengths: SSZList<uint64>,
+    shard_data_roots: SSZList<Bytes32>,
+    shard_states: SSZList<ShardState>,
     proposer_signature_aggregate: BLSSignature
-  ) : this(
-    TekuShardTransition(
-      UInt64Type.unwrap(start_slot),
-      SSZMutableListType(
-        UInt64Type
-      ).unwrap(shard_block_lengths),
-      SSZMutableListType(
-        Bytes32Type
-      ).unwrap(shard_data_roots),
-      SSZMutableListType(
-        ShardStateType
-      ).unwrap(shard_states),
-      BLSSignatureType.unwrap(proposer_signature_aggregate)
-    )
+  ) : super(
+    TYPE,
+    UInt64View(start_slot.toUnsignedLong()),
+    (shard_block_lengths as SSZAbstractCollection<*, *>).view,
+    (shard_data_roots as SSZAbstractCollection<*, *>).view,
+    (shard_states as SSZAbstractCollection<*, *>).view,
+    ViewUtils.createVectorFromBytes(proposer_signature_aggregate.wrappedBytes)
   )
 
-  override val start_slot: Slot
-    get() = UInt64Type.wrap(v.start_slot)
-  override val shard_block_lengths: SSZList<uint64>
-    get() = SSZListType(
-      UInt64Type
-    ).wrap(v.shard_block_lengths)
-  override val shard_data_roots: SSZList<Bytes32>
-    get() = SSZListType(
-      Bytes32Type
-    ).wrap(v.shard_data_roots)
-  override val shard_states: SSZList<ShardState>
-    get() = SSZListType(
-      ShardStateType
-    ).wrap(v.shard_states)
-  override val proposer_signature_aggregate: BLSSignature
-    get() = BLSSignatureType.wrap(v.proposer_signature_aggregate)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is ShardTransitionWrapper) {
-      return other.v == v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<ShardTransition>(
+      listOf(
+        BasicViewTypes.UINT64_TYPE,
+        ListViewType<UInt64View>(
+          BasicViewTypes.UINT64_TYPE,
+          MAX_SHARD_BLOCKS_PER_ATTESTATION.toLong()
+        ),
+        ListViewType<Bytes32View>(
+          BasicViewTypes.BYTES32_TYPE,
+          MAX_SHARD_BLOCKS_PER_ATTESTATION.toLong()
+        ),
+        ListViewType<ShardState>(ShardState.TYPE, MAX_SHARD_BLOCKS_PER_ATTESTATION.toLong()),
+        Bytes96Type
+      ),
+      ::ShardTransition
+    )
   }
 }
 
-internal class ShardStateWrapper(
-  override var v: TekuShardState,
-  onUpdate: Callback<ShardState>? = null
-) : Wrapper<TekuShardState>, ShardState, Mutable<ShardState>(onUpdate) {
+class ShardState : AbstractMutableContainer {
+  var slot: Slot
+    get() = (get(0) as UInt64View).get().toUInt64()
+    set(value) {
+      set(0, UInt64View(value.toUnsignedLong()))
+    }
+  var gasprice: Gwei
+    get() = (get(1) as UInt64View).get().toUInt64()
+    set(value) {
+      set(1, UInt64View(value.toUnsignedLong()))
+    }
+  var latest_block_root: Root
+    get() = (get(2) as Bytes32View).get()
+    set(value) {
+      set(2, Bytes32View(value))
+    }
 
   constructor(
     slot: Slot,
     gasprice: Gwei,
-    transition_digest: Bytes32,
     latest_block_root: Root
-  ) : this(
-    TekuShardState(
-      UInt64Type.unwrap(slot),
-      UInt64Type.unwrap(gasprice),
-      transition_digest,
-      latest_block_root
-    )
+  ) : super(
+    TYPE,
+    UInt64View(slot.toUnsignedLong()),
+    UInt64View(gasprice.toUnsignedLong()),
+    Bytes32View(latest_block_root)
   )
 
-  override var slot: Slot
-    get() = UInt64Type.wrap(v.slot)
-    set(value) {
-      v = TekuShardState(
-        UInt64Type.unwrap(value),
-        v.gasprice,
-        v.transition_digest,
-        v.latest_block_root
-      )
-      onUpdate(this)
-    }
-  override var gasprice: Gwei
-    get() = UInt64Type.wrap(v.gasprice)
-    set(value) {
-      v = TekuShardState(v.slot, UInt64Type.unwrap(value), v.transition_digest, v.latest_block_root)
-      onUpdate(this)
-    }
-  override var transition_digest: Bytes32
-    get() = v.transition_digest
-    set(value) {
-      v = TekuShardState(v.slot, v.gasprice, value, v.latest_block_root)
-      onUpdate(this)
-    }
-  override var latest_block_root: Root
-    get() = Bytes32Type.wrap(v.latest_block_root)
-    set(value) {
-      v = TekuShardState(v.slot, v.gasprice, v.transition_digest, value)
-      onUpdate(this)
-    }
+  constructor(type: ContainerViewType<out ContainerViewRead>?, backingNode: TreeNode?) : super(
+    type,
+    backingNode
+  )
 
-  override fun copy(
-    slot: Slot,
-    gasprice: Gwei,
-    transition_digest: Bytes32,
-    latest_block_root: Root
-  ): ShardState = ShardStateWrapper(slot, gasprice, transition_digest, latest_block_root)
+  constructor() : super(TYPE)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  fun copy(): ShardState = ShardState(TYPE, this.backingNode)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is ShardStateWrapper) {
-      return other.v == v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<ShardState>(
+      listOf(
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.BYTES32_TYPE
+      ),
+      ::ShardState
+    )
   }
 }
 
-internal class ShardBlockHeaderWrapper(override val v: TekuShardBlockHeader) :
-  Wrapper<TekuShardBlockHeader>, ShardBlockHeader {
+class ShardBlockHeader : AbstractImmutableContainer {
+  val shard_parent_root: Root
+    get() = getBasicValue(get(0))
+  val beacon_parent_root: Root
+    get() = getBasicValue(get(1))
+  val slot: Slot
+    get() = getBasicValue(get(2))
+  val shard: Shard
+    get() = getBasicValue(get(3))
+  val proposer_index: ValidatorIndex
+    get() = getBasicValue(get(4))
+  val body_root: Root
+    get() = getBasicValue(get(5))
 
   constructor(
     shard_parent_root: Root,
     beacon_parent_root: Root,
     slot: Slot,
+    shard: Shard,
     proposer_index: ValidatorIndex,
     body_root: Root
-  ) : this(
-    TekuShardBlockHeader(
+  ) : super(
+    TYPE,
+    *wrapValues(
       shard_parent_root,
       beacon_parent_root,
-      UInt64Type.unwrap(slot),
-      UInt64Type.unwrap(proposer_index),
+      slot,
+      shard,
+      proposer_index,
       body_root
     )
   )
 
-  override val shard_parent_root: Root
-    get() = Bytes32Type.wrap(v.shard_parent_root)
-  override val beacon_parent_root: Root
-    get() = Bytes32Type.wrap(v.beacon_parent_root)
-  override val slot: Slot
-    get() = UInt64Type.wrap(v.slot)
-  override val proposer_index: ValidatorIndex
-    get() = UInt64Type.wrap(v.proposer_index)
-  override val body_root: Root
-    get() = Bytes32Type.wrap(v.body_root)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is ShardBlockHeaderWrapper) {
-      return other.v == v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<ShardBlockHeader>(
+      listOf(
+        BasicViewTypes.BYTES32_TYPE,
+        BasicViewTypes.BYTES32_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.BYTES32_TYPE
+      ),
+      ::ShardBlockHeader
+    )
   }
 }
 
-internal class ShardBlockWrapper(override val v: TekuShardBlock) : Wrapper<TekuShardBlock>,
-  ShardBlock {
+class ShardBlock : AbstractImmutableContainer {
+  val shard_parent_root: Root
+    get() = getBasicValue(get(0))
+  val beacon_parent_root: Root
+    get() = getBasicValue(get(1))
+  val slot: Slot
+    get() = getBasicValue(get(2))
+  val shard: Shard
+    get() = getBasicValue(get(3))
+  val proposer_index: ValidatorIndex
+    get() = getBasicValue(get(4))
+  val body: SSZByteList
+    get() = SSZByteListImpl(getAny(5))
 
   constructor(
-    shard_parent_root: Root,
-    beacon_parent_root: Root,
+    shard_parent_root: Root = Root(),
+    beacon_parent_root: Root = Root(),
     slot: Slot,
-    proposer_index: ValidatorIndex,
-    body: SSZByteList
-  ) : this(
-    TekuShardBlock(
+    shard: Shard,
+    proposer_index: ValidatorIndex = ValidatorIndex(),
+    body: SSZByteList = SSZByteListImpl(
+      ListViewType<ByteView>(
+        BasicViewTypes.BYTE_TYPE,
+        MAX_SHARD_BLOCK_SIZE.toLong()
+      ).default
+    )
+  ) : super(
+    TYPE,
+    *wrapValues(
       shard_parent_root,
       beacon_parent_root,
-      UInt64Type.unwrap(slot),
-      UInt64Type.unwrap(proposer_index),
-      SSZByteListType.unwrap(body)
+      slot,
+      shard,
+      proposer_index,
+      body
     )
   )
 
-  override val shard_parent_root: Root
-    get() = Bytes32Type.wrap(v.shard_parent_root)
-  override val beacon_parent_root: Root
-    get() = Bytes32Type.wrap(v.beacon_parent_root)
-  override val slot: Slot
-    get() = UInt64Type.wrap(v.slot)
-  override val proposer_index: ValidatorIndex
-    get() = UInt64Type.wrap(v.proposer_index)
-  override val body: SSZByteList
-    get() = SSZByteListType.wrap(v.body)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is ShardBlockWrapper) {
-      return other.v == v
-    }
-
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<ShardBlock>(
+      listOf(
+        BasicViewTypes.BYTES32_TYPE,
+        BasicViewTypes.BYTES32_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        ListViewType<ByteView>(BasicViewTypes.BYTE_TYPE, MAX_SHARD_BLOCK_SIZE.toLong())
+      ),
+      ::ShardBlock
+    )
   }
 }
 
-internal class SignedShardBlockWrapper(override val v: TekuSignedShardBlock) :
-  Wrapper<TekuSignedShardBlock>, SignedShardBlock {
+class SignedShardBlock : AbstractImmutableContainer {
+  val message: ShardBlock
+    get() = getAny(0)
+  val signature: BLSSignature
+    get() = Bytes96(ViewUtils.getAllBytes(getAny(1)))
 
-  constructor(message: ShardBlock, signature: BLSSignature) : this(
-    TekuSignedShardBlock(
-      ShardBlockType.unwrap(message),
-      BLSSignatureType.unwrap(signature)
-    )
+  constructor(message: ShardBlock, signature: BLSSignature = BLSSignature()) : super(
+    TYPE, message, ViewUtils.createVectorFromBytes(signature.wrappedBytes)
   )
 
-  override val message: ShardBlock
-    get() = ShardBlockType.wrap(v.message)
-  override val signature: BLSSignature
-    get() = BLSSignatureType.wrap(v.signature)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is SignedShardBlockWrapper) {
-      return other.v == v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<SignedShardBlock>(
+      listOf(
+        ShardBlock.TYPE,
+        Bytes96Type
+      ),
+      ::SignedShardBlock
+    )
   }
 }

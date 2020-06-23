@@ -1,315 +1,298 @@
 package tech.pegasys.teku.phase1.integration.ssz
 
-import tech.pegasys.teku.phase1.integration.datastructures.Mutable
-import tech.pegasys.teku.phase1.integration.datastructures.Wrapper
-import tech.pegasys.teku.phase1.integration.types.ByteType
-import tech.pegasys.teku.phase1.integration.types.TypePair
-import tech.pegasys.teku.phase1.onotole.ssz.Bytes1
-import tech.pegasys.teku.phase1.onotole.ssz.SSZBitList
-import tech.pegasys.teku.phase1.onotole.ssz.SSZBitVector
+import tech.pegasys.teku.phase1.onotole.ssz.SSZBitlist
+import tech.pegasys.teku.phase1.onotole.ssz.SSZBitvector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZByteList
+import tech.pegasys.teku.phase1.onotole.ssz.SSZByteVector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZCollection
 import tech.pegasys.teku.phase1.onotole.ssz.SSZList
+import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableBitlist
+import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableBitvector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableVector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZVector
-import tech.pegasys.teku.ssz.SSZTypes.Bitlist
-import tech.pegasys.teku.ssz.SSZTypes.Bitvector
-import tech.pegasys.teku.util.hashtree.HashTreeUtil
-import java.util.stream.Collectors
-import tech.pegasys.teku.ssz.SSZTypes.SSZImmutableCollection as TekuSSZImmutableCollection
-import tech.pegasys.teku.ssz.SSZTypes.SSZList as TekuSSZList
-import tech.pegasys.teku.ssz.SSZTypes.SSZMutableCollection as TekuSSZMutableCollection
-import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList as TekuSSZMutableList
-import tech.pegasys.teku.ssz.SSZTypes.SSZMutableVector as TekuSSZMutableVector
-import tech.pegasys.teku.ssz.SSZTypes.SSZVector as TekuSSZVector
+import tech.pegasys.teku.ssz.backing.CompositeViewRead
+import tech.pegasys.teku.ssz.backing.ListViewRead
+import tech.pegasys.teku.ssz.backing.ListViewWrite
+import tech.pegasys.teku.ssz.backing.VectorViewRead
+import tech.pegasys.teku.ssz.backing.VectorViewWrite
+import tech.pegasys.teku.ssz.backing.ViewRead
+import tech.pegasys.teku.ssz.backing.tree.TreeNode
+import tech.pegasys.teku.ssz.backing.type.BasicViewTypes
+import tech.pegasys.teku.ssz.backing.type.ListViewType
+import tech.pegasys.teku.ssz.backing.type.VectorViewType
+import tech.pegasys.teku.ssz.backing.type.ViewType
+import tech.pegasys.teku.ssz.backing.view.BasicViews.BitView
+import tech.pegasys.teku.ssz.backing.view.BasicViews.ByteView
 
-internal abstract class SSZCollectionWrapper<Onotole : Any, Teku : Any>(
-  internal val type: TypePair<Onotole, Teku>
-) : SSZCollection<Onotole> {
-  internal abstract val collection: TekuSSZImmutableCollection<Teku>
+abstract class SSZAbstractCollection<U : Any, V : ViewRead> : SSZCollection<U> {
+  protected abstract val unwrapper: (V) -> U
+  internal abstract val view: CompositeViewRead<V>
 
   override val size: Int
-    get() = collection.size()
+    get() = view.size()
 
-  override fun contains(element: Onotole): Boolean = collection.contains(type.unwrap(element))
-  override fun get(index: ULong): Onotole {
-    return type.wrap(collection[index.toInt()])
-  }
-
-  override fun indexOf(element: Onotole) = collection.indexOf(type.unwrap(element))
-  override fun isEmpty() = collection.isEmpty
-  override fun iterator(): MutableIterator<Onotole> = object : MutableIterator<Onotole> {
-    private val iterator = collection.iterator()
-    override fun hasNext() = iterator.hasNext()
-    override fun next() = type.wrap(iterator.next())
-    override fun remove() = iterator.remove()
-  }
-
-  override fun lastIndexOf(element: Onotole) = collection.lastIndexOf(type.unwrap(element))
-  override fun subList(fromIndex: Int, toIndex: Int): List<Onotole> {
-    return collection.stream()
-      .skip(fromIndex.toLong())
-      .limit((toIndex - fromIndex + 1).toLong())
-      .map { type.wrap(it) }
-      .collect(Collectors.toList())
-  }
-
-
-  override fun equals(other: Any?): Boolean {
-    if (other is SSZCollectionWrapper<*, *>) {
-      return other.collection == collection
+  override fun get(index: ULong): U = unwrapper(view.get(index.toInt()) as V)
+  override fun contains(element: U): Boolean = indexOf(element) > 0
+  override fun indexOf(element: U): Int {
+    for ((index, item) in this.withIndex()) {
+      if (item == element)
+        return index
     }
-    return false
+    return -1
   }
 
-  override fun hashCode(): Int {
-    return collection.hashCode()
+  override fun isEmpty(): Boolean = size == 0
+  override fun iterator(): Iterator<U> = object : Iterator<U> {
+    private var it: Int = -1
+    override fun hasNext(): Boolean = (it + 1) < size
+    override fun next(): U {
+      if (!hasNext()) throw NoSuchElementException()
+      return get(++it)
+    }
   }
 
-  override fun toString(): String {
-    return collection.toString()
+  override fun subList(fromIndex: Int, toIndex: Int): List<U> {
+    if (fromIndex < 0 || toIndex > size) {
+      throw IndexOutOfBoundsException("fromIndex: $fromIndex, toIndex: $toIndex, size: $size")
+    }
+    if (fromIndex > toIndex) {
+      throw IllegalArgumentException("fromIndex: $fromIndex > toIndex: $toIndex")
+    }
+    return (fromIndex until toIndex).map { get(it) }
   }
 
-  override fun containsAll(elements: Collection<Onotole>) = throw UnsupportedOperationException()
-  override fun listIterator(): MutableListIterator<Onotole> = throw UnsupportedOperationException()
-  override fun listIterator(index: Int): MutableListIterator<Onotole> =
-    throw UnsupportedOperationException()
+  override fun lastIndexOf(element: U): Int = throw UnsupportedOperationException()
+  override fun containsAll(elements: Collection<U>): Boolean = throw UnsupportedOperationException()
+  override fun listIterator(): ListIterator<U> = throw UnsupportedOperationException()
+  override fun listIterator(index: Int): ListIterator<U> = throw UnsupportedOperationException()
 }
 
-internal open class SSZListWrapper<Onotole : Any, Teku : Any>(
-  override val collection: TekuSSZList<Teku>,
-  type: TypePair<Onotole, Teku>
-) : SSZList<Onotole>, SSZCollectionWrapper<Onotole, Teku>(type) {
-
-  constructor(items: MutableList<Onotole>, maxSize: ULong, type: TypePair<Onotole, Teku>)
-      : this(
-    TekuSSZList.createMutable(
-      items.map { type.unwrap(it) }.toList(),
-      maxSize.toLong(),
-      type.teku.java
-    ), type
+class SSZVectorImpl<U : Any, V : ViewRead>(
+  override val view: VectorViewRead<V>,
+  override val unwrapper: (V) -> U
+) : SSZAbstractCollection<U, V>(), SSZVector<U> {
+  constructor(
+    elementType: ViewType,
+    elements: List<U>,
+    unwrapper: (V) -> U,
+    wrapper: (U) -> V
+  ) : this(
+    initializeVectorView<U, V>(elementType, elements, wrapper).commitChanges(),
+    unwrapper
   )
 
-  override val maxSize: ULong
-    get() = collection.maxSize.toULong()
+  constructor(elementType: ViewType, size: Long, unwrapper: (V) -> U) : this(
+    VectorViewType<V>(elementType, size).default,
+    unwrapper
+  )
 }
 
-internal open class SSZMutableListWrapper<Onotole : Any, Teku : Any>(
-  override val collection: TekuSSZMutableList<Teku>,
-  type: TypePair<Onotole, Teku>
-) : SSZMutableList<Onotole>, SSZListWrapper<Onotole, Teku>(collection, type) {
+class SSZMutableVectorImpl<U : Any, V : ViewRead>(
+  override val view: VectorViewWrite<V>,
+  override val unwrapper: (V) -> U,
+  private val wrapper: (U) -> V
+) : SSZAbstractCollection<U, V>(), SSZMutableVector<U> {
 
-  constructor(immutable: SSZList<Onotole>) : this(
-    TekuSSZList.createMutable(
-      (immutable as SSZListWrapper<Onotole, Teku>).collection
-    ), immutable.type
-  )
+  override fun set(index: ULong, item: U): U {
+    val oldValue = get(index)
+    view.set(index.toInt(), wrapper(item))
+    return oldValue
+  }
 
   constructor(
-    items: MutableList<Onotole>,
-    maxSize: ULong,
-    type: TypePair<Onotole, Teku>
-  ) : this(
-    TekuSSZList.createMutable(
-      items.map { type.unwrap(it) }.toList(),
-      maxSize.toLong(),
-      type.teku.java
-    ), type
+    elementType: ViewType,
+    elements: List<U>,
+    unwrapper: (V) -> U,
+    wrapper: (U) -> V
+  ) : this(initializeVectorView<U, V>(elementType, elements, wrapper), unwrapper, wrapper)
+
+  constructor(elementType: ViewType, size: ULong, unwrapper: (V) -> U, wrapper: (U) -> V) : this(
+    VectorViewType<V>(elementType, size.toLong()).default.createWritableCopy(), unwrapper, wrapper
   )
-
-  override fun append(item: Onotole) {
-    collection.add(type.unwrap(item))
-  }
-
-  override fun get(index: ULong): Onotole {
-    val item = type.wrap(collection[index.toInt()])
-    if (item is Mutable<*>) {
-      item.callback = { value -> this[index] = value as Onotole }
-    }
-    return item
-  }
-
-  override operator fun set(index: ULong, item: Onotole): Onotole {
-    val oldItem = collection[index.toInt()]
-    collection.set(index.toInt(), type.unwrap(item))
-    return type.wrap(oldItem)
-  }
 }
 
-internal class SSZBitListWrapper(override val v: Bitlist) : Wrapper<Bitlist>, SSZBitList {
-
-  constructor(items: MutableList<Boolean>, maxSize: ULong) : this(
-    MutableList(1) { items }.map<MutableList<Boolean>, Bitlist> { list ->
-      val data = Bitlist(items.size, maxSize.toLong())
-      list.forEachIndexed { i, bit -> if (bit) data.setBit(i) }
-      data
-    }.first()
-  )
+class SSZListImpl<U : Any, V : ViewRead>(
+  override val view: ListViewRead<V>,
+  override val unwrapper: (V) -> U
+) : SSZAbstractCollection<U, V>(), SSZList<U> {
 
   override val maxSize: ULong
-    get() = v.maxSize.toULong()
-  override val size: Int = v.currentSize
-  override fun get(index: ULong): Boolean = v.getBit(index.toInt())
-  override fun isEmpty() = size == 0
-  override fun set(index: ULong, element: Boolean): Boolean {
-    val oldItem = this[index.toInt()]
-    v.setBit(index.toInt())
-    return oldItem
+    get() = view.type.maxLength.toULong()
+
+  constructor(
+    elementType: ViewType,
+    maxSize: ULong,
+    elements: List<U>,
+    unwrapper: (V) -> U,
+    wrapper: (U) -> V
+  ) : this(
+    initializeListView<U, V>(elementType, maxSize, elements, wrapper).commitChanges(),
+    unwrapper
+  )
+}
+
+class SSZMutableListImpl<U : Any, V : ViewRead>(
+  override val view: ListViewWrite<V>,
+  override val unwrapper: (V) -> U,
+  private val wrapper: (U) -> V
+) : SSZAbstractCollection<U, V>(), SSZMutableList<U> {
+
+  override val maxSize: ULong
+    get() = view.type.maxLength.toULong()
+
+  override fun set(index: ULong, item: U): U {
+    val oldValue = get(index)
+    view.set(index.toInt(), wrapper(item))
+    return oldValue
   }
 
-  override fun hash_tree_root() = HashTreeUtil.hash_tree_root_bitlist(v)
-
-  override fun equals(other: Any?): Boolean {
-    if (other is SSZBitListWrapper) {
-      return other.v == v
+  override fun append(item: U) {
+    if (size.toULong() >= maxSize) {
+      throw IndexOutOfBoundsException()
     }
-    return false
+    set(size + 1, item)
   }
 
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
+  override fun clear() = view.clear()
 
-  override fun toString(): String {
-    return v.toString()
-  }
-
-  override fun append(item: Boolean) = throw UnsupportedOperationException()
-  override fun contains(element: Boolean) = throw UnsupportedOperationException()
-  override fun indexOf(element: Boolean) = throw UnsupportedOperationException()
-  override fun lastIndexOf(element: Boolean) = throw UnsupportedOperationException()
-  override fun iterator() = throw UnsupportedOperationException()
-  override fun containsAll(elements: Collection<Boolean>) = throw UnsupportedOperationException()
-  override fun listIterator(): MutableListIterator<Boolean> = throw UnsupportedOperationException()
-  override fun listIterator(index: Int): MutableListIterator<Boolean> =
-    throw UnsupportedOperationException()
-
-  override fun subList(fromIndex: Int, toIndex: Int) = throw UnsupportedOperationException()
-}
-
-internal class SSZByteListWrapper(list: TekuSSZList<Byte>) :
-  SSZListWrapper<Bytes1, Byte>(
-    list,
-    ByteType
-  ), SSZByteList {
-
-  constructor(items: MutableList<Byte>, maxSize: ULong) : this(
-    TekuSSZList.createMutable(items, maxSize.toLong(), Byte::class.java)
+  constructor(
+    elementType: ViewType,
+    maxSize: ULong,
+    elements: List<U>,
+    unwrapper: (V) -> U,
+    wrapper: (U) -> V
+  ) : this(
+    initializeListView<U, V>(elementType, maxSize, elements, wrapper),
+    unwrapper,
+    wrapper
   )
 }
 
-internal open class SSZVectorWrapper<Onotole : Any, Teku : Any>(
-  override val collection: TekuSSZVector<Teku>,
-  type: TypePair<Onotole, Teku>
-) : SSZVector<Onotole>, SSZCollectionWrapper<Onotole, Teku>(type) {
+class SSZBitvectorImpl(override val view: VectorViewRead<BitView>) :
+  SSZAbstractCollection<Boolean, BitView>(), SSZBitvector {
+  override val unwrapper: (BitView) -> Boolean = BitView::get
 
-  constructor(items: MutableList<Onotole>, type: TypePair<Onotole, Teku>)
-      : this(
-    TekuSSZVector.createMutable(items.map { type.unwrap(it) }.toList(), type.teku.java),
-    type
+  constructor(size: ULong) : this(
+    VectorViewType<BitView>(
+      BasicViewTypes.BIT_TYPE,
+      size.toLong()
+    ).default.createWritableCopy()
+  )
+
+  constructor(elements: List<Boolean>) : this(
+    initializeVectorView<Boolean, BitView>(BasicViewTypes.BIT_TYPE, elements, ::BitView)
   )
 }
 
-internal class SSZMutableVectorWrapper<Onotole : Any, Teku : Any>(
-  override val collection: TekuSSZMutableVector<Teku>,
-  type: TypePair<Onotole, Teku>
-) : SSZMutableVector<Onotole>, SSZVectorWrapper<Onotole, Teku>(collection, type) {
+class SSZMutableBitvectorImpl(override val view: VectorViewWrite<BitView>) :
+  SSZAbstractCollection<Boolean, BitView>(), SSZMutableBitvector {
+  override val unwrapper: (BitView) -> Boolean = BitView::get
+  override fun set(index: ULong, item: Boolean): Boolean {
+    val oldValue = get(index)
+    view.set(index.toInt(), BitView(item))
+    return oldValue
+  }
 
-  constructor(immutable: SSZVector<Onotole>) : this(
-    TekuSSZVector.createMutable(
-      (immutable as SSZVectorWrapper<Onotole, Teku>).collection.asList(),
-      immutable.type.teku.java
-    ),
-    immutable.type
+  constructor(size: ULong) : this(
+    VectorViewType<BitView>(
+      BasicViewTypes.BIT_TYPE,
+      size.toLong()
+    ).default.createWritableCopy()
   )
 
-  constructor(items: MutableList<Onotole>, type: TypePair<Onotole, Teku>)
-      : this(
-    TekuSSZVector.createMutable(items.map { type.unwrap(it) }.toList(), type.teku.java),
-    type
+  constructor(elements: List<Boolean>) : this(
+    initializeVectorView<Boolean, BitView>(BasicViewTypes.BIT_TYPE, elements, ::BitView)
   )
+}
 
-  override fun get(index: ULong): Onotole {
-    val item = type.wrap(collection[index.toInt()])
-    if (item is Mutable<*>) {
-      item.callback = { value -> this[index] = value as Onotole }
+class SSZBitlistImpl(override val view: ListViewRead<BitView>) :
+  SSZAbstractCollection<Boolean, BitView>(), SSZBitlist {
+  override val unwrapper: (BitView) -> Boolean = BitView::get
+  override val maxSize: ULong
+    get() = view.type.maxLength.toULong()
+
+  constructor(maxSize: ULong, elements: List<Boolean>) : this(
+    initializeListView<Boolean, BitView>(BasicViewTypes.BIT_TYPE, maxSize, elements, ::BitView)
+  )
+}
+
+class SSZMutableBitlistImpl(override val view: ListViewWrite<BitView>) :
+  SSZAbstractCollection<Boolean, BitView>(), SSZMutableBitlist {
+  override val unwrapper: (BitView) -> Boolean = BitView::get
+  override val maxSize: ULong
+    get() = view.type.maxLength.toULong()
+
+  override fun append(item: Boolean) {
+    if (size.toULong() >= maxSize) {
+      throw IndexOutOfBoundsException()
     }
-    return item
+    set(size + 1, item)
   }
 
-  override operator fun set(index: ULong, item: Onotole): Onotole {
-    val oldItem = collection[index.toInt()]
-    collection.set(index.toInt(), type.unwrap(item))
-    return type.wrap(oldItem)
-  }
-}
+  override fun clear() = view.clear()
 
-internal class SSZBitVectorWrapper(override val v: Bitvector) : Wrapper<Bitvector>, SSZBitVector {
-  constructor(items: MutableList<Boolean>) : this(
-    Bitvector(
-      items.mapIndexed { i, v -> Pair(i, v) }.filter { p -> p.second }
-        .map { p -> p.first },
-      items.size
-    )
+  override fun set(index: ULong, item: Boolean): Boolean {
+    val oldValue = get(index)
+    view.set(index.toInt(), BitView(item))
+    return oldValue
+  }
+
+  constructor(maxSize: ULong, elements: List<Boolean>) : this(
+    initializeListView<Boolean, BitView>(BasicViewTypes.BIT_TYPE, maxSize, elements, ::BitView)
   )
-
-  override val size: Int = v.size
-  override fun get(index: ULong): Boolean = v.getBit(index.toInt())
-  override fun isEmpty() = size == 0
-  override fun set(index: ULong, element: Boolean): Boolean {
-    val oldItem = this[index.toInt()]
-    v.setBit(index.toInt())
-    return oldItem
-  }
-
-  override fun hash_tree_root() = HashTreeUtil.hash_tree_root_bitvector(v)
-
-  override fun equals(other: Any?): Boolean {
-    if (other is SSZBitVectorWrapper) {
-      return other.v == v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
-  }
-
-  override fun contains(element: Boolean) = throw UnsupportedOperationException()
-  override fun indexOf(element: Boolean) = throw UnsupportedOperationException()
-  override fun lastIndexOf(element: Boolean) = throw UnsupportedOperationException()
-  override fun iterator() = throw UnsupportedOperationException()
-  override fun containsAll(elements: Collection<Boolean>) = throw UnsupportedOperationException()
-  override fun listIterator(): MutableListIterator<Boolean> = throw UnsupportedOperationException()
-  override fun listIterator(index: Int): MutableListIterator<Boolean> =
-    throw UnsupportedOperationException()
-
-  override fun subList(fromIndex: Int, toIndex: Int) = throw UnsupportedOperationException()
 }
 
-internal fun <Onotole : Any, Teku : Any> SSZMutableVector<Onotole>.copyTo(
-  to: TekuSSZMutableCollection<Teku>
-) {
-  (this as SSZMutableVectorWrapper<Onotole, Teku>).forEachIndexed { i, item ->
-    to.set(
-      i,
-      this.type.unwrap(item)
-    )
-  }
+class SSZByteListImpl(override val view: ListViewRead<ByteView>) :
+  SSZAbstractCollection<Byte, ByteView>(), SSZByteList {
+  override val unwrapper: (ByteView) -> Byte = ByteView::get
+  override val maxSize: ULong
+    get() = view.type.maxLength.toULong()
+  val backingNode: TreeNode
+    get() = view.backingNode
+
+  constructor(maxSize: ULong, elements: List<Byte>) : this(
+    initializeListView<Byte, ByteView>(
+      BasicViewTypes.BYTE_TYPE,
+      maxSize,
+      elements,
+      ::ByteView
+    ).commitChanges()
+  )
 }
 
-internal fun <Onotole : Any, Teku : Any> SSZMutableList<Onotole>.copyTo(
-  to: TekuSSZMutableCollection<Teku>
-) {
-  (this as SSZMutableListWrapper<Onotole, Teku>).forEachIndexed { i, item ->
-    to.set(
-      i,
-      this.type.unwrap(item)
-    )
-  }
+class SSZByteVectorImpl(override val view: VectorViewRead<ByteView>) :
+  SSZAbstractCollection<Byte, ByteView>(), SSZByteVector {
+  override val unwrapper: (ByteView) -> Byte = ByteView::get
+  override val size: Int
+    get() = view.size()
+  val backingNode: TreeNode
+    get() = view.backingNode
+
+  constructor(elements: List<Byte>) : this(
+    initializeVectorView(BasicViewTypes.BYTES32_TYPE, elements, ::ByteView)
+  )
+}
+
+private fun <U : Any, V : ViewRead> initializeVectorView(
+  elementType: ViewType,
+  elements: List<U>,
+  wrapper: (U) -> V
+): VectorViewWrite<V> {
+  val type = VectorViewType<V>(elementType, elements.size.toLong())
+  val view = type.default.createWritableCopy()
+  elements.forEachIndexed { index, item -> view.set(index, wrapper(item)) }
+  return view
+}
+
+private fun <U : Any, V : ViewRead> initializeListView(
+  elementType: ViewType,
+  maxSize: ULong,
+  elements: List<U>,
+  wrapper: (U) -> V
+): ListViewWrite<V> {
+  val type = ListViewType<V>(elementType, maxSize.toLong())
+  val view = type.default.createWritableCopy()
+  elements.forEachIndexed { index, item -> view.set(index, wrapper(item)) }
+  return view
 }

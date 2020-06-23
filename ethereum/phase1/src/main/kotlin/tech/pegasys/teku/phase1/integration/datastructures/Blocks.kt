@@ -1,334 +1,296 @@
 package tech.pegasys.teku.phase1.integration.datastructures
 
-import tech.pegasys.teku.phase1.integration.types.AttestationType
-import tech.pegasys.teku.phase1.integration.types.AttesterSlashingType
-import tech.pegasys.teku.phase1.integration.types.BLSSignatureType
-import tech.pegasys.teku.phase1.integration.types.BeaconBlockBodyType
-import tech.pegasys.teku.phase1.integration.types.BeaconBlockHeaderType
-import tech.pegasys.teku.phase1.integration.types.BeaconBlockType
-import tech.pegasys.teku.phase1.integration.types.CustodyKeyRevealType
-import tech.pegasys.teku.phase1.integration.types.DepositType
-import tech.pegasys.teku.phase1.integration.types.EarlyDerivedSecretRevealType
-import tech.pegasys.teku.phase1.integration.types.Eth1DataType
-import tech.pegasys.teku.phase1.integration.types.ProposerSlashingType
-import tech.pegasys.teku.phase1.integration.types.SSZBitVectorType
-import tech.pegasys.teku.phase1.integration.types.SSZListType
-import tech.pegasys.teku.phase1.integration.types.SSZMutableListType
-import tech.pegasys.teku.phase1.integration.types.SSZMutableVectorType
-import tech.pegasys.teku.phase1.integration.types.SSZVectorType
-import tech.pegasys.teku.phase1.integration.types.ShardTransitionType
-import tech.pegasys.teku.phase1.integration.types.SignedCustodySlashingType
-import tech.pegasys.teku.phase1.integration.types.SignedVoluntaryExitType
-import tech.pegasys.teku.phase1.integration.types.UInt64Type
-import tech.pegasys.teku.phase1.onotole.phase1.Attestation
-import tech.pegasys.teku.phase1.onotole.phase1.AttesterSlashing
+import tech.pegasys.teku.phase1.integration.ssz.SSZAbstractCollection
+import tech.pegasys.teku.phase1.integration.ssz.SSZBitvectorImpl
+import tech.pegasys.teku.phase1.integration.ssz.SSZListImpl
+import tech.pegasys.teku.phase1.integration.ssz.SSZVectorImpl
+import tech.pegasys.teku.phase1.integration.Bytes96Type
+import tech.pegasys.teku.phase1.integration.getBasicValue
+import tech.pegasys.teku.phase1.integration.toUInt64
+import tech.pegasys.teku.phase1.integration.toUnsignedLong
+import tech.pegasys.teku.phase1.integration.wrapBasicValue
+import tech.pegasys.teku.phase1.integration.wrapValues
 import tech.pegasys.teku.phase1.onotole.phase1.BLSSignature
-import tech.pegasys.teku.phase1.onotole.phase1.BeaconBlock
-import tech.pegasys.teku.phase1.onotole.phase1.BeaconBlockBody
-import tech.pegasys.teku.phase1.onotole.phase1.BeaconBlockHeader
-import tech.pegasys.teku.phase1.onotole.phase1.CustodyKeyReveal
-import tech.pegasys.teku.phase1.onotole.phase1.Deposit
-import tech.pegasys.teku.phase1.onotole.phase1.EarlyDerivedSecretReveal
-import tech.pegasys.teku.phase1.onotole.phase1.Eth1Data
-import tech.pegasys.teku.phase1.onotole.phase1.ProposerSlashing
+import tech.pegasys.teku.phase1.onotole.phase1.Domain
+import tech.pegasys.teku.phase1.onotole.phase1.LIGHT_CLIENT_COMMITTEE_SIZE
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_ATTESTATIONS
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_ATTESTER_SLASHINGS
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_CUSTODY_CHUNK_CHALLENGES
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_CUSTODY_CHUNK_CHALLENGE_RESPONSES
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_CUSTODY_KEY_REVEALS
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_CUSTODY_SLASHINGS
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_DEPOSITS
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_EARLY_DERIVED_SECRET_REVEALS
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_PROPOSER_SLASHINGS
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_VOLUNTARY_EXITS
 import tech.pegasys.teku.phase1.onotole.phase1.Root
-import tech.pegasys.teku.phase1.onotole.phase1.ShardTransition
-import tech.pegasys.teku.phase1.onotole.phase1.SignedBeaconBlock
-import tech.pegasys.teku.phase1.onotole.phase1.SignedBeaconBlockHeader
-import tech.pegasys.teku.phase1.onotole.phase1.SignedCustodySlashing
-import tech.pegasys.teku.phase1.onotole.phase1.SignedVoluntaryExit
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
 import tech.pegasys.teku.phase1.onotole.phase1.ValidatorIndex
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
-import tech.pegasys.teku.phase1.onotole.ssz.SSZBitVector
+import tech.pegasys.teku.phase1.onotole.ssz.Bytes96
+import tech.pegasys.teku.phase1.onotole.ssz.SSZBitvector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZList
-import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableList
-import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableVector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZVector
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
-import tech.pegasys.teku.datastructures.blocks.BeaconBlockHeader as TekuBeaconBlockHeader
-import tech.pegasys.teku.datastructures.blocks.Eth1Data as TekuEth1Data
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlockHeader as TekuSignedBeaconBlockHeader
-import tech.pegasys.teku.datastructures.phase1.blocks.BeaconBlockBodyPhase1 as TekuBeaconBlockBody
-import tech.pegasys.teku.datastructures.phase1.blocks.BeaconBlockPhase1 as TekuBeaconBlock
-import tech.pegasys.teku.datastructures.phase1.blocks.SignedBeaconBlockPhase1 as TekuSignedBeaconBlock
+import tech.pegasys.teku.ssz.backing.ContainerViewRead
+import tech.pegasys.teku.ssz.backing.VectorViewRead
+import tech.pegasys.teku.ssz.backing.ViewRead
+import tech.pegasys.teku.ssz.backing.tree.TreeNode
+import tech.pegasys.teku.ssz.backing.type.BasicViewTypes
+import tech.pegasys.teku.ssz.backing.type.ContainerViewType
+import tech.pegasys.teku.ssz.backing.type.ListViewType
+import tech.pegasys.teku.ssz.backing.type.VectorViewType
+import tech.pegasys.teku.ssz.backing.view.AbstractImmutableContainer
+import tech.pegasys.teku.ssz.backing.view.AbstractMutableContainer
+import tech.pegasys.teku.ssz.backing.view.BasicViews.BitView
+import tech.pegasys.teku.ssz.backing.view.BasicViews.Bytes32View
+import tech.pegasys.teku.ssz.backing.view.BasicViews.UInt64View
+import tech.pegasys.teku.ssz.backing.view.ViewUtils
 
-internal class Eth1DataWrapper(
-  override var v: TekuEth1Data,
-  onUpdate: Callback<Eth1Data>? = null
-) : Eth1Data, Mutable<Eth1Data>(onUpdate), Wrapper<TekuEth1Data> {
+class Eth1Data : AbstractMutableContainer {
+  var deposit_root: Root
+    get() = (get(0) as Bytes32View).get()
+    set(value) {
+      set(0, Bytes32View(value))
+    }
+  val deposit_count: uint64
+    get() = (get(1) as UInt64View).get().toUInt64()
+  val block_hash: Bytes32
+    get() = (get(2) as Bytes32View).get()
 
-  constructor(
-    deposit_root: Root,
-    deposit_count: uint64,
-    block_hash: Bytes32
-  ) : this(
-    TekuEth1Data(
+  constructor(type: ContainerViewType<out ContainerViewRead>?, backingNode: TreeNode?) : super(
+    type,
+    backingNode
+  )
+
+  constructor(deposit_root: Root = Root(), deposit_count: uint64, block_hash: Bytes32) : super(
+    TYPE,
+    *wrapValues(
       deposit_root,
-      UInt64Type.unwrap(deposit_count),
+      deposit_count,
       block_hash
     )
   )
 
-  override var deposit_root: Root
-    get() = v.deposit_root
-    set(value) {
-      v = TekuEth1Data(
-        value,
-        v.deposit_count,
-        v.block_hash
-      )
-      onUpdate(this)
-    }
-  override val deposit_count: uint64
-    get() = UInt64Type.wrap(v.deposit_count)
-  override val block_hash: Bytes32
-    get() = v.block_hash
+  constructor() : super(TYPE)
 
-  override fun hash_tree_root() = v.hash_tree_root()
-
-  override fun equals(other: Any?): Boolean {
-    if (other is Eth1DataWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType(
+      listOf(BasicViewTypes.BYTES32_TYPE, BasicViewTypes.UINT64_TYPE, BasicViewTypes.BYTES32_TYPE),
+      ::Eth1Data
+    )
   }
 }
 
-internal class BeaconBlockHeaderWrapper(
-  override var v: TekuBeaconBlockHeader,
-  onUpdate: Callback<BeaconBlockHeader>? = null
-) : BeaconBlockHeader, Wrapper<TekuBeaconBlockHeader>, Mutable<BeaconBlockHeader>(onUpdate) {
+class BeaconBlockHeader : AbstractMutableContainer {
+  val slot: Slot
+    get() = getBasicValue(get(0))
+  val proposer_index: ValidatorIndex
+    get() = getBasicValue(get(1))
+  val parent_root: Root
+    get() = getBasicValue(get(2))
+  var state_root: Root
+    get() = getBasicValue(get(3))
+    set(value) {
+      set(3, wrapBasicValue(value))
+    }
+  val body_root: Root
+    get() = getBasicValue(get(4))
 
   constructor(
-    slot: Slot,
-    proposer_index: ValidatorIndex,
-    parent_root: Root,
-    state_root: Root,
+    slot: Slot = Slot(),
+    proposer_index: ValidatorIndex = ValidatorIndex(),
+    parent_root: Root = Root(),
+    state_root: Root = Root(),
     body_root: Root
-  ) : this(
-    TekuBeaconBlockHeader(
-      UInt64Type.unwrap(slot),
-      UInt64Type.unwrap(proposer_index),
-      parent_root,
-      state_root,
-      body_root
-    )
+  ) : super(TYPE, *wrapValues(
+    slot,
+    proposer_index,
+    parent_root,
+    state_root,
+    body_root
+  )
   )
 
-  override val slot: Slot
-    get() = UInt64Type.wrap(v.slot)
-  override val proposer_index: ValidatorIndex
-    get() = UInt64Type.wrap(v.proposer_index)
-  override val parent_root: Root
-    get() = v.parent_root
-  override var state_root: Root
-    get() = v.state_root
-    set(value) {
-      v = TekuBeaconBlockHeader(
-        v.slot,
-        v.proposer_index,
-        v.parent_root,
-        value,
-        v.body_root
-      )
-    }
-  override val body_root: Root
-    get() = v.state_root
+  constructor(type: ContainerViewType<out ContainerViewRead>?, backingNode: TreeNode?) : super(
+    type,
+    backingNode
+  )
 
-  override fun copy(
-    slot: Slot,
-    proposer_index: ValidatorIndex,
-    parent_root: Root,
-    state_root: Root,
-    body_root: Root
-  ) = BeaconBlockHeaderWrapper(slot, proposer_index, parent_root, state_root, body_root)
+  constructor(
+    type: ContainerViewType<out ContainerViewRead>?,
+    vararg memberValues: ViewRead?
+  ) : super(type, *memberValues)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is BeaconBlockHeaderWrapper) {
-      return v == other.v
-    }
-    return false
-  }
+  fun copy(): BeaconBlockHeader = BeaconBlockHeader(TYPE, this.backingNode)
 
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType(
+      listOf(
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.BYTES32_TYPE,
+        BasicViewTypes.BYTES32_TYPE,
+        BasicViewTypes.BYTES32_TYPE
+      ), ::BeaconBlockHeader
+    )
   }
 }
 
-internal class SignedBeaconBlockHeaderWrapper(
-  override val v: TekuSignedBeaconBlockHeader
-) : Wrapper<TekuSignedBeaconBlockHeader>, SignedBeaconBlockHeader {
+class SignedBeaconBlockHeader : AbstractImmutableContainer {
+  val message: BeaconBlockHeader
+    get() = getAny(0)
+  val signature: BLSSignature
+    get() = Bytes96(ViewUtils.getAllBytes(getAny(1)))
 
-  constructor(message: BeaconBlockHeader, signature: BLSSignature)
-      : this(
-    TekuSignedBeaconBlockHeader(
-      BeaconBlockHeaderType.unwrap(message),
-      BLSSignatureType.unwrap(signature)
-    )
+  constructor(message: BeaconBlockHeader, signature: BLSSignature) : super(
+    TYPE,
+    message,
+    ViewUtils.createVectorFromBytes(signature.wrappedBytes)
   )
 
-  override val message: BeaconBlockHeader
-    get() = BeaconBlockHeaderType.wrap(v.message)
-  override val signature: BLSSignature
-    get() = BLSSignatureType.wrap(v.signature)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is SignedBeaconBlockHeaderWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<SignedBeaconBlockHeader>(
+      listOf(BeaconBlockHeader.TYPE,
+        Bytes96Type
+      ), ::SignedBeaconBlockHeader
+    )
   }
 }
 
-internal class BeaconBlockBodyWrapper(
-  override val v: TekuBeaconBlockBody
-) : Wrapper<TekuBeaconBlockBody>, BeaconBlockBody {
+class BeaconBlockBody : AbstractImmutableContainer {
+  val randao_reveal: BLSSignature
+    get() = Bytes96(ViewUtils.getAllBytes(getAny(0)))
+  val eth1_data: Eth1Data
+    get() = getAny(1)
+  val graffiti: Bytes32
+    get() = (get(2) as Bytes32View).get()
+  val proposer_slashings: SSZList<ProposerSlashing>
+    get() = SSZListImpl<ProposerSlashing, ProposerSlashing>(getAny(3)) { v -> v }
+  val attester_slashings: SSZList<AttesterSlashing>
+    get() = SSZListImpl<AttesterSlashing, AttesterSlashing>(getAny(4)) { v -> v }
+  val attestations: SSZList<Attestation>
+    get() = SSZListImpl<Attestation, Attestation>(getAny(5)) { v -> v }
+  val deposits: SSZList<Deposit>
+    get() = SSZListImpl<Deposit, Deposit>(getAny(6)) { v -> v }
+  val voluntary_exits: SSZList<SignedVoluntaryExit>
+    get() = SSZListImpl<SignedVoluntaryExit, SignedVoluntaryExit>(getAny(7)) { v -> v }
+  val chunk_challenges: SSZList<CustodyChunkChallenge>
+    get() = SSZListImpl<CustodyChunkChallenge, CustodyChunkChallenge>(getAny(8)) { v -> v }
+  val chunk_challenge_responses: SSZList<CustodyChunkResponse>
+    get() = SSZListImpl<CustodyChunkResponse, CustodyChunkResponse>(getAny(9)) { v -> v }
+  val custody_key_reveals: SSZList<CustodyKeyReveal>
+    get() = SSZListImpl<CustodyKeyReveal, CustodyKeyReveal>(getAny(10)) { v -> v }
+  val early_derived_secret_reveals: SSZList<EarlyDerivedSecretReveal>
+    get() = SSZListImpl<EarlyDerivedSecretReveal, EarlyDerivedSecretReveal>(getAny(11)) { v -> v }
+  val custody_slashings: SSZList<SignedCustodySlashing>
+    get() = SSZListImpl<SignedCustodySlashing, SignedCustodySlashing>(getAny(12)) { v -> v }
+  val shard_transitions: SSZVector<ShardTransition>
+    get() = SSZVectorImpl<ShardTransition, ShardTransition>(getAny(13)) { v -> v }
+  val light_client_bits: SSZBitvector
+    get() = SSZBitvectorImpl(getAny<VectorViewRead<BitView>>(14))
+  val light_client_signature: BLSSignature
+    get() = Bytes96(ViewUtils.getAllBytes(getAny(15)))
 
   constructor(
     randao_reveal: BLSSignature,
     eth1_data: Eth1Data,
     graffiti: Bytes32,
-    proposer_slashings: SSZMutableList<ProposerSlashing>,
-    attester_slashings: SSZMutableList<AttesterSlashing>,
-    attestations: SSZMutableList<Attestation>,
-    deposits: SSZMutableList<Deposit>,
-    voluntary_exits: SSZMutableList<SignedVoluntaryExit>,
-    custody_slashings: SSZMutableList<SignedCustodySlashing>,
-    custody_key_reveals: SSZMutableList<CustodyKeyReveal>,
-    early_derived_secret_reveals: SSZMutableList<EarlyDerivedSecretReveal>,
-    shard_transitions: SSZMutableVector<ShardTransition>,
-    light_client_signature_bitfield: SSZBitVector,
+    proposer_slashings: SSZList<ProposerSlashing>,
+    attester_slashings: SSZList<AttesterSlashing>,
+    attestations: SSZList<Attestation>,
+    deposits: SSZList<Deposit>,
+    voluntary_exits: SSZList<SignedVoluntaryExit>,
+    custody_slashings: SSZList<SignedCustodySlashing>,
+    custody_key_reveals: SSZList<CustodyKeyReveal>,
+    early_derived_secret_reveals: SSZList<EarlyDerivedSecretReveal>,
+    shard_transitions: SSZVector<ShardTransition>,
+    light_client_signature_bitfield: SSZBitvector,
     light_client_signature: BLSSignature
-  ) : this(
-    TekuBeaconBlockBody(
-      BLSSignatureType.unwrap(randao_reveal),
-      Eth1DataType.unwrap(eth1_data),
-      graffiti,
-      SSZMutableListType(
-        ProposerSlashingType
-      ).unwrap(proposer_slashings),
-      SSZMutableListType(
-        AttesterSlashingType
-      ).unwrap(attester_slashings),
-      SSZMutableListType(
-        AttestationType
-      ).unwrap(attestations),
-      SSZMutableListType(
-        DepositType
-      ).unwrap(deposits),
-      SSZMutableListType(
-        SignedVoluntaryExitType
-      ).unwrap(voluntary_exits),
-      SSZMutableListType(
-        SignedCustodySlashingType
-      ).unwrap(custody_slashings),
-      SSZMutableListType(
-        CustodyKeyRevealType
-      ).unwrap(custody_key_reveals),
-      SSZMutableListType(
-        EarlyDerivedSecretRevealType
-      ).unwrap(early_derived_secret_reveals),
-      SSZMutableVectorType(
-        ShardTransitionType
-      ).unwrap(shard_transitions),
-      SSZBitVectorType.unwrap(light_client_signature_bitfield),
-      BLSSignatureType.unwrap(light_client_signature)
-    )
+  ) : super(
+    TYPE,
+    ViewUtils.createVectorFromBytes(randao_reveal.wrappedBytes),
+    eth1_data,
+    Bytes32View(graffiti),
+    (proposer_slashings as SSZAbstractCollection<*, *>).view,
+    (attester_slashings as SSZAbstractCollection<*, *>).view,
+    (attestations as SSZAbstractCollection<*, *>).view,
+    (deposits as SSZAbstractCollection<*, *>).view,
+    (voluntary_exits as SSZAbstractCollection<*, *>).view,
+    (custody_slashings as SSZAbstractCollection<*, *>).view,
+    (custody_key_reveals as SSZAbstractCollection<*, *>).view,
+    (early_derived_secret_reveals as SSZAbstractCollection<*, *>).view,
+    (shard_transitions as SSZAbstractCollection<*, *>).view,
+    (light_client_signature_bitfield as SSZAbstractCollection<*, *>).view,
+    ViewUtils.createVectorFromBytes(light_client_signature.wrappedBytes)
   )
 
-  override val randao_reveal: BLSSignature
-    get() = BLSSignatureType.wrap(v.randao_reveal)
-  override val eth1_data: Eth1Data
-    get() = Eth1DataType.wrap(v.eth1_data)
-  override val graffiti: Bytes32
-    get() = v.graffiti
-  override val proposer_slashings: SSZList<ProposerSlashing>
-    get() = SSZListType(
-      ProposerSlashingType
-    ).wrap(v.proposer_slashings)
-  override val attester_slashings: SSZList<AttesterSlashing>
-    get() = SSZListType(
-      AttesterSlashingType
-    ).wrap(v.attester_slashings)
-  override val attestations: SSZList<Attestation>
-    get() = SSZListType(
-      AttestationType
-    ).wrap(v.attestations)
-  override val deposits: SSZList<Deposit>
-    get() = SSZListType(
-      DepositType
-    ).wrap(v.deposits)
-  override val voluntary_exits: SSZList<SignedVoluntaryExit>
-    get() = SSZListType(
-      SignedVoluntaryExitType
-    ).wrap(v.voluntary_exits)
-  override val custody_slashings: SSZList<SignedCustodySlashing>
-    get() = SSZListType(
-      SignedCustodySlashingType
-    ).wrap(v.custody_slashings)
-  override val custody_key_reveals: SSZList<CustodyKeyReveal>
-    get() = SSZListType(
-      CustodyKeyRevealType
-    ).wrap(v.custody_key_reveals)
-  override val early_derived_secret_reveals: SSZList<EarlyDerivedSecretReveal>
-    get() = SSZListType(
-      EarlyDerivedSecretRevealType
-    ).wrap(v.early_derived_secret_reveals)
-  override val shard_transitions: SSZVector<ShardTransition>
-    get() = SSZVectorType(
-      ShardTransitionType
-    ).wrap(v.shard_transitions)
-  override val light_client_signature_bitfield: SSZBitVector
-    get() = SSZBitVectorType.wrap(v.light_client_signature_bitfield)
-  override val light_client_signature: BLSSignature
-    get() = BLSSignatureType.wrap(v.light_client_signature)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is BeaconBlockBodyWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<BeaconBlockBody>(
+      listOf(
+        Bytes96Type,
+        Eth1Data.TYPE,
+        BasicViewTypes.BYTES32_TYPE,
+        ListViewType<ProposerSlashing>(ProposerSlashing.TYPE, MAX_PROPOSER_SLASHINGS.toLong()),
+        ListViewType<AttesterSlashing>(AttesterSlashing.TYPE, MAX_ATTESTER_SLASHINGS.toLong()),
+        ListViewType<Attestation>(Attestation.TYPE, MAX_ATTESTATIONS.toLong()),
+        ListViewType<Deposit>(Deposit.TYPE, MAX_DEPOSITS.toLong()),
+        ListViewType<SignedVoluntaryExit>(
+          SignedVoluntaryExit.TYPE,
+          MAX_VOLUNTARY_EXITS.toLong()
+        ),
+        ListViewType<CustodyChunkChallenge>(
+          CustodyChunkChallenge.TYPE,
+          MAX_CUSTODY_CHUNK_CHALLENGES.toLong()
+        ),
+        ListViewType<CustodyChunkResponse>(
+          CustodyChunkResponse.TYPE,
+          MAX_CUSTODY_CHUNK_CHALLENGE_RESPONSES.toLong()
+        ),
+        ListViewType<CustodyKeyReveal>(CustodyKeyReveal.TYPE, MAX_CUSTODY_KEY_REVEALS.toLong()),
+        ListViewType<EarlyDerivedSecretReveal>(
+          EarlyDerivedSecretReveal.TYPE,
+          MAX_EARLY_DERIVED_SECRET_REVEALS.toLong()
+        ),
+        ListViewType<SignedCustodySlashing>(
+          SignedCustodySlashing.TYPE,
+          MAX_CUSTODY_SLASHINGS.toLong()
+        ),
+        ListViewType<ShardTransition>(ShardTransition.TYPE, MAX_PROPOSER_SLASHINGS.toLong()),
+        VectorViewType<BitView>(BasicViewTypes.BIT_TYPE, LIGHT_CLIENT_COMMITTEE_SIZE.toLong()),
+        Bytes96Type
+      ), ::BeaconBlockBody
+    )
   }
 }
 
-internal class BeaconBlockWrapper(
-  override val v: TekuBeaconBlock
-) : Wrapper<TekuBeaconBlock>, BeaconBlock {
+class BeaconBlock : AbstractImmutableContainer {
+  val slot: Slot
+    get() = (get(0) as UInt64View).get().toUInt64()
+  val proposer_index: ValidatorIndex
+    get() = (get(1) as UInt64View).get().toUInt64()
+  val parent_root: Root
+    get() = (get(2) as Bytes32View).get()
+  val state_root: Root
+    get() = (get(3) as Bytes32View).get()
+  val body: BeaconBlockBody
+    get() = getAny(4)
 
   constructor(
     slot: Slot,
@@ -336,76 +298,86 @@ internal class BeaconBlockWrapper(
     parent_root: Root,
     state_root: Root,
     body: BeaconBlockBody
-  ) : this(
-    TekuBeaconBlock(
-      UInt64Type.unwrap(slot),
-      UInt64Type.unwrap(proposer_index),
-      parent_root,
-      state_root,
-      BeaconBlockBodyType.unwrap(body)
-    )
+  ) : super(
+    TYPE,
+    UInt64View(slot.toUnsignedLong()),
+    UInt64View(proposer_index.toUnsignedLong()),
+    Bytes32View(parent_root),
+    Bytes32View(state_root),
+    body
   )
 
-  override val slot: Slot
-    get() = UInt64Type.wrap(v.slot)
-  override val proposer_index: ValidatorIndex
-    get() = UInt64Type.wrap(v.proposer_index)
-  override val parent_root: Root
-    get() = v.parent_root
-  override val state_root: Root
-    get() = v.state_root
-  override val body: BeaconBlockBody
-    get() = BeaconBlockBodyType.wrap(v.body)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is BeaconBlockWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<BeaconBlock>(
+      listOf(
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.BYTES32_TYPE,
+        BasicViewTypes.BYTES32_TYPE,
+        BeaconBlockBody.TYPE
+      ), ::BeaconBlock
+    )
   }
 }
 
-internal class SignedBeaconBlockWrapper(
-  override val v: TekuSignedBeaconBlock
-) : Wrapper<TekuSignedBeaconBlock>, SignedBeaconBlock {
+class SignedBeaconBlock : AbstractImmutableContainer {
+  val message: BeaconBlock
+    get() = getAny(0)
+  val signature: BLSSignature
+    get() = Bytes96(ViewUtils.getAllBytes(getAny(1)))
 
-  constructor(message: BeaconBlock, signature: BLSSignature)
-      : this(
-    TekuSignedBeaconBlock(
-      BeaconBlockType.unwrap(message),
-      BLSSignatureType.unwrap(signature)
-    )
+  constructor(message: BeaconBlock, signature: BLSSignature = BLSSignature()) : super(
+    TYPE,
+    message,
+    ViewUtils.createVectorFromBytes(signature.wrappedBytes)
   )
 
-  override val message: BeaconBlock
-    get() = BeaconBlockType.wrap(v.message)
-  override val signature: BLSSignature
-    get() = BLSSignatureType.wrap(v.signature)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is SignedBeaconBlockWrapper) {
-      return v == other.v
-    }
-    return false
+  companion object {
+    val TYPE = ContainerViewType<SignedBeaconBlock>(
+      listOf(
+        BeaconBlock.TYPE,
+        Bytes96Type
+      ),
+      ::SignedBeaconBlock
+    )
   }
+}
 
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
+class SigningData : AbstractImmutableContainer {
+  val object_root: Root
+    get() = (get(0) as Bytes32View).get()
+  val domain: Domain
+    get() = (get(0) as Bytes32View).get()
 
-  override fun toString(): String {
-    return v.toString()
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
+
+  constructor(
+    object_root: Root,
+    domain: Domain
+  ) : super(TYPE, Bytes32View(object_root), Bytes32View(domain))
+
+  constructor() : super(TYPE)
+
+  companion object {
+    val TYPE = ContainerViewType<SigningData>(
+      listOf(BasicViewTypes.BYTES32_TYPE, BasicViewTypes.BYTES32_TYPE), ::SigningData
+    )
   }
 }

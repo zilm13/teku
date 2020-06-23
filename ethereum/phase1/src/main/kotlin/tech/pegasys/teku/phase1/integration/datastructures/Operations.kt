@@ -1,78 +1,78 @@
 package tech.pegasys.teku.phase1.integration.datastructures
 
-import tech.pegasys.teku.phase1.integration.types.AttestationDataType
-import tech.pegasys.teku.phase1.integration.types.AttestationType
-import tech.pegasys.teku.phase1.integration.types.BLSPublicKeyType
-import tech.pegasys.teku.phase1.integration.types.BLSSignatureType
-import tech.pegasys.teku.phase1.integration.types.Bytes32Type
-import tech.pegasys.teku.phase1.integration.types.CheckpointType
-import tech.pegasys.teku.phase1.integration.types.CustodySlashingType
-import tech.pegasys.teku.phase1.integration.types.DepositDataType
-import tech.pegasys.teku.phase1.integration.types.IndexedAttestationType
-import tech.pegasys.teku.phase1.integration.types.SSZBitListType
-import tech.pegasys.teku.phase1.integration.types.SSZByteListType
-import tech.pegasys.teku.phase1.integration.types.SSZListType
-import tech.pegasys.teku.phase1.integration.types.SSZMutableListType
-import tech.pegasys.teku.phase1.integration.types.SSZMutableVectorType
-import tech.pegasys.teku.phase1.integration.types.SSZVectorType
-import tech.pegasys.teku.phase1.integration.types.ShardTransitionType
-import tech.pegasys.teku.phase1.integration.types.SignedBeaconBlockHeaderType
-import tech.pegasys.teku.phase1.integration.types.UInt64Type
-import tech.pegasys.teku.phase1.integration.types.VoluntaryExitType
-import tech.pegasys.teku.phase1.onotole.phase1.Attestation
-import tech.pegasys.teku.phase1.onotole.phase1.AttestationCustodyBitWrapper
-import tech.pegasys.teku.phase1.onotole.phase1.AttestationData
-import tech.pegasys.teku.phase1.onotole.phase1.AttesterSlashing
+import org.apache.tuweni.bytes.Bytes48
+import tech.pegasys.teku.phase1.integration.ssz.SSZAbstractCollection
+import tech.pegasys.teku.phase1.integration.ssz.SSZBitlistImpl
+import tech.pegasys.teku.phase1.integration.ssz.SSZByteListImpl
+import tech.pegasys.teku.phase1.integration.ssz.SSZByteVectorImpl
+import tech.pegasys.teku.phase1.integration.ssz.SSZListImpl
+import tech.pegasys.teku.phase1.integration.ssz.SSZVectorImpl
+import tech.pegasys.teku.phase1.integration.Bytes48Type
+import tech.pegasys.teku.phase1.integration.Bytes96Type
+import tech.pegasys.teku.phase1.integration.getBasicValue
+import tech.pegasys.teku.phase1.integration.toUInt64
+import tech.pegasys.teku.phase1.integration.toUnsignedLong
+import tech.pegasys.teku.phase1.integration.wrapBasicValue
+import tech.pegasys.teku.phase1.integration.wrapValues
 import tech.pegasys.teku.phase1.onotole.phase1.BLSPubkey
 import tech.pegasys.teku.phase1.onotole.phase1.BLSSignature
-import tech.pegasys.teku.phase1.onotole.phase1.Checkpoint
+import tech.pegasys.teku.phase1.onotole.phase1.BYTES_PER_CUSTODY_CHUNK
+import tech.pegasys.teku.phase1.onotole.phase1.CUSTODY_RESPONSE_DEPTH
 import tech.pegasys.teku.phase1.onotole.phase1.CommitteeIndex
-import tech.pegasys.teku.phase1.onotole.phase1.CustodyKeyReveal
-import tech.pegasys.teku.phase1.onotole.phase1.CustodySlashing
-import tech.pegasys.teku.phase1.onotole.phase1.Deposit
-import tech.pegasys.teku.phase1.onotole.phase1.DepositData
-import tech.pegasys.teku.phase1.onotole.phase1.DepositMessage
-import tech.pegasys.teku.phase1.onotole.phase1.EarlyDerivedSecretReveal
+import tech.pegasys.teku.phase1.onotole.phase1.DEPOSIT_CONTRACT_TREE_DEPTH
 import tech.pegasys.teku.phase1.onotole.phase1.Epoch
 import tech.pegasys.teku.phase1.onotole.phase1.Gwei
-import tech.pegasys.teku.phase1.onotole.phase1.IndexedAttestation
-import tech.pegasys.teku.phase1.onotole.phase1.ProposerSlashing
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_SHARD_BLOCK_SIZE
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_VALIDATORS_PER_COMMITTEE
 import tech.pegasys.teku.phase1.onotole.phase1.Root
-import tech.pegasys.teku.phase1.onotole.phase1.ShardTransition
-import tech.pegasys.teku.phase1.onotole.phase1.SignedBeaconBlockHeader
-import tech.pegasys.teku.phase1.onotole.phase1.SignedCustodySlashing
-import tech.pegasys.teku.phase1.onotole.phase1.SignedVoluntaryExit
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
 import tech.pegasys.teku.phase1.onotole.phase1.ValidatorIndex
-import tech.pegasys.teku.phase1.onotole.phase1.VoluntaryExit
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
-import tech.pegasys.teku.phase1.onotole.ssz.SSZBitList
+import tech.pegasys.teku.phase1.onotole.ssz.Bytes96
+import tech.pegasys.teku.phase1.onotole.ssz.SSZBitlist
 import tech.pegasys.teku.phase1.onotole.ssz.SSZByteList
+import tech.pegasys.teku.phase1.onotole.ssz.SSZByteVector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableList
-import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableVector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZVector
 import tech.pegasys.teku.phase1.onotole.ssz.boolean
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
-import tech.pegasys.teku.datastructures.operations.Deposit as TekuDeposit
-import tech.pegasys.teku.datastructures.operations.DepositData as TekuDepositData
-import tech.pegasys.teku.datastructures.operations.DepositMessage as TekuDepositMessage
-import tech.pegasys.teku.datastructures.operations.ProposerSlashing as TekuProposerSlashing
-import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit as TekuSignedVoluntaryExit
-import tech.pegasys.teku.datastructures.operations.VoluntaryExit as TekuVoluntaryExit
-import tech.pegasys.teku.datastructures.phase1.operations.AttestationCustodyBitWrapper as TekuAttestationCustodyBitWrapper
-import tech.pegasys.teku.datastructures.phase1.operations.AttestationDataPhase1 as TekuAttestationData
-import tech.pegasys.teku.datastructures.phase1.operations.AttestationPhase1 as TekuAttestation
-import tech.pegasys.teku.datastructures.phase1.operations.AttesterSlashingPhase1 as TekuAttesterSlashing
-import tech.pegasys.teku.datastructures.phase1.operations.CustodyKeyReveal as TekuCustodyKeyReveal
-import tech.pegasys.teku.datastructures.phase1.operations.CustodySlashing as TekuCustodySlashing
-import tech.pegasys.teku.datastructures.phase1.operations.EarlyDerivedSecretReveal as TekuEarlyDerivedSecretReveal
-import tech.pegasys.teku.datastructures.phase1.operations.IndexedAttestationPhase1 as TekuIndexedAttestation
-import tech.pegasys.teku.datastructures.phase1.operations.SignedCustodySlashing as TekuSignedCustodySlashing
+import tech.pegasys.teku.ssz.backing.ListViewRead
+import tech.pegasys.teku.ssz.backing.VectorViewRead
+import tech.pegasys.teku.ssz.backing.tree.TreeNode
+import tech.pegasys.teku.ssz.backing.type.BasicViewTypes
+import tech.pegasys.teku.ssz.backing.type.ContainerViewType
+import tech.pegasys.teku.ssz.backing.type.ListViewType
+import tech.pegasys.teku.ssz.backing.type.VectorViewType
+import tech.pegasys.teku.ssz.backing.view.AbstractImmutableContainer
+import tech.pegasys.teku.ssz.backing.view.BasicViews.BitView
+import tech.pegasys.teku.ssz.backing.view.BasicViews.ByteView
+import tech.pegasys.teku.ssz.backing.view.BasicViews.Bytes32View
+import tech.pegasys.teku.ssz.backing.view.BasicViews.UInt64View
+import tech.pegasys.teku.ssz.backing.view.ViewUtils
 
-internal class AttestationDataWrapper(
-  override val v: TekuAttestationData
-) : Wrapper<TekuAttestationData>, AttestationData {
+class AttestationData : AbstractImmutableContainer {
+  val slot: Slot
+    get() = getBasicValue(get(0))
+  val index: CommitteeIndex
+    get() = getBasicValue(get(1))
+  val beacon_block_root: Root
+    get() = getBasicValue(get(2))
+  val source: Checkpoint
+    get() = getAny(3)
+  val target: Checkpoint
+    get() = getAny(4)
+  val shard_head_root: Root
+    get() = getBasicValue(get(5))
+  val shard_transition_root: Root
+    get() = getBasicValue(get(6))
+
+  constructor() : super(TYPE)
+
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
   constructor(
     slot: Slot,
@@ -82,437 +82,383 @@ internal class AttestationDataWrapper(
     target: Checkpoint,
     head_shard_root: Root,
     shard_transition_root: Root
-  ) : this(
-    TekuAttestationData(
-      UInt64Type.unwrap(slot),
-      UInt64Type.unwrap(index),
+  ) : super(
+    TYPE,
+    *wrapValues(
+      slot,
+      index,
       beacon_block_root,
-      CheckpointType.unwrap(source),
-      CheckpointType.unwrap(target),
+      source,
+      target,
       head_shard_root,
       shard_transition_root
     )
   )
 
-  override val slot: Slot
-    get() = UInt64Type.wrap(v.slot)
-  override val index: CommitteeIndex
-    get() = UInt64Type.wrap(v.index)
-  override val beacon_block_root: Root
-    get() = v.beacon_block_root
-  override val source: Checkpoint
-    get() = CheckpointType.wrap(v.source)
-  override val target: Checkpoint
-    get() = CheckpointType.wrap(v.target)
-  override val shard_head_root: Root
-    get() = v.shard_head_root
-  override val shard_transition_root: Root
-    get() = v.shard_transition_root
-
-  override fun hash_tree_root() = v.hash_tree_root()
-
-  override fun equals(other: Any?): Boolean {
-    if (other is AttestationDataWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<AttestationData>(
+      listOf(
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.BYTES32_TYPE,
+        Checkpoint.TYPE,
+        Checkpoint.TYPE,
+        BasicViewTypes.BYTES32_TYPE,
+        BasicViewTypes.BYTES32_TYPE
+      ), ::AttestationData
+    )
   }
 }
 
-internal class DepositMessageWrapper(
-  override val v: TekuDepositMessage
-) : Wrapper<TekuDepositMessage>, DepositMessage {
+class DepositMessage : AbstractImmutableContainer {
+  val pubkey: BLSPubkey
+    get() = Bytes48.wrap(ViewUtils.getAllBytes(getAny(0)))
+  val withdrawal_credentials: Bytes32
+    get() = (get(1) as Bytes32View).get()
+  val amount: Gwei
+    get() = (get(2) as UInt64View).get().toUInt64()
 
-  constructor(pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: Gwei)
-      : this(
-    TekuDepositMessage(
-      BLSPublicKeyType.unwrap(pubkey),
-      withdrawal_credentials,
-      UInt64Type.unwrap(amount)
-    )
+  constructor(pubkey: BLSPubkey, withdrawal_credentials: Bytes32, amount: Gwei) : super(
+    TYPE,
+    ViewUtils.createVectorFromBytes(pubkey),
+    Bytes32View(withdrawal_credentials),
+    UInt64View(amount.toUnsignedLong())
   )
 
-  override val pubkey: BLSPubkey
-    get() = BLSPublicKeyType.wrap(v.pubkey)
-  override val withdrawal_credentials: Bytes32
-    get() = v.withdrawal_credentials
-  override val amount: Gwei
-    get() = UInt64Type.wrap(v.amount)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is DepositMessageWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<DepositMessage>(
+      listOf(Bytes48Type, BasicViewTypes.BYTES32_TYPE, BasicViewTypes.UINT64_TYPE),
+      ::DepositMessage
+    )
   }
 }
 
-internal class DepositDataWrapper(
-  override val v: TekuDepositData
-) : Wrapper<TekuDepositData>, DepositData {
+class DepositData : AbstractImmutableContainer {
+  val pubkey: BLSPubkey
+    get() = Bytes48.wrap(ViewUtils.getAllBytes(getAny(0)))
+  val withdrawal_credentials: Bytes32
+    get() = (get(1) as Bytes32View).get()
+  val amount: Gwei
+    get() = (get(2) as UInt64View).get().toUInt64()
+  val signature: BLSSignature
+    get() = Bytes96(ViewUtils.getAllBytes(getAny(3)))
 
   constructor(
     pubkey: BLSPubkey,
     withdrawal_credentials: Bytes32,
     amount: Gwei,
     signature: BLSSignature
-  ) : this(
-    TekuDepositData(
-      BLSPublicKeyType.unwrap(pubkey),
-      withdrawal_credentials,
-      UInt64Type.unwrap(amount),
-      BLSSignatureType.unwrap(signature)
-    )
+  ) : super(
+    TYPE,
+    ViewUtils.createVectorFromBytes(pubkey),
+    Bytes32View(withdrawal_credentials),
+    UInt64View(amount.toUnsignedLong()),
+    ViewUtils.createVectorFromBytes(signature.wrappedBytes)
   )
-
-  override val pubkey: BLSPubkey
-    get() = BLSPublicKeyType.wrap(v.pubkey)
-  override val withdrawal_credentials: Bytes32
-    get() = v.withdrawal_credentials
-  override val amount: Gwei
-    get() = UInt64Type.wrap(v.amount)
-  override val signature: BLSSignature
-    get() = BLSSignatureType.wrap(v.signature)
-
-  override fun hash_tree_root() = v.hash_tree_root()
-
-  override fun equals(other: Any?): Boolean {
-    if (other is DepositDataWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
-  }
-}
-
-internal class AttestationWrapper(
-  override val v: TekuAttestation
-) : Wrapper<TekuAttestation>, Attestation {
 
   constructor(
-    aggregation_bits: SSZBitList,
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
+
+  constructor() : super(TYPE)
+
+  companion object {
+    val TYPE = ContainerViewType<DepositData>(
+      listOf(
+        Bytes48Type, BasicViewTypes.BYTES32_TYPE, BasicViewTypes.UINT64_TYPE,
+        Bytes96Type
+      ),
+      ::DepositData
+    )
+  }
+}
+
+class Attestation : AbstractImmutableContainer {
+  val aggregation_bits: SSZBitlist
+    get() = SSZBitlistImpl(getAny(0))
+  val data: AttestationData
+    get() = getAny(1)
+  val custody_bits_blocks: SSZList<SSZBitlist>
+    get() = SSZListImpl<SSZBitlist, ListViewRead<BitView>>(getAny(2)) { v ->
+      SSZBitlistImpl(v)
+    }
+  val signature: BLSSignature
+    get() = Bytes96(ViewUtils.getAllBytes(getAny(3)))
+
+  constructor(
+    aggregation_bits: SSZBitlist,
     data: AttestationData,
-    custody_bits_blocks: SSZMutableList<SSZBitList>,
+    custody_bits_blocks: SSZMutableList<SSZBitlist>,
+    signature: BLSSignature
+  ) : super(
+    TYPE,
+    (aggregation_bits as SSZAbstractCollection<*, *>).view,
+    data,
+    (custody_bits_blocks as SSZAbstractCollection<*, *>).view,
+    ViewUtils.createVectorFromBytes(signature.wrappedBytes)
+  )
+
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
+
+  constructor() : super(TYPE)
+
+  companion object {
+    val TYPE = ContainerViewType<Attestation>(
+      listOf(
+        ListViewType<BitView>(BasicViewTypes.BIT_TYPE, MAX_VALIDATORS_PER_COMMITTEE.toLong()),
+        AttestationData.TYPE,
+        ListViewType<ListViewRead<BitView>>(
+          ListViewType<BitView>(
+            BasicViewTypes.BIT_TYPE,
+            MAX_VALIDATORS_PER_COMMITTEE.toLong()
+          ), MAX_VALIDATORS_PER_COMMITTEE.toLong()
+        ),
+        Bytes96Type
+      ),
+      ::Attestation
+    )
+  }
+}
+
+class IndexedAttestation : AbstractImmutableContainer {
+  val attesting_indices: SSZList<ValidatorIndex>
+    get() = SSZListImpl<ValidatorIndex, UInt64View>(getAny(0)) { v -> v.get().toUInt64() }
+  val data: AttestationData
+    get() = getAny(1)
+  val signature: BLSSignature
+    get() = Bytes96(ViewUtils.getAllBytes(getAny(2)))
+
+  constructor(
+    attesting_indices: SSZList<ValidatorIndex>,
+    data: AttestationData,
+    signature: BLSSignature
+  ) : super(
+    TYPE,
+    *wrapValues(
+      attesting_indices,
+      data,
+      signature
+    )
+  )
+
+  constructor(
+    attesting_indices: List<ValidatorIndex>,
+    data: AttestationData,
     signature: BLSSignature
   ) : this(
-    TekuAttestation(
-      SSZBitListType.unwrap(aggregation_bits),
-      AttestationDataType.unwrap(data),
-      SSZMutableListType(
-        SSZBitListType
-      ).unwrap(custody_bits_blocks),
-      BLSSignatureType.unwrap(signature)
-    )
+    SSZListImpl(
+      BasicViewTypes.UINT64_TYPE,
+      MAX_VALIDATORS_PER_COMMITTEE,
+      attesting_indices,
+      { v -> getBasicValue<ValidatorIndex>(v) },
+      { u -> wrapBasicValue<UInt64View>(u) }
+    ),
+    data,
+    signature
   )
 
-  override val aggregation_bits: SSZBitList
-    get() = SSZBitListType.wrap(v.aggregation_bits)
-  override val data: AttestationData
-    get() = AttestationDataType.wrap(v.data)
-  override val custody_bits_blocks: SSZList<SSZBitList>
-    get() = SSZListType(
-      SSZBitListType
-    ).wrap(v.custody_bits_blocks)
-  override val signature: BLSSignature
-    get() = BLSSignatureType.wrap(v.aggregate_signature)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is AttestationWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<IndexedAttestation>(
+      listOf(
+        ListViewType<UInt64View>(BasicViewTypes.UINT64_TYPE, MAX_VALIDATORS_PER_COMMITTEE.toLong()),
+        AttestationData.TYPE, Bytes96Type
+      ),
+      ::IndexedAttestation
+    )
   }
 }
 
-internal class IndexedAttestationWrapper(
-  override val v: TekuIndexedAttestation
-) : Wrapper<TekuIndexedAttestation>, IndexedAttestation {
+class AttesterSlashing : AbstractImmutableContainer {
+  val attestation_1: IndexedAttestation
+    get() = getAny(0)
+  val attestation_2: IndexedAttestation
+    get() = getAny(1)
 
-  constructor(committee: SSZMutableList<ValidatorIndex>, attestation: Attestation)
-      : this(
-    TekuIndexedAttestation(
-      SSZMutableListType(
-        UInt64Type
-      ).unwrap(committee),
-      AttestationType.unwrap(attestation)
-    )
+  constructor(attestation_1: IndexedAttestation, attestation_2: IndexedAttestation) : super(
+    TYPE,
+    attestation_1,
+    attestation_2
   )
 
-  override val committee: SSZList<ValidatorIndex>
-    get() = SSZListType(
-      UInt64Type
-    ).wrap(v.committee)
-  override val attestation: Attestation
-    get() = AttestationType.wrap(v.attestation)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is IndexedAttestationWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<AttesterSlashing>(
+      listOf(IndexedAttestation.TYPE, IndexedAttestation.TYPE),
+      ::AttesterSlashing
+    )
   }
 }
 
-internal class AttesterSlashingWrapper(
-  override val v: TekuAttesterSlashing
-) : Wrapper<TekuAttesterSlashing>, AttesterSlashing {
+class Deposit : AbstractImmutableContainer {
+  val proof: SSZVector<Bytes32>
+    get() = SSZVectorImpl(getAny(0), Bytes32View::get)
+  val data: DepositData
+    get() = getAny(1)
 
-  constructor(attestation_1: IndexedAttestation, attestation_2: IndexedAttestation)
-      : this(
-    TekuAttesterSlashing(
-      IndexedAttestationType.unwrap(attestation_1),
-      IndexedAttestationType.unwrap(attestation_2)
-    )
+  constructor(proof: SSZVector<Bytes32>, data: DepositData) : super(
+    TYPE,
+    (proof as SSZAbstractCollection<*, *>).view,
+    data
   )
 
-  override val attestation_1: IndexedAttestation
-    get() = IndexedAttestationType.wrap(v.attestation_1)
-  override val attestation_2: IndexedAttestation
-    get() = IndexedAttestationType.wrap(v.attestation_2)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is AttesterSlashingWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<Deposit>(
+      listOf(
+        VectorViewType<Bytes32View>(
+          BasicViewTypes.BYTES32_TYPE,
+          (DEPOSIT_CONTRACT_TREE_DEPTH + 1uL).toLong()
+        ), DepositData.TYPE
+      ), ::Deposit
+    )
   }
 }
 
-internal class DepositWrapper(
-  override val v: TekuDeposit
-) : Wrapper<TekuDeposit>, Deposit {
+class VoluntaryExit : AbstractImmutableContainer {
+  val epoch: Epoch
+    get() = (get(0) as UInt64View).get().toUInt64()
+  val validator_index: ValidatorIndex
+    get() = (get(1) as UInt64View).get().toUInt64()
 
-  constructor(proof: SSZMutableVector<Bytes32>, data: DepositData)
-      : this(
-    TekuDeposit(
-      SSZMutableVectorType(
-        Bytes32Type
-      ).unwrap(proof),
-      DepositDataType.unwrap(data)
-    )
+  constructor(epoch: Epoch, validator_index: ValidatorIndex) : super(
+    TYPE, UInt64View(epoch.toUnsignedLong()), UInt64View(validator_index.toUnsignedLong())
   )
 
-  override val proof: SSZVector<Bytes32>
-    get() = SSZVectorType(
-      Bytes32Type
-    ).wrap(v.proof)
-  override val data: DepositData
-    get() = DepositDataType.wrap(v.data)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is DepositWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<VoluntaryExit>(
+      listOf(BasicViewTypes.UINT64_TYPE, BasicViewTypes.UINT64_TYPE), ::VoluntaryExit
+    )
   }
 }
 
-internal class VoluntaryExitWrapper(
-  override val v: TekuVoluntaryExit
-) : Wrapper<TekuVoluntaryExit>, VoluntaryExit {
+class SignedVoluntaryExit : AbstractImmutableContainer {
+  val message: VoluntaryExit
+    get() = getAny(0)
+  val signature: BLSSignature
+    get() = Bytes96(ViewUtils.getAllBytes(getAny(1)))
 
-  constructor(epoch: Epoch, validator_index: ValidatorIndex)
-      : this(
-    TekuVoluntaryExit(
-      UInt64Type.unwrap(epoch),
-      UInt64Type.unwrap(validator_index)
-    )
+  constructor(message: VoluntaryExit, signature: BLSSignature) : super(
+    TYPE,
+    message,
+    ViewUtils.createVectorFromBytes(signature.wrappedBytes)
   )
 
-  override val epoch: Epoch
-    get() = UInt64Type.wrap(v.epoch)
-  override val validator_index: ValidatorIndex
-    get() = UInt64Type.wrap(v.validator_index)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is VoluntaryExitWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<SignedVoluntaryExit>(
+      listOf(VoluntaryExit.TYPE,
+        Bytes96Type
+      ), ::SignedVoluntaryExit
+    )
   }
 }
 
-internal class SignedVoluntaryExitWrapper(
-  override val v: TekuSignedVoluntaryExit
-) : Wrapper<TekuSignedVoluntaryExit>, SignedVoluntaryExit {
-
-  constructor(message: VoluntaryExit, signature: BLSSignature)
-      : this(
-    TekuSignedVoluntaryExit(
-      VoluntaryExitType.unwrap(message),
-      BLSSignatureType.unwrap(signature)
-    )
-  )
-
-  override val message: VoluntaryExit
-    get() = VoluntaryExitType.wrap(v.message)
-  override val signature: BLSSignature
-    get() = BLSSignatureType.wrap(v.signature)
-
-  override fun hash_tree_root() = v.hash_tree_root()
-
-  override fun equals(other: Any?): Boolean {
-    if (other is SignedVoluntaryExitWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
-  }
-}
-
-internal class ProposerSlashingWrapper(
-  override val v: TekuProposerSlashing
-) : ProposerSlashing, Wrapper<TekuProposerSlashing> {
+class ProposerSlashing : AbstractImmutableContainer {
+  val signed_header_1: SignedBeaconBlockHeader
+    get() = getAny(0)
+  val signed_header_2: SignedBeaconBlockHeader
+    get() = getAny(1)
 
   constructor(signed_header_1: SignedBeaconBlockHeader, signed_header_2: SignedBeaconBlockHeader)
-      : this(
-    TekuProposerSlashing(
-      SignedBeaconBlockHeaderType.unwrap(signed_header_1),
-      SignedBeaconBlockHeaderType.unwrap(signed_header_2)
+      : super(TYPE, signed_header_1, signed_header_2)
+
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
+
+  constructor() : super(TYPE)
+
+  companion object {
+    val TYPE = ContainerViewType<ProposerSlashing>(
+      listOf(SignedBeaconBlockHeader.TYPE, SignedBeaconBlockHeader.TYPE), ::ProposerSlashing
     )
-  )
-
-  override val signed_header_1: SignedBeaconBlockHeader
-    get() = SignedBeaconBlockHeaderType.wrap(v.header_1)
-  override val signed_header_2: SignedBeaconBlockHeader
-    get() = SignedBeaconBlockHeaderType.wrap(v.header_2)
-
-  override fun hash_tree_root() = v.hash_tree_root()
-
-  override fun equals(other: Any?): Boolean {
-    if (other is ProposerSlashingWrapper) {
-      return v == other.v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
   }
 }
 
-internal class CustodyKeyRevealWrapper(override val v: TekuCustodyKeyReveal) :
-  Wrapper<TekuCustodyKeyReveal>, CustodyKeyReveal {
+class CustodyKeyReveal : AbstractImmutableContainer {
+  val revealer_index: ValidatorIndex
+    get() = (get(0) as UInt64View).get().toUInt64()
+  val reveal: BLSSignature
+    get() = Bytes96(ViewUtils.getAllBytes(getAny(1)))
 
   constructor(revealer_index: ValidatorIndex, reveal: BLSSignature)
-      : this(
-    TekuCustodyKeyReveal(
-      UInt64Type.unwrap(revealer_index),
-      BLSSignatureType.unwrap(reveal)
-    )
+      : super(
+    TYPE,
+    UInt64View(revealer_index.toUnsignedLong()),
+    ViewUtils.createVectorFromBytes(reveal.wrappedBytes)
   )
 
-  override val revealer_index: ValidatorIndex
-    get() = UInt64Type.wrap(v.revealer_index)
-  override val reveal: BLSSignature
-    get() = BLSSignatureType.wrap(v.reveal)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is CustodyKeyRevealWrapper) {
-      return other.v == v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<CustodyKeyReveal>(
+      listOf(BasicViewTypes.UINT64_TYPE,
+        Bytes96Type
+      ), ::CustodyKeyReveal
+    )
   }
 }
 
-internal class EarlyDerivedSecretRevealWrapper(override val v: TekuEarlyDerivedSecretReveal) :
-  Wrapper<TekuEarlyDerivedSecretReveal>, EarlyDerivedSecretReveal {
+class EarlyDerivedSecretReveal : AbstractImmutableContainer {
+  val revealed_index: ValidatorIndex
+    get() = (get(0) as UInt64View).get().toUInt64()
+  val epoch: Epoch
+    get() = (get(1) as UInt64View).get().toUInt64()
+  val reveal: BLSSignature
+    get() = Bytes96(ViewUtils.getAllBytes(getAny(2)))
+  val masker_index: ValidatorIndex
+    get() = (get(3) as UInt64View).get().toUInt64()
+  val mask: Bytes32
+    get() = (get(4) as Bytes32View).get()
 
   constructor(
     revealed_index: ValidatorIndex,
@@ -520,46 +466,50 @@ internal class EarlyDerivedSecretRevealWrapper(override val v: TekuEarlyDerivedS
     reveal: BLSSignature,
     masker_index: ValidatorIndex,
     mask: Bytes32
-  ) : this(
-    TekuEarlyDerivedSecretReveal(
-      UInt64Type.unwrap(revealed_index),
-      UInt64Type.unwrap(epoch),
-      BLSSignatureType.unwrap(reveal),
-      UInt64Type.unwrap(masker_index), mask
-    )
+  ) : super(
+    TYPE,
+    UInt64View(revealed_index.toUnsignedLong()),
+    UInt64View(epoch.toUnsignedLong()),
+    ViewUtils.createVectorFromBytes(reveal.wrappedBytes),
+    UInt64View(masker_index.toUnsignedLong()),
+    Bytes32View(mask)
   )
 
-  override val revealed_index: ValidatorIndex
-    get() = UInt64Type.wrap(v.revealed_index)
-  override val epoch: Epoch
-    get() = UInt64Type.wrap(v.epoch)
-  override val reveal: BLSSignature
-    get() = BLSSignatureType.wrap(v.reveal)
-  override val masker_index: ValidatorIndex
-    get() = UInt64Type.wrap(v.masker_index)
-  override val mask: Bytes32
-    get() = v.mask
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is EarlyDerivedSecretRevealWrapper) {
-      return other.v == v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<EarlyDerivedSecretReveal>(
+      listOf(
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        Bytes96Type,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.BYTES32_TYPE
+      ), ::EarlyDerivedSecretReveal
+    )
   }
 }
 
-internal class CustodySlashingWrapper(override val v: TekuCustodySlashing) :
-  Wrapper<TekuCustodySlashing>, CustodySlashing {
+class CustodySlashing : AbstractImmutableContainer {
+  val data_index: uint64
+    get() = (get(0) as UInt64View).get().toUInt64()
+  val malefactor_index: ValidatorIndex
+    get() = (get(1) as UInt64View).get().toUInt64()
+  val malefactor_secret: BLSSignature
+    get() = Bytes96(ViewUtils.getAllBytes(getAny(2)))
+  val whistleblower_index: ValidatorIndex
+    get() = (get(3) as UInt64View).get().toUInt64()
+  val shard_transition: ShardTransition
+    get() = getAny(4)
+  val attestation: Attestation
+    get() = getAny(5)
+  val data: SSZByteList
+    get() = SSZByteListImpl(getAny(6))
 
   constructor(
     data_index: uint64,
@@ -569,116 +519,177 @@ internal class CustodySlashingWrapper(override val v: TekuCustodySlashing) :
     shard_transition: ShardTransition,
     attestation: Attestation,
     data: SSZByteList
-  ) : this(
-    TekuCustodySlashing(
-      UInt64Type.unwrap(data_index),
-      UInt64Type.unwrap(malefactor_index),
-      BLSSignatureType.unwrap(malefactor_secret),
-      UInt64Type.unwrap(whistleblower_index),
-      ShardTransitionType.unwrap(shard_transition),
-      AttestationType.unwrap(attestation),
-      SSZByteListType.unwrap(data)
-    )
+  ) : super(
+    TYPE,
+    UInt64View(data_index.toUnsignedLong()),
+    UInt64View(malefactor_index.toUnsignedLong()),
+    ViewUtils.createVectorFromBytes(malefactor_secret.wrappedBytes),
+    UInt64View(whistleblower_index.toUnsignedLong()),
+    shard_transition,
+    attestation,
+    (data as SSZAbstractCollection<*, *>).view
   )
 
-  override val data_index: uint64
-    get() = UInt64Type.wrap(v.data_index)
-  override val malefactor_index: ValidatorIndex
-    get() = UInt64Type.wrap(v.malefactor_index)
-  override val malefactor_secret: BLSSignature
-    get() = BLSSignatureType.wrap(v.malefactor_secret)
-  override val whistleblower_index: ValidatorIndex
-    get() = UInt64Type.wrap(v.whistleblower_index)
-  override val shard_transition: ShardTransition
-    get() = ShardTransitionType.wrap(v.shard_transition)
-  override val attestation: Attestation
-    get() = AttestationType.wrap(v.attestation)
-  override val data: SSZByteList
-    get() = SSZByteListType.wrap(v.data)
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-  override fun hash_tree_root() = v.hash_tree_root()
+  constructor() : super(TYPE)
 
-  override fun equals(other: Any?): Boolean {
-    if (other is CustodySlashingWrapper) {
-      return other.v == v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
+  companion object {
+    val TYPE = ContainerViewType<CustodySlashing>(
+      listOf(
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        Bytes96Type,
+        BasicViewTypes.UINT64_TYPE,
+        ShardTransition.TYPE,
+        Attestation.TYPE,
+        ListViewType<ByteView>(BasicViewTypes.BYTE_TYPE, MAX_SHARD_BLOCK_SIZE.toLong())
+      ), ::CustodySlashing
+    )
   }
 }
 
-internal class SignedCustodySlashingWrapper(override val v: TekuSignedCustodySlashing) :
-  Wrapper<TekuSignedCustodySlashing>, SignedCustodySlashing {
+class SignedCustodySlashing : AbstractImmutableContainer {
+  val message: CustodySlashing
+    get() = getAny(0)
+  val signature: BLSSignature
+    get() = Bytes96(ViewUtils.getAllBytes(getAny(1)))
 
   constructor(message: CustodySlashing, signature: BLSSignature)
-      : this(
-    TekuSignedCustodySlashing(
-      CustodySlashingType.unwrap(message),
-      BLSSignatureType.unwrap(signature)
+      : super(TYPE, message, ViewUtils.createVectorFromBytes(signature.wrappedBytes))
+
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
+
+  constructor() : super(TYPE)
+
+  companion object {
+    val TYPE = ContainerViewType<SignedCustodySlashing>(
+      listOf(CustodySlashing.TYPE,
+        Bytes96Type
+      ),
+      ::SignedCustodySlashing
     )
-  )
-
-  override val message: CustodySlashing
-    get() = CustodySlashingType.wrap(v.message)
-  override val signature: BLSSignature
-    get() = BLSSignatureType.wrap(v.signature)
-
-  override fun hash_tree_root() = v.hash_tree_root()
-
-  override fun equals(other: Any?): Boolean {
-    if (other is SignedCustodySlashingWrapper) {
-      return other.v == v
-    }
-    return false
-  }
-
-  override fun hashCode(): Int {
-    return v.hashCode()
-  }
-
-  override fun toString(): String {
-    return v.toString()
   }
 }
 
-internal class AttestationCustodyBitWrapperImpl(
-  override val attestation_data_root: Root,
-  override val block_index: uint64,
-  override val bit: boolean
-) : AttestationCustodyBitWrapper {
+class AttestationCustodyBit : AbstractImmutableContainer {
+  val attestation_data_root: Root
+    get() = (get(0) as Bytes32View).get()
+  val block_index: uint64
+    get() = (get(1) as UInt64View).get().toUInt64()
+  val bit: boolean
+    get() = (get(2) as BitView).get()
 
-  override fun hash_tree_root(): Bytes32 {
-    return TekuAttestationCustodyBitWrapper(
-      attestation_data_root, UInt64Type.unwrap(block_index), bit
-    ).hash_tree_root()
+
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
+
+  constructor(attestation_data_root: Root, block_index: uint64, bit: boolean) : super(
+    TYPE, Bytes32View(attestation_data_root), UInt64View(block_index.toUnsignedLong()), BitView(bit)
+  )
+
+  constructor() : super(TYPE)
+
+  companion object {
+    val TYPE = ContainerViewType<AttestationCustodyBit>(
+      listOf(BasicViewTypes.BYTES32_TYPE, BasicViewTypes.UINT64_TYPE, BasicViewTypes.BIT_TYPE),
+      ::AttestationCustodyBit
+    )
   }
+}
 
-  override fun equals(other: Any?): Boolean {
-    if (this === other) return true
-    if (other !is AttestationCustodyBitWrapperImpl) return false
+class CustodyChunkChallenge : AbstractImmutableContainer {
+  val responder_index: ValidatorIndex
+    get() = (get(0) as UInt64View).get().toUInt64()
+  val shard_transition: ShardTransition
+    get() = getAny(1)
+  val attestation: Attestation
+    get() = getAny(2)
+  val data_index: uint64
+    get() = (get(3) as UInt64View).get().toUInt64()
+  val chunk_index: uint64
+    get() = (get(4) as UInt64View).get().toUInt64()
 
-    if (attestation_data_root != other.attestation_data_root) return false
-    if (block_index != other.block_index) return false
-    if (bit != other.bit) return false
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
-    return true
+  constructor(
+    responder_index: ValidatorIndex,
+    shard_transition: ShardTransition,
+    attestation: Attestation,
+    data_index: uint64,
+    chunk_index: uint64
+  ) : super(
+    TYPE,
+    UInt64View(responder_index.toUnsignedLong()),
+    shard_transition,
+    attestation,
+    UInt64View(data_index.toUnsignedLong()),
+    UInt64View(chunk_index.toUnsignedLong())
+  )
+
+  constructor() : super(TYPE)
+
+  companion object {
+    val TYPE = ContainerViewType<CustodyChunkChallenge>(
+      listOf(
+        BasicViewTypes.UINT64_TYPE,
+        ShardTransition.TYPE,
+        Attestation.TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE
+      ), ::CustodyChunkChallenge
+    )
   }
+}
 
-  override fun hashCode(): Int {
-    var result = attestation_data_root.hashCode()
-    result = 31 * result + block_index.hashCode()
-    result = 31 * result + bit.hashCode()
-    return result
-  }
+class CustodyChunkResponse : AbstractImmutableContainer {
+  val challenge_index: uint64
+    get() = (get(0) as UInt64View).get().toUInt64()
+  val chunk_index: uint64
+    get() = (get(1) as UInt64View).get().toUInt64()
+  val chunk: SSZByteVector
+    get() = SSZByteVectorImpl(get(2) as VectorViewRead<ByteView>)
+  val branch: SSZVector<Root>
+    get() = SSZVectorImpl(getAny(3), Bytes32View::get)
 
-  override fun toString(): String {
-    return "AttestationCustodyBitWrapperImpl(attestation_data_root=$attestation_data_root, block_index=$block_index, bit=$bit)"
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
+
+  constructor(
+    challenge_index: uint64,
+    chunk_index: uint64,
+    chunk: SSZByteVector,
+    branch: SSZVector<Root>
+  ) : super(
+    TYPE,
+    UInt64View(challenge_index.toUnsignedLong()),
+    UInt64View(chunk_index.toUnsignedLong()),
+    (chunk as SSZAbstractCollection<*, *>).view,
+    (branch as SSZAbstractCollection<*, *>).view
+  )
+
+  constructor() : super(TYPE)
+
+  companion object {
+    val TYPE = ContainerViewType<CustodyChunkChallenge>(
+      listOf(
+        BasicViewTypes.UINT64_TYPE, BasicViewTypes.UINT64_TYPE,
+        VectorViewType<ByteView>(BasicViewTypes.BYTE_TYPE, BYTES_PER_CUSTODY_CHUNK.toLong()),
+        VectorViewType<ByteView>(BasicViewTypes.BYTE_TYPE, CUSTODY_RESPONSE_DEPTH.value.toLong())
+      ), ::CustodyChunkChallenge
+    )
   }
 }
