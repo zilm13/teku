@@ -13,29 +13,36 @@
 
 package tech.pegasys.teku.statetransition.attestation;
 
-import tech.pegasys.teku.core.results.AttestationProcessingResult;
-import tech.pegasys.teku.datastructures.operations.Attestation;
-import tech.pegasys.teku.statetransition.forkchoice.ForkChoice;
-import tech.pegasys.teku.storage.Store;
+import static tech.pegasys.teku.core.ForkChoiceUtil.on_attestation;
+
+import tech.pegasys.teku.core.StateTransition;
+import tech.pegasys.teku.datastructures.attestation.ValidateableAttestation;
+import tech.pegasys.teku.datastructures.operations.IndexedAttestation;
+import tech.pegasys.teku.datastructures.util.AttestationProcessingResult;
 import tech.pegasys.teku.storage.client.RecentChainData;
+import tech.pegasys.teku.storage.store.UpdatableStore.StoreTransaction;
 
 public class ForkChoiceAttestationProcessor {
 
   private final RecentChainData recentChainData;
-  private final ForkChoice forkChoice;
 
-  public ForkChoiceAttestationProcessor(
-      final RecentChainData recentChainData, final ForkChoice forkChoice) {
+  public ForkChoiceAttestationProcessor(final RecentChainData recentChainData) {
     this.recentChainData = recentChainData;
-    this.forkChoice = forkChoice;
   }
 
-  public AttestationProcessingResult processAttestation(final Attestation attestation) {
-    final Store.Transaction transaction = recentChainData.startStoreTransaction();
-    final AttestationProcessingResult result = forkChoice.onAttestation(transaction, attestation);
+  public AttestationProcessingResult processAttestation(final ValidateableAttestation attestation) {
+    final StoreTransaction transaction = recentChainData.startStoreTransaction();
+    final AttestationProcessingResult result =
+        on_attestation(transaction, attestation, new StateTransition());
     if (result.isSuccessful()) {
       transaction.commit(() -> {}, "Failed to persist attestation result");
     }
     return result;
+  }
+
+  public void applyIndexedAttestationToForkChoice(final IndexedAttestation attestation) {
+    final StoreTransaction transaction = recentChainData.startStoreTransaction();
+    transaction.processAttestation(attestation);
+    transaction.commit(() -> {}, "Failed to persist attestation result");
   }
 }

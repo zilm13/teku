@@ -19,6 +19,7 @@ import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_star
 import static tech.pegasys.teku.util.config.Constants.SLOTS_PER_EPOCH;
 
 import com.google.common.primitives.UnsignedLong;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +37,7 @@ import tech.pegasys.teku.core.signatures.MessageSignerService;
 import tech.pegasys.teku.core.signatures.TestMessageSignerService;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlockBodyLists;
+import tech.pegasys.teku.datastructures.blocks.Eth1Data;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.SignedBlockAndState;
 import tech.pegasys.teku.datastructures.operations.Attestation;
@@ -82,12 +84,12 @@ public class ChainBuilder {
   }
 
   public UnsignedLong getLatestSlot() {
-    asserChainIsNotEmpty();
+    assertChainIsNotEmpty();
     return getLatestBlockAndState().getBlock().getSlot();
   }
 
   public UnsignedLong getLatestEpoch() {
-    asserChainIsNotEmpty();
+    assertChainIsNotEmpty();
     final UnsignedLong slot = getLatestSlot();
     return compute_epoch_at_slot(slot);
   }
@@ -98,6 +100,14 @@ public class ChainBuilder {
 
   public Stream<SignedBlockAndState> streamBlocksAndStates(final long fromSlot, final long toSlot) {
     return streamBlocksAndStates(UnsignedLong.valueOf(fromSlot), UnsignedLong.valueOf(toSlot));
+  }
+
+  public Stream<SignedBlockAndState> streamBlocksAndStates(final long fromSlot) {
+    return streamBlocksAndStates(UnsignedLong.valueOf(fromSlot));
+  }
+
+  public Stream<SignedBlockAndState> streamBlocksAndStates(final UnsignedLong fromSlot) {
+    return streamBlocksAndStates(fromSlot, getLatestSlot());
   }
 
   public Stream<SignedBlockAndState> streamBlocksAndStates(
@@ -160,7 +170,7 @@ public class ChainBuilder {
   }
 
   public SignedBlockAndState getLatestBlockAndStateAtEpochBoundary(final UnsignedLong epoch) {
-    asserChainIsNotEmpty();
+    assertChainIsNotEmpty();
     final UnsignedLong slot = compute_start_slot_at_epoch(epoch);
     return getLatestBlockAndStateAtSlot(slot);
   }
@@ -170,7 +180,7 @@ public class ChainBuilder {
   }
 
   public Checkpoint getCurrentCheckpointForEpoch(final UnsignedLong epoch) {
-    asserChainIsNotEmpty();
+    assertChainIsNotEmpty();
     final SignedBeaconBlock block = getLatestBlockAndStateAtEpochBoundary(epoch).getBlock();
     return new Checkpoint(epoch, block.getMessage().hash_tree_root());
   }
@@ -195,17 +205,33 @@ public class ChainBuilder {
     return blockAndState;
   }
 
-  public void generateBlocksUpToSlot(final long slot) throws StateTransitionException {
-    generateBlocksUpToSlot(UnsignedLong.valueOf(slot));
+  public List<SignedBlockAndState> generateBlocksUpToSlot(final long slot)
+      throws StateTransitionException {
+    return generateBlocksUpToSlot(UnsignedLong.valueOf(slot));
   }
 
-  public void generateBlocksUpToSlot(final UnsignedLong slot) throws StateTransitionException {
+  public List<SignedBlockAndState> generateBlocksUpToSlot(final long slot, final int skip)
+      throws StateTransitionException {
+    return generateBlocksUpToSlot(UnsignedLong.valueOf(slot));
+  }
+
+  public List<SignedBlockAndState> generateBlocksUpToSlot(final UnsignedLong slot)
+      throws StateTransitionException {
+    return generateBlocksUpToSlot(slot, 0);
+  }
+
+  public List<SignedBlockAndState> generateBlocksUpToSlot(final UnsignedLong slot, final int skip)
+      throws StateTransitionException {
     assertBlockCanBeGenerated();
+    final List<SignedBlockAndState> generated = new ArrayList<>();
 
     SignedBlockAndState latestBlock = getLatestBlockAndState();
     while (latestBlock.getState().getSlot().compareTo(slot) < 0) {
-      latestBlock = generateNextBlock();
+      latestBlock = generateNextBlock(skip);
+      generated.add(latestBlock);
     }
+
+    return generated;
   }
 
   public SignedBlockAndState generateNextBlock() throws StateTransitionException {
@@ -278,7 +304,7 @@ public class ChainBuilder {
         .flatMap(head -> attestationGenerator.streamAttestations(head, head.getSlot()));
   }
 
-  private void asserChainIsNotEmpty() {
+  private void assertChainIsNotEmpty() {
     checkState(!blocks.isEmpty(), "Unable to execute operation on empty chain");
   }
 
@@ -295,8 +321,15 @@ public class ChainBuilder {
     final int proposerIndex = blockProposalTestUtil.getProposerIndexForSlot(preState, slot);
     final MessageSignerService signer = getSigner(proposerIndex);
     final SignedBlockAndState nextBlockAndState =
-        blockProposalTestUtil.createBlockWithAttestations(
-            signer, slot, preState, parentRoot, options.getAttestations());
+        blockProposalTestUtil.createBlock(
+            signer,
+            slot,
+            preState,
+            parentRoot,
+            Optional.of(options.getAttestations()),
+            Optional.empty(),
+            Optional.empty(),
+            options.getEth1Data());
 
     blocks.put(slot, nextBlockAndState);
     return nextBlockAndState;
@@ -316,6 +349,7 @@ public class ChainBuilder {
 
   public static final class BlockOptions {
     private SSZMutableList<Attestation> attestations = BeaconBlockBodyLists.createAttestations();
+    private Optional<Eth1Data> eth1Data = Optional.empty();
 
     private BlockOptions() {}
 
@@ -328,8 +362,17 @@ public class ChainBuilder {
       return this;
     }
 
+    public BlockOptions setEth1Data(final Eth1Data eth1Data) {
+      this.eth1Data = Optional.ofNullable(eth1Data);
+      return this;
+    }
+
     private SSZList<Attestation> getAttestations() {
       return attestations;
+    }
+
+    public Optional<Eth1Data> getEth1Data() {
+      return eth1Data;
     }
   }
 }

@@ -29,12 +29,12 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import tech.pegasys.teku.bls.BLSKeyGenerator;
 import tech.pegasys.teku.bls.BLSKeyPair;
+import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.networking.eth2.peers.Eth2Peer;
 import tech.pegasys.teku.networking.eth2.peers.PeerStatus;
 import tech.pegasys.teku.networking.eth2.rpc.core.encodings.RpcEncoding;
 import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
-import tech.pegasys.teku.storage.Store;
 import tech.pegasys.teku.storage.client.MemoryOnlyRecentChainData;
 import tech.pegasys.teku.storage.client.RecentChainData;
 
@@ -137,7 +137,7 @@ public class PeerStatusIntegrationTest {
   @MethodSource("getEncodings")
   public void shouldUpdatePeerStatusPeriodically(
       final String encodingName, final RpcEncoding encoding) throws Exception {
-    Duration statusUpdateInterval = Duration.ofMillis(100);
+    Duration statusUpdateInterval = Duration.ofSeconds(2);
     final Eth2Network network1 =
         networkFactory
             .builder()
@@ -174,12 +174,12 @@ public class PeerStatusIntegrationTest {
 
   private void assertStatusMatchesStorage(
       final RecentChainData storageClient, final PeerStatus status) {
-    final Store network2Store = storageClient.getStore();
+    final BeaconState state = storageClient.getBestState().orElseThrow();
     assertStatus(
         status,
-        storageClient.getCurrentForkInfo().orElseThrow().getForkDigest(),
-        network2Store.getFinalizedCheckpoint().getRoot(),
-        network2Store.getFinalizedCheckpoint().getEpoch(),
+        storageClient.getHeadForkInfo().orElseThrow().getForkDigest(),
+        state.getFinalized_checkpoint().getRoot(),
+        state.getFinalized_checkpoint().getEpoch(),
         storageClient.getBestBlockRoot().orElseThrow(),
         storageClient.getBestSlot());
   }

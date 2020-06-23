@@ -49,7 +49,8 @@ public class NetworkDefinition {
               builder()
                   .constants("schlesi")
                   .snappyCompressionEnabled(true)
-                  .initialState("https://github.com/goerli/schlesi/raw/master/teku/genesis.ssz")
+                  .initialState(
+                      "https://github.com/goerli/schlesi/raw/master/.trash/schlesi/teku/genesis.ssz")
                   .discoveryBootnodes(
                       "enr:-LK4QJ-6k6QytxOn7P9BdDZHXesHz3aaglpvo-VcTGc-rfr5H4DBzjQsjg6stZoy1H-p3yK21IISkJHe742QTVwRS_IEh2F0dG5ldHOIAAAAAAAAAACEZXRoMpCZJe_WAAAAAP__________gmlkgnY0gmlwhDMPd52Jc2VjcDI1NmsxoQINdLr6UY7y2CzshX4n_BbdYM1G40rpdEs84Mdoyv_ZyYN0Y3CCIyiDdWRwgiMo",
                       "enr:-LK4QFO0gKFieMiNrUystSk5Xt7DmIgusloLudv-gH8Krjw9SsUDZRk---H-3hwvL9rMfsMcZwU6L5ezK2d1_dG0UgECh2F0dG5ldHOIAAAAAAAAAACEZXRoMpCZJe_WAAAAAP__________gmlkgnY0gmlwhDMPd52Jc2VjcDI1NmsxoQPNb3TG-iN0aGTagN4peO0SEkWKklJOvloWL0He8pnB_4N0Y3CCJRyDdWRwgiUc",
@@ -58,6 +59,21 @@ public class NetworkDefinition {
                       "enr:-KG4QEKucvfLm_Hp8Erw1rVEGerBlDblJI54LNNHvzfCY-jCAHTaoHf0UF8HLB5HsbZtJhjJ83oWkQ0aMty7c26aZy8ChGV0aDKQmSXv1gAAAAD__________4JpZIJ2NIJpcIQzD0YHiXNlY3AyNTZrMaEDggHXPlO6yT4JkCgVMOJjilj4F0ogSlHuXjPJjsiWne2DdGNwgiMog3VkcIIjKA",
                       "enr:-KG4QBUEkcqHGnHHCZLnWfSPBocBqP5SNClDHOR1KmlzaS-YN53w0xBspt-HCzk5-FZw_ZcYIdxQKrLp8VUSO2LPSDwChGV0aDKQmSXv1gAAAAD__________4JpZIJ2NIJpcIQzD0YHiXNlY3AyNTZrMaEDMcdoZ1TJBKATCJixtLTYxGmKbe7r3ckjvhg5OP5cILeDdGNwgiUcg3VkcIIlHA")
                   .eth1DepositContractAddress("0xA15554BF93a052669B511ae29EA21f3581677ac5")
+                  .build())
+          .put(
+              "witti",
+              builder()
+                  .constants("witti")
+                  .snappyCompressionEnabled(true)
+                  .initialStateFromClasspath("witti-genesis.ssz")
+                  .discoveryBootnodes(
+                      "enr:-Ku4QMucba73OPBz2mgyYduH1tM50mZjaiLNEXMrEmTSnrgyEWMEF0zFK0QT6URu_wFfqW04gYn1wze-VQe-jb0L8r8Bh2F0dG5ldHOIAAAAAAAAAACEZXRoMpD1pf1CAAAAAP__________gmlkgnY0gmlwhFzAVJaJc2VjcDI1NmsxoQIX4kyr2PR-bGTptaN9DbXa2A2L_rVfuIpMj7sCjPBov4N1ZHCCW8w",
+                      "enr:-Ku4QJsxkOibTc9FXfBWYmcdMAGwH4bnOOFb4BlTHfMdx_f0WN-u4IUqZcQVP9iuEyoxipFs7-Qd_rH_0HfyOQitc7IBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpD1pf1CAAAAAP__________gmlkgnY0gmlwhLAJM9iJc2VjcDI1NmsxoQL2RyM26TKZzqnUsyycHQB4jnyg6Wi79rwLXtaZXty06YN1ZHCCW8w",
+                      "enr:-Ku4QF5CI2Ndig0cxR0fQjRolG1k6TggK0BV4Z5neog4U9LDYsTHz6Vv6qVyJ7b9L2r6S2Gu4Ek4Z7i7j-jAJBxHbmYBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpD1pf1CAAAAAP__________gmlkgnY0gmlwhFe0zw-Jc2VjcDI1NmsxoQPD9aDKsFoUfpEMPuTgZ13qNsJZ31zMMrl3PsQXeX2cwYN1ZHCCW8w",
+                      "enr:-Ku4QLE_fTEjP6K3OII1RYRLUMUbwV9dAh7-2vr7gkZnRXLxSy2B6C-b0nVVQcFYsUvp2Tgli7GKHBYpWiknTse7rrUBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpD1pf1CAAAAAP__________gmlkgnY0gmlwhFzAVJaJc2VjcDI1NmsxoQKxhcZJCugFnVuRMMzE4JJe0E0FS71ctmAnx1Y2wCJwKoN1ZHCCpgQ",
+                      "enr:-Ku4QKsKa3HbJjz8cZn4mEh-stIF6kACLh2rmCGscEsLUe4XUSt-xZEAx7SK6R3zqAc2WAVBpLkh5fu-r-PHr_8d4B8Bh2F0dG5ldHOIAAAAAAAAAACEZXRoMpD1pf1CAAAAAP__________gmlkgnY0gmlwhDMPd52Jc2VjcDI1NmsxoQMLvOjDnLAqnQsTKqUqNr1qcleEBgkin3KOW9BeIxAJ54N1ZHCCW8w")
+                  .eth1DepositContractAddress("0x42cc0FcEB02015F145105Cf6f19F90e9BEa76558")
+                  .startupTimeoutSeconds(120)
                   .build())
           .build();
 
@@ -146,6 +162,12 @@ public class NetworkDefinition {
 
     public Builder initialState(final String initialState) {
       this.initialState = Optional.of(initialState);
+      return this;
+    }
+
+    public Builder initialStateFromClasspath(final String filename) {
+      this.initialState =
+          Optional.of(NetworkDefinition.class.getResource(filename).toExternalForm());
       return this;
     }
 

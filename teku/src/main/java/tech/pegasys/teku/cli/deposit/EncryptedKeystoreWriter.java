@@ -14,12 +14,13 @@
 package tech.pegasys.teku.cli.deposit;
 
 import static tech.pegasys.teku.logging.StatusLogger.STATUS_LOG;
-import static tech.pegasys.teku.util.crypto.SecureRandomProvider.createSecureRandom;
+import static tech.pegasys.teku.util.bytes.KeyFormatter.shortPublicKey;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.SecureRandom;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.signers.bls.keystore.KeyStore;
@@ -33,23 +34,27 @@ import tech.pegasys.signers.bls.keystore.model.SCryptParam;
 import tech.pegasys.teku.bls.BLSKeyPair;
 
 public class EncryptedKeystoreWriter implements KeysWriter {
+
+  private final SecureRandom secureRandom;
   private final String validatorKeyPassword;
   private final String withdrawalKeyPassword;
   private final Path outputPath;
 
   public EncryptedKeystoreWriter(
+      final SecureRandom secureRandom,
       final String validatorKeyPassword,
       final String withdrawalKeyPassword,
       final Path outputPath) {
+    this.secureRandom = secureRandom;
     this.validatorKeyPassword = validatorKeyPassword;
     this.withdrawalKeyPassword = withdrawalKeyPassword;
     this.outputPath = outputPath;
+    createKeystoreDirectory();
   }
 
   @Override
   public void writeKeys(final BLSKeyPair validatorKey, final BLSKeyPair withdrawalKey)
       throws UncheckedIOException, KeyStoreValidationException {
-    final Path keystoreDirectory = createKeystoreDirectory(validatorKey);
 
     final KeyStoreData validatorKeyStoreData =
         generateKeystoreData(validatorKey, validatorKeyPassword);
@@ -57,32 +62,29 @@ public class EncryptedKeystoreWriter implements KeysWriter {
         generateKeystoreData(withdrawalKey, withdrawalKeyPassword);
 
     final String validatorFileName =
-        "validator_" + trimPublicKey(validatorKey.getPublicKey().toString()) + ".json";
+        shortPublicKey(validatorKey.getPublicKey()) + "_validator.json";
     final String withdrawalFileName =
-        "withdrawal_" + trimPublicKey(withdrawalKey.getPublicKey().toString()) + ".json";
+        shortPublicKey(validatorKey.getPublicKey()) + "_withdrawal.json";
 
-    saveKeyStore(keystoreDirectory.resolve(validatorFileName), validatorKeyStoreData);
-    saveKeyStore(keystoreDirectory.resolve(withdrawalFileName), withdrawalKeyStoreData);
+    saveKeyStore(outputPath.resolve(validatorFileName), validatorKeyStoreData);
+    saveKeyStore(outputPath.resolve(withdrawalFileName), withdrawalKeyStoreData);
   }
 
-  private Path createKeystoreDirectory(final BLSKeyPair validatorKey) {
-    final Path keystoreDirectory =
-        outputPath.resolve("validator_" + trimPublicKey(validatorKey.getPublicKey().toString()));
+  private void createKeystoreDirectory() {
     try {
-      return Files.createDirectories(keystoreDirectory);
+      Files.createDirectories(outputPath);
     } catch (IOException e) {
       STATUS_LOG.validatorDepositEncryptedKeystoreWriterFailure(
-          "Error: Unable to create directory [{}] : {}", keystoreDirectory, e.getMessage());
+          "Error: Unable to create directory [{}] : {}", outputPath, e.getMessage());
       throw new UncheckedIOException(e);
     }
   }
 
   private KeyStoreData generateKeystoreData(final BLSKeyPair key, final String password) {
-    final KdfParam kdfParam = new SCryptParam(32, Bytes32.random(createSecureRandom()));
-    final Cipher cipher =
-        new Cipher(CipherFunction.AES_128_CTR, Bytes.random(16, createSecureRandom()));
+    final KdfParam kdfParam = new SCryptParam(32, Bytes32.random(secureRandom));
+    final Cipher cipher = new Cipher(CipherFunction.AES_128_CTR, Bytes.random(16, secureRandom));
     return KeyStore.encrypt(
-        key.getSecretKey().getSecretKey().toBytes(),
+        key.getSecretKey().toBytes(),
         key.getPublicKey().toBytesCompressed(),
         password,
         "",
@@ -98,12 +100,5 @@ public class EncryptedKeystoreWriter implements KeysWriter {
           "Error: Unable to save keystore file [{}] : {}", outputPath, e.getMessage());
       throw new UncheckedIOException(e);
     }
-  }
-
-  private String trimPublicKey(final String publicKey) {
-    if (publicKey.toLowerCase().startsWith("0x")) {
-      return publicKey.substring(2, 9);
-    }
-    return publicKey.substring(0, 7);
   }
 }

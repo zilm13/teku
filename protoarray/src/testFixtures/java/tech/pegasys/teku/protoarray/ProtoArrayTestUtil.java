@@ -13,17 +13,17 @@
 
 package tech.pegasys.teku.protoarray;
 
-import static com.google.common.primitives.UnsignedLong.ONE;
-import static com.google.common.primitives.UnsignedLong.ZERO;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.int_to_bytes32;
 
 import com.google.common.primitives.UnsignedLong;
 import java.util.HashMap;
 import org.apache.tuweni.bytes.Bytes32;
+import tech.pegasys.teku.datastructures.forkchoice.MutableStore;
+import tech.pegasys.teku.datastructures.forkchoice.TestStoreFactory;
 import tech.pegasys.teku.datastructures.state.Checkpoint;
-import tech.pegasys.teku.storage.Store;
 
 public class ProtoArrayTestUtil {
+  private static final TestStoreFactory STORE_FACTORY = new TestStoreFactory();
 
   // Gives a deterministic hash for a given integer
   public static Bytes32 getHash(int i) {
@@ -35,41 +35,28 @@ public class ProtoArrayTestUtil {
       UnsignedLong finalizedBlockSlot,
       UnsignedLong finalizedCheckpointEpoch,
       UnsignedLong justifiedCheckpointEpoch) {
-    Store store =
-        new Store(
-            UnsignedLong.ONE,
-            ZERO,
-            new Checkpoint(justifiedCheckpointEpoch, Bytes32.ZERO),
-            new Checkpoint(finalizedCheckpointEpoch, Bytes32.ZERO),
-            new Checkpoint(ONE, Bytes32.ZERO),
-            new HashMap<>(),
-            new HashMap<>(),
-            new HashMap<>(),
-            new HashMap<>());
+    MutableStore store = STORE_FACTORY.createEmptyStore();
+    store.setJustifiedCheckpoint(new Checkpoint(justifiedCheckpointEpoch, Bytes32.ZERO));
+    store.setFinalizedCheckpoint(new Checkpoint(finalizedCheckpointEpoch, Bytes32.ZERO));
 
-    ProtoArrayForkChoiceStrategy forkChoice = ProtoArrayForkChoiceStrategy.create(store);
+    ProtoArrayForkChoiceStrategy forkChoice =
+        ProtoArrayForkChoiceStrategy.create(
+            new HashMap<>(), store.getFinalizedCheckpoint(), store.getJustifiedCheckpoint());
 
-    forkChoice.processBlock(
+    ProtoArrayForkChoiceStrategyUpdater updater = forkChoice.updater();
+    updater.processBlock(
         finalizedBlockSlot,
         finalizedBlockRoot,
         Bytes32.ZERO,
         Bytes32.ZERO,
         justifiedCheckpointEpoch,
         finalizedCheckpointEpoch);
+    updater.commit();
 
     return forkChoice;
   }
 
-  public static Store createStoreToManipulateVotes() {
-    return new Store(
-        UnsignedLong.ONE,
-        ZERO,
-        new Checkpoint(ZERO, Bytes32.ZERO),
-        new Checkpoint(ZERO, Bytes32.ZERO),
-        new Checkpoint(ONE, Bytes32.ZERO),
-        new HashMap<>(),
-        new HashMap<>(),
-        new HashMap<>(),
-        new HashMap<>());
+  public static MutableStore createStoreToManipulateVotes() {
+    return STORE_FACTORY.createMutableGenesisStore();
   }
 }

@@ -112,6 +112,7 @@ allprojects {
         exclude '**/src/main/java/tech/pegasys/teku/Constants.java'
         exclude '**/proto'
         exclude '**/resources'
+        exclude '**/src/*/generated'
       }
 
       importOrder 'tech.pegasys', 'net.consensys', 'java', ''
@@ -211,7 +212,7 @@ allprojects {
   }
 }
 
-def refTestVersion = 'v0.11.2'
+def refTestVersion = 'v0.11.3'
 def refTestBaseUrl = 'https://github.com/ethereum/eth2.0-spec-tests/releases/download'
 def refTestDownloadDir = "${buildDir}/refTests/${refTestVersion}"
 def refTestExpandDir = "${project.rootDir}/eth-reference-tests/src/referenceTest/resources/eth2.0-spec-tests/"
@@ -286,8 +287,28 @@ application {
       "-Dteku.home=TEKU_HOME",
       // We shutdown log4j ourselves, as otherwise his shutdown hook runs before our own and whatever
       // happens during shutdown is not logged.
-      "-Dlog4j.shutdownHookEnabled=false"
+      "-Dlog4j.shutdownHookEnabled=false",
+      "-XX:+HeapDumpOnOutOfMemoryError"
   ]
+}
+
+startScripts {
+
+  def shortenWindowsClasspath = { line ->
+    line = line.replaceAll(/^set CLASSPATH=.*$/, "set CLASSPATH=%APP_HOME%/lib/*")
+  }
+
+  doLast {
+    unixScript.text = unixScript.text.replace('TEKU_HOME', '\$APP_HOME')
+    windowsScript.text = windowsScript.text.replace('TEKU_HOME', '%~dp0..')
+
+    // Prevent the error originating from the 8191 chars limit on Windows
+    windowsScript.text =
+        windowsScript
+            .readLines()
+            .collect(shortenWindowsClasspath)
+            .join('\r\n')
+  }
 }
 
 // rename the top level dir from teku-<version> to teku and this makes it really
@@ -338,6 +359,11 @@ subprojects {
     reports {
       junitXml.enabled = true
     }
+    filter {
+      // Support filtering tests with the --tests option to gradle
+      // Without this the build fails if you filter out all the tests for any module
+      setFailOnNoMatchingTests(false)
+    }
   }
 
   tasks.withType(JavaCompile) {
@@ -372,6 +398,7 @@ subprojects {
     }
     referenceTest {
       java {
+        srcDir file('src/referenceTest/generated')
         srcDir file('src/referenceTest/java')
       }
       resources.srcDir file('src/referenceTest/resources')
@@ -541,13 +568,6 @@ run {
   }
 }
 
-startScripts {
-  doLast {
-    unixScript.text = unixScript.text.replace('TEKU_HOME', '\$APP_HOME').replace('APP_NAME=', 'export LD_LIBRARY_PATH="\$APP_HOME/native:\$LD_LIBRARY_PATH"\nAPP_NAME=')
-    windowsScript.text = windowsScript.text.replace('TEKU_HOME', '%~dp0..')
-  }
-}
-
 dependencies {
   compile project(':teku')
   errorprone 'com.google.errorprone:error_prone_core'
@@ -583,7 +603,7 @@ def calculateVersion() {
 
 def getCheckedOutGitCommitHash() {
   def takeFromHash = 8
-  grgit.head().id.take(takeFromHash)
+  grgit ? grgit.head().id.take(takeFromHash) : 'UNKNOWN'
 }
 
 task jacocoRootReport(type: JacocoReport) {

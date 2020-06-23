@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static tech.pegasys.teku.datastructures.util.AttestationProcessingResult.SUCCESSFUL;
 import static tech.pegasys.teku.util.async.SafeFuture.completedFuture;
 
 import com.google.common.eventbus.EventBus;
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.bls.BLSPublicKey;
 import tech.pegasys.teku.bls.BLSSignature;
 import tech.pegasys.teku.core.StateTransition;
+import tech.pegasys.teku.datastructures.attestation.ValidateableAttestation;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlockAndState;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
@@ -49,6 +51,7 @@ import tech.pegasys.teku.networking.eth2.gossip.AttestationTopicSubscriber;
 import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
 import tech.pegasys.teku.statetransition.attestation.AggregatingAttestationPool;
+import tech.pegasys.teku.statetransition.attestation.AttestationManager;
 import tech.pegasys.teku.statetransition.events.block.ProposedBlockEvent;
 import tech.pegasys.teku.storage.client.CombinedChainDataClient;
 import tech.pegasys.teku.sync.SyncState;
@@ -69,6 +72,7 @@ class ValidatorApiHandlerTest {
   private final StateTransition stateTransition = mock(StateTransition.class);
   private final BlockFactory blockFactory = mock(BlockFactory.class);
   private final AggregatingAttestationPool attestationPool = mock(AggregatingAttestationPool.class);
+  private final AttestationManager attestationManager = mock(AttestationManager.class);
   private final AttestationTopicSubscriber attestationTopicSubscriptions =
       mock(AttestationTopicSubscriber.class);
   private final EventBus eventBus = mock(EventBus.class);
@@ -80,6 +84,7 @@ class ValidatorApiHandlerTest {
           stateTransition,
           blockFactory,
           attestationPool,
+          attestationManager,
           attestationTopicSubscriptions,
           eventBus);
 
@@ -210,21 +215,10 @@ class ValidatorApiHandlerTest {
     when(syncStateTracker.getCurrentSyncState()).thenReturn(SyncState.SYNCING);
     final SafeFuture<Optional<BeaconBlock>> result =
         validatorApiHandler.createUnsignedBlock(
-            UnsignedLong.ONE, dataStructureUtil.randomSignature());
+            UnsignedLong.ONE, dataStructureUtil.randomSignature(), Optional.empty());
 
     assertThat(result).isCompletedExceptionally();
     assertThatThrownBy(result::get).hasRootCauseInstanceOf(NodeSyncingException.class);
-  }
-
-  @Test
-  public void createUnsignedBlock_shouldReturnEmptyWhenBestBlockNotSet() {
-    when(chainDataClient.getBestBlockRoot()).thenReturn(Optional.empty());
-
-    final SafeFuture<Optional<BeaconBlock>> result =
-        validatorApiHandler.createUnsignedBlock(
-            UnsignedLong.ONE, dataStructureUtil.randomSignature());
-
-    assertThat(result).isCompletedWithValue(Optional.empty());
   }
 
   @Test
@@ -239,14 +233,18 @@ class ValidatorApiHandlerTest {
 
     when(chainDataClient.getBestBlockRoot()).thenReturn(Optional.of(blockRoot));
     when(chainDataClient.getBestSlot()).thenReturn(UnsignedLong.valueOf(24));
-    when(chainDataClient.getBlockAndStateInEffectAtSlot(newSlot.minus(UnsignedLong.ONE), blockRoot))
+    when(chainDataClient.getBlockAndStateInEffectAtSlot(newSlot.minus(UnsignedLong.ONE)))
         .thenReturn(SafeFuture.completedFuture(Optional.of(previousBlockAndState)));
     when(blockFactory.createUnsignedBlock(
-            previousState, previousBlockAndState.getBlock(), newSlot, randaoReveal))
+            previousState,
+            previousBlockAndState.getBlock(),
+            newSlot,
+            randaoReveal,
+            Optional.empty()))
         .thenReturn(createdBlock);
 
     final SafeFuture<Optional<BeaconBlock>> result =
-        validatorApiHandler.createUnsignedBlock(newSlot, randaoReveal);
+        validatorApiHandler.createUnsignedBlock(newSlot, randaoReveal, Optional.empty());
 
     assertThat(result).isCompletedWithValue(Optional.of(createdBlock));
   }
@@ -262,16 +260,6 @@ class ValidatorApiHandlerTest {
   }
 
   @Test
-  public void createUnsignedAttestation_shouldReturnEmptyWhenBestBlockNotSet() {
-    when(chainDataClient.getBestBlockRoot()).thenReturn(Optional.empty());
-
-    final SafeFuture<Optional<Attestation>> result =
-        validatorApiHandler.createUnsignedAttestation(UnsignedLong.ONE, 3);
-
-    assertThat(result).isCompletedWithValue(Optional.empty());
-  }
-
-  @Test
   public void createUnsignedAttestation_shouldCreateAttestation() {
     final Bytes32 blockRoot = dataStructureUtil.randomBytes32();
     final BeaconState state = createStateWithActiveValidators();
@@ -281,7 +269,7 @@ class ValidatorApiHandlerTest {
 
     when(chainDataClient.getBestBlockRoot()).thenReturn(Optional.of(blockRoot));
     when(chainDataClient.getBestSlot()).thenReturn(slot);
-    when(chainDataClient.getBlockAndStateInEffectAtSlot(slot, blockRoot))
+    when(chainDataClient.getBlockAndStateInEffectAtSlot(slot))
         .thenReturn(SafeFuture.completedFuture(Optional.of(blockAndState)));
 
     final int committeeIndex = 0;
@@ -317,7 +305,8 @@ class ValidatorApiHandlerTest {
   public void createAggregate_shouldReturnAggregateFromAttestationPool() {
     final AttestationData attestationData = dataStructureUtil.randomAttestationData();
     final Optional<Attestation> aggregate = Optional.of(dataStructureUtil.randomAttestation());
-    when(attestationPool.createAggregateFor(attestationData)).thenReturn(aggregate);
+    when(attestationPool.createAggregateFor(attestationData))
+        .thenReturn(aggregate.map(ValidateableAttestation::fromAttestation));
 
     assertThat(validatorApiHandler.createAggregate(attestationData))
         .isCompletedWithValue(aggregate);
@@ -352,10 +341,10 @@ class ValidatorApiHandlerTest {
   @Test
   public void sendSignedAttestation_shouldAddAttestationToAggregatorAndEventBus() {
     final Attestation attestation = dataStructureUtil.randomAttestation();
+    when(attestationManager.onAttestation(any())).thenReturn(SUCCESSFUL);
     validatorApiHandler.sendSignedAttestation(attestation);
 
-    verify(attestationPool).add(attestation);
-    verify(eventBus).post(attestation);
+    verify(attestationManager).onAttestation(ValidateableAttestation.fromAttestation(attestation));
   }
 
   @Test
@@ -370,10 +359,11 @@ class ValidatorApiHandlerTest {
   public void sendAggregateAndProof_shouldPostAggregateAndProof() {
     final SignedAggregateAndProof aggregateAndProof =
         dataStructureUtil.randomSignedAggregateAndProof();
+    when(attestationManager.onAttestation(any())).thenReturn(SUCCESSFUL);
     validatorApiHandler.sendAggregateAndProof(aggregateAndProof);
 
-    verify(attestationPool).add(aggregateAndProof.getMessage().getAggregate());
-    verify(eventBus).post(aggregateAndProof);
+    verify(attestationManager)
+        .onAttestation(ValidateableAttestation.fromSignedAggregate(aggregateAndProof));
   }
 
   private Optional<List<ValidatorDuties>> assertCompletedSuccessfully(

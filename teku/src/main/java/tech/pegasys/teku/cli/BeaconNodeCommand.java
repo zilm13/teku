@@ -45,6 +45,7 @@ import tech.pegasys.teku.cli.subcommand.DepositCommand;
 import tech.pegasys.teku.cli.subcommand.GenesisCommand;
 import tech.pegasys.teku.cli.subcommand.PeerCommand;
 import tech.pegasys.teku.cli.subcommand.TransitionCommand;
+import tech.pegasys.teku.cli.subcommand.debug.DebugCommand;
 import tech.pegasys.teku.cli.util.CascadingDefaultProvider;
 import tech.pegasys.teku.cli.util.EnvironmentVariableDefaultProvider;
 import tech.pegasys.teku.cli.util.YamlConfigFileDefaultProvider;
@@ -66,7 +67,8 @@ import tech.pegasys.teku.util.config.TekuConfiguration;
       TransitionCommand.class,
       PeerCommand.class,
       DepositCommand.class,
-      GenesisCommand.class
+      GenesisCommand.class,
+      DebugCommand.class
     },
     showDefaultValues = true,
     abbreviateSynopsis = true,
@@ -226,11 +228,15 @@ public class BeaconNodeCommand implements Callable<Integer> {
     errorWriter.println(ex.getMessage());
 
     CommandLine.UnmatchedArgumentException.printSuggestions(ex, outputWriter);
+    printUsage(outputWriter);
+
+    return ex.getCommandLine().getCommandSpec().exitCodeOnInvalidInput();
+  }
+
+  private void printUsage(PrintWriter outputWriter) {
     outputWriter.println();
     outputWriter.println("To display full help:");
     outputWriter.println("teku [COMMAND] --help");
-
-    return ex.getCommandLine().getCommandSpec().exitCodeOnInvalidInput();
   }
 
   @Override
@@ -258,12 +264,14 @@ public class BeaconNodeCommand implements Callable<Integer> {
   private void reportUnexpectedError(final Throwable t) {
     System.err.println("Teku failed to start.");
     t.printStackTrace();
-    System.exit(1);
+
+    errorWriter.println("Teku failed to start");
+    printUsage(errorWriter);
   }
 
   private void reportUserError(final Throwable ex) {
-    System.err.println(ex.getMessage());
-    System.exit(1);
+    errorWriter.println(ex.getMessage());
+    printUsage(errorWriter);
   }
 
   private void setLogLevels() {
@@ -308,11 +316,13 @@ public class BeaconNodeCommand implements Callable<Integer> {
             validatorOptions.getValidatorExternalSignerPublicKeys())
         .setValidatorExternalSignerUrl(validatorOptions.getValidatorExternalSignerUrl())
         .setValidatorExternalSignerTimeout(validatorOptions.getValidatorExternalSignerTimeout())
-        .setEth1Enabled(depositOptions.isEth1Enabled())
+        .setGraffiti(validatorOptions.getGraffiti())
         .setEth1DepositContractAddress(depositOptions.getEth1DepositContractAddress())
         .setEth1Endpoint(depositOptions.getEth1Endpoint())
+        .setEth1DepositsFromStorageEnabled(depositOptions.isEth1DepositsFromStorageEnabled())
         .setLogColorEnabled(loggingOptions.isLogColorEnabled())
         .setLogIncludeEventsEnabled(loggingOptions.isLogIncludeEventsEnabled())
+        .setLogIncludeValidatorDutiesEnabled(loggingOptions.isLogIncludeValidatorDutiesEnabled())
         .setLogDestination(loggingOptions.getLogDestination())
         .setLogFile(loggingOptions.getLogFile())
         .setLogFileNamePattern(loggingOptions.getLogFileNamePattern())
@@ -325,13 +335,16 @@ public class BeaconNodeCommand implements Callable<Integer> {
         .setMetricsPort(metricsOptions.getMetricsPort())
         .setMetricsInterface(metricsOptions.getMetricsInterface())
         .setMetricsCategories(metricsOptions.getMetricsCategories())
-        .setMetricsHostWhitelist(metricsOptions.getMetricsHostWhitelist())
+        .setMetricsHostAllowlist(metricsOptions.getMetricsHostAllowlist())
         .setDataPath(dataOptions.getDataPath())
         .setDataStorageMode(dataOptions.getDataStorageMode())
+        .setDataStorageFrequency(dataOptions.getDataStorageFrequency())
+        .setDataStorageCreateDbVersion(dataOptions.getCreateDbVersion())
         .setRestApiPort(beaconRestApiOptions.getRestApiPort())
         .setRestApiDocsEnabled(beaconRestApiOptions.isRestApiDocsEnabled())
         .setRestApiEnabled(beaconRestApiOptions.isRestApiEnabled())
         .setRestApiInterface(beaconRestApiOptions.getRestApiInterface())
+        .setRestApiHostAllowlist(beaconRestApiOptions.getRestApiHostAllowlist())
         .build();
   }
 }

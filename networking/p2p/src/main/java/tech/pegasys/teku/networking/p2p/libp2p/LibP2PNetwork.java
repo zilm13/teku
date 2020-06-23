@@ -17,7 +17,6 @@ import static tech.pegasys.teku.logging.StatusLogger.STATUS_LOG;
 import static tech.pegasys.teku.util.async.SafeFuture.failedFuture;
 import static tech.pegasys.teku.util.async.SafeFuture.reportExceptions;
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import identify.pb.IdentifyOuterClass;
 import io.libp2p.core.Host;
 import io.libp2p.core.PeerId;
@@ -34,6 +33,7 @@ import io.libp2p.mux.mplex.MplexStreamMuxer;
 import io.libp2p.protocol.Identify;
 import io.libp2p.protocol.Ping;
 import io.libp2p.pubsub.gossip.Gossip;
+import io.libp2p.pubsub.gossip.GossipParams;
 import io.libp2p.pubsub.gossip.GossipRouter;
 import io.libp2p.security.noise.NoiseXXSecureChannel;
 import io.libp2p.security.secio.SecIoSecureChannel;
@@ -44,17 +44,17 @@ import io.netty.handler.logging.LoggingHandler;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.tuweni.crypto.Hash;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import tech.pegasys.teku.networking.p2p.connection.ReputationManager;
 import tech.pegasys.teku.networking.p2p.discovery.DiscoveryPeer;
@@ -72,7 +72,6 @@ import tech.pegasys.teku.networking.p2p.peer.Peer;
 import tech.pegasys.teku.networking.p2p.peer.PeerConnectedSubscriber;
 import tech.pegasys.teku.networking.p2p.rpc.RpcMethod;
 import tech.pegasys.teku.util.async.AsyncRunner;
-import tech.pegasys.teku.util.async.DelayedExecutorAsyncRunner;
 import tech.pegasys.teku.util.async.SafeFuture;
 import tech.pegasys.teku.util.cli.VersionProvider;
 
@@ -92,13 +91,10 @@ public class LibP2PNetwork implements P2PNetwork<Peer> {
 
   private final AtomicReference<State> state = new AtomicReference<>(State.IDLE);
   private final Map<RpcMethod, RpcHandler> rpcHandlers = new ConcurrentHashMap<>();
-  private final ExecutorService executorService =
-      Executors.newCachedThreadPool(
-          new ThreadFactoryBuilder().setNameFormat(getClass().getSimpleName() + "-%d").build());
-  private final AsyncRunner asyncRunner = DelayedExecutorAsyncRunner.create(executorService);
   private final int listenPort;
 
   public LibP2PNetwork(
+      final AsyncRunner asyncRunner,
       final NetworkConfig config,
       final ReputationManager reputationManager,
       final MetricsSystem metricsSystem,
@@ -160,15 +156,24 @@ public class LibP2PNetwork implements P2PNetwork<Peer> {
   }
 
   private Gossip createGossip() {
-    GossipRouter router = new Eth2GossipRouter();
-    router.setD(config.getGossipConfig().getD());
-    router.setDLow(config.getGossipConfig().getDLow());
-    router.setDHigh(config.getGossipConfig().getDHigh());
-    router.setDGossip(config.getGossipConfig().getDLazy());
-    router.setFanoutTTL(config.getGossipConfig().getFanoutTTL().toMillis());
-    router.setGossipSize(config.getGossipConfig().getAdvertise());
-    router.setGossipHistoryLength(config.getGossipConfig().getHistory());
-    router.setHeartbeatInterval(config.getGossipConfig().getHeartbeatInterval());
+    GossipParams gossipParams =
+        GossipParams.builder()
+            .D(config.getGossipConfig().getD())
+            .DLow(config.getGossipConfig().getDLow())
+            .DHigh(config.getGossipConfig().getDHigh())
+            .DLazy(config.getGossipConfig().getDLazy())
+            .fanoutTTL(config.getGossipConfig().getFanoutTTL())
+            .gossipSize(config.getGossipConfig().getAdvertise())
+            .gossipHistoryLength(config.getGossipConfig().getHistory())
+            .heartbeatInterval(config.getGossipConfig().getHeartbeatInterval())
+            .build();
+
+    GossipRouter router = new GossipRouter(gossipParams);
+    router.setMessageIdGenerator(
+        msg ->
+            Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString(Hash.sha2_256(msg.getData().toByteArray())));
 
     ChannelHandler debugHandler =
         config.getWireLogsConfig().isLogWireGossip()
@@ -190,8 +195,8 @@ public class LibP2PNetwork implements P2PNetwork<Peer> {
             .setObservedAddr(
                 ByteArrayExtKt.toProtobuf( // TODO: Report external IP?
                     advertisedAddr.getBytes()))
-            .addProtocols(ping.getAnnounce())
-            .addProtocols(gossip.getAnnounce())
+            .addAllProtocols(ping.getProtocolDescriptor().getAnnounceProtocols())
+            .addAllProtocols(gossip.getProtocolDescriptor().getAnnounceProtocols())
             .build();
     return List.of(ping, new Identify(identifyMsg), gossip);
   }
@@ -296,7 +301,6 @@ public class LibP2PNetwork implements P2PNetwork<Peer> {
     }
     LOG.debug("JvmLibP2PNetwork.stop()");
     reportExceptions(host.stop());
-    executorService.shutdownNow();
   }
 
   @Override
@@ -306,6 +310,11 @@ public class LibP2PNetwork implements P2PNetwork<Peer> {
 
   @Override
   public Optional<String> getEnr() {
+    return Optional.empty();
+  }
+
+  @Override
+  public Optional<String> getDiscoveryAddress() {
     return Optional.empty();
   }
 

@@ -45,7 +45,9 @@ public class PeerManager implements ConnectionHandler {
 
   private final Map<RpcMethod, RpcHandler> rpcHandlers;
 
-  private ConcurrentHashMap<NodeId, Peer> connectedPeerMap = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<NodeId, Peer> connectedPeerMap = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<NodeId, SafeFuture<Peer>> pendingConnections =
+      new ConcurrentHashMap<>();
   private final ReputationManager reputationManager;
   private final List<PeerHandler> peerHandlers;
 
@@ -79,6 +81,10 @@ public class PeerManager implements ConnectionHandler {
   }
 
   public SafeFuture<Peer> connect(final MultiaddrPeerAddress peer, final Network network) {
+    return pendingConnections.computeIfAbsent(peer.getId(), __ -> doConnect(peer, network));
+  }
+
+  private SafeFuture<Peer> doConnect(final MultiaddrPeerAddress peer, final Network network) {
     LOG.debug("Connecting to {}", peer);
 
     return SafeFuture.of(() -> network.connect(peer.getMultiaddr()))
@@ -103,7 +109,8 @@ public class PeerManager implements ConnectionHandler {
               return connectedPeer;
             })
         .exceptionallyCompose(this::handleConcurrentConnectionInitiation)
-        .catchAndRethrow(error -> reputationManager.reportInitiatedConnectionFailed(peer));
+        .catchAndRethrow(error -> reputationManager.reportInitiatedConnectionFailed(peer))
+        .whenComplete((result, error) -> pendingConnections.remove(peer.getId()));
   }
 
   private CompletionStage<Peer> handleConcurrentConnectionInitiation(final Throwable error) {
@@ -127,6 +134,7 @@ public class PeerManager implements ConnectionHandler {
       peer.subscribeDisconnect(() -> onDisconnectedPeer(peer));
     } else {
       LOG.trace("Disconnecting duplicate connection to {}", peer::getId);
+      peer.disconnectImmediately();
       throw new PeerAlreadyConnectedException(peer);
     }
   }
@@ -145,26 +153,5 @@ public class PeerManager implements ConnectionHandler {
 
   public int getPeerCount() {
     return connectedPeerMap.size();
-  }
-
-  /**
-   * Indicates that two connections to the same PeerID were incorrectly established.
-   *
-   * <p>LibP2P usually detects attempts to establish multiple connections at the same time, but if
-   * we have incoming and outgoing connections simultaneously to the same peer, sometimes it slips
-   * through. In that case this exception is thrown so that the new connection is terminated before
-   * handshakes complete and we are able to identify the situation and return the existing peer.
-   */
-  private static class PeerAlreadyConnectedException extends RuntimeException {
-    private final Peer peer;
-
-    public PeerAlreadyConnectedException(final Peer peer) {
-      super("Already connected to peer " + peer.getId().toBase58());
-      this.peer = peer;
-    }
-
-    public Peer getPeer() {
-      return peer;
-    }
   }
 }

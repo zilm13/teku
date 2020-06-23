@@ -16,8 +16,7 @@ package tech.pegasys.teku.protoarray;
 import static com.google.common.primitives.UnsignedLong.ZERO;
 import static com.google.common.primitives.UnsignedLong.valueOf;
 import static org.assertj.core.api.Assertions.assertThat;
-import static tech.pegasys.teku.protoarray.ProtoArrayForkChoiceStrategy.computeDeltas;
-import static tech.pegasys.teku.protoarray.ProtoArrayTestUtil.createStoreToManipulateVotes;
+import static tech.pegasys.teku.protoarray.ProtoArrayForkChoiceStrategyUpdater.computeDeltas;
 import static tech.pegasys.teku.protoarray.ProtoArrayTestUtil.getHash;
 
 import com.google.common.primitives.UnsignedLong;
@@ -29,24 +28,21 @@ import java.util.Map;
 import org.apache.tuweni.bytes.Bytes32;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import tech.pegasys.teku.datastructures.forkchoice.MutableStore;
 import tech.pegasys.teku.datastructures.forkchoice.VoteTracker;
-import tech.pegasys.teku.storage.Store;
-import tech.pegasys.teku.storage.api.StubStorageUpdateChannel;
 
 public class ProtoArrayForkChoiceStrategyTest {
 
   private Map<Bytes32, Integer> indices;
   private List<UnsignedLong> oldBalances;
   private List<UnsignedLong> newBalances;
-  private Store.Transaction store;
+  private ProtoArrayForkChoiceStrategyUpdater.VoteUpdater votes =
+      new ProtoArrayForkChoiceStrategyUpdater.VoteUpdater(new HashMap<>());
 
   @BeforeEach
   void setUp() {
     indices = new HashMap<>();
     oldBalances = new ArrayList<>();
     newBalances = new ArrayList<>();
-    store = createStoreToManipulateVotes().startTransaction(new StubStorageUpdateChannel());
   }
 
   @Test
@@ -55,12 +51,12 @@ public class ProtoArrayForkChoiceStrategyTest {
 
     for (int i = 0; i < validatorCount; i++) {
       indices.put(getHash(i), i);
-      store.getVote(valueOf(i));
+      votes.getVote(valueOf(i));
       oldBalances.add(ZERO);
       newBalances.add(ZERO);
     }
 
-    List<Long> deltas = computeDeltas(store, indices, oldBalances, newBalances);
+    List<Long> deltas = computeDeltas(votes, indices, oldBalances, newBalances);
     assertThat(deltas).hasSize(validatorCount);
 
     // Deltas should all be zero
@@ -74,12 +70,12 @@ public class ProtoArrayForkChoiceStrategyTest {
 
     for (int i = 0; i < validatorCount; i++) {
       indices.put(getHash(i), i);
-      store.getVote(valueOf(i)).setNextRoot(getHash(0));
+      votes.getVote(valueOf(i)).setNextRoot(getHash(0));
       oldBalances.add(BALANCE);
       newBalances.add(BALANCE);
     }
 
-    List<Long> deltas = computeDeltas(store, indices, oldBalances, newBalances);
+    List<Long> deltas = computeDeltas(votes, indices, oldBalances, newBalances);
     assertThat(deltas).hasSize(validatorCount);
 
     for (int i = 0; i < deltas.size(); i++) {
@@ -93,7 +89,7 @@ public class ProtoArrayForkChoiceStrategyTest {
       }
     }
 
-    votesShouldBeUpdated(store);
+    votesShouldBeUpdated();
   }
 
   @Test
@@ -103,18 +99,18 @@ public class ProtoArrayForkChoiceStrategyTest {
 
     for (int i = 0; i < validatorCount; i++) {
       indices.put(getHash(i), i);
-      store.getVote(valueOf(i)).setNextRoot(getHash(i));
+      votes.getVote(valueOf(i)).setNextRoot(getHash(i));
       oldBalances.add(BALANCE);
       newBalances.add(BALANCE);
     }
 
-    List<Long> deltas = computeDeltas(store, indices, oldBalances, newBalances);
+    List<Long> deltas = computeDeltas(votes, indices, oldBalances, newBalances);
     assertThat(deltas).hasSize(validatorCount);
 
     // Each root should have the same delta
     assertThat(deltas).containsOnly(BALANCE.longValue());
 
-    votesShouldBeUpdated(store);
+    votesShouldBeUpdated();
   }
 
   @Test
@@ -124,14 +120,14 @@ public class ProtoArrayForkChoiceStrategyTest {
 
     for (int i = 0; i < validatorCount; i++) {
       indices.put(getHash(i), i);
-      VoteTracker vote = store.getVote(valueOf(i));
+      VoteTracker vote = votes.getVote(valueOf(i));
       vote.setCurrentRoot(getHash(0));
       vote.setNextRoot(getHash(1));
       oldBalances.add(BALANCE);
       newBalances.add(BALANCE);
     }
 
-    List<Long> deltas = computeDeltas(store, indices, oldBalances, newBalances);
+    List<Long> deltas = computeDeltas(votes, indices, oldBalances, newBalances);
 
     assertThat(deltas).hasSize(validatorCount);
     long totalDelta = BALANCE.longValue() * Integer.toUnsignedLong(validatorCount);
@@ -150,7 +146,7 @@ public class ProtoArrayForkChoiceStrategyTest {
       }
     }
 
-    votesShouldBeUpdated(store);
+    votesShouldBeUpdated();
   }
 
   @Test
@@ -165,22 +161,22 @@ public class ProtoArrayForkChoiceStrategyTest {
     newBalances = Collections.nCopies(2, BALANCE);
 
     // One validator moves their vote from the block to the zero hash.
-    VoteTracker validator1vote = store.getVote(valueOf(0));
+    VoteTracker validator1vote = votes.getVote(valueOf(0));
     validator1vote.setCurrentRoot(getHash(1));
     validator1vote.setNextRoot(Bytes32.ZERO);
 
     // One validator moves their vote from the block to something outside the tree.
-    VoteTracker validator2vote = store.getVote(valueOf(1));
+    VoteTracker validator2vote = votes.getVote(valueOf(1));
     validator2vote.setCurrentRoot(getHash(1));
     validator2vote.setNextRoot(getHash(1337));
 
-    List<Long> deltas = computeDeltas(store, indices, oldBalances, newBalances);
+    List<Long> deltas = computeDeltas(votes, indices, oldBalances, newBalances);
     assertThat(deltas).hasSize(1);
 
     // The block should have lost both balances
     assertThat(deltas.get(0)).isEqualTo(-BALANCE.longValue() * 2);
 
-    votesShouldBeUpdated(store);
+    votesShouldBeUpdated();
   }
 
   @Test
@@ -193,14 +189,14 @@ public class ProtoArrayForkChoiceStrategyTest {
 
     for (int i = 0; i < validatorCount; i++) {
       indices.put(getHash(i), i);
-      VoteTracker vote = store.getVote(valueOf(i));
+      VoteTracker vote = votes.getVote(valueOf(i));
       vote.setCurrentRoot(getHash(0));
       vote.setNextRoot(getHash(1));
       oldBalances.add(OLD_BALANCE);
       newBalances.add(NEW_BALANCE);
     }
 
-    List<Long> deltas = computeDeltas(store, indices, oldBalances, newBalances);
+    List<Long> deltas = computeDeltas(votes, indices, oldBalances, newBalances);
     assertThat(deltas).hasSize(validatorCount);
 
     for (int i = 0; i < deltas.size(); i++) {
@@ -217,7 +213,7 @@ public class ProtoArrayForkChoiceStrategyTest {
       }
     }
 
-    votesShouldBeUpdated(store);
+    votesShouldBeUpdated();
   }
 
   @Test
@@ -236,12 +232,12 @@ public class ProtoArrayForkChoiceStrategyTest {
 
     // Both validators move votes from block 1 to block 2.
     for (int i = 0; i < 2; i++) {
-      VoteTracker vote = store.getVote(valueOf(i));
+      VoteTracker vote = votes.getVote(valueOf(i));
       vote.setCurrentRoot(getHash(1));
       vote.setNextRoot(getHash(2));
     }
 
-    List<Long> deltas = computeDeltas(store, indices, oldBalances, newBalances);
+    List<Long> deltas = computeDeltas(votes, indices, oldBalances, newBalances);
     assertThat(deltas).hasSize(2);
 
     // Block 1 should have only lost one balance
@@ -250,7 +246,7 @@ public class ProtoArrayForkChoiceStrategyTest {
     // Block 2 should have gained two balances
     assertThat(deltas.get(1)).isEqualTo(2 * BALANCE.longValue());
 
-    votesShouldBeUpdated(store);
+    votesShouldBeUpdated();
   }
 
   @Test
@@ -269,12 +265,12 @@ public class ProtoArrayForkChoiceStrategyTest {
 
     // Both validators move votes from block 1 to block 2.
     for (int i = 0; i < 2; i++) {
-      VoteTracker vote = store.getVote(valueOf(i));
+      VoteTracker vote = votes.getVote(valueOf(i));
       vote.setCurrentRoot(getHash(1));
       vote.setNextRoot(getHash(2));
     }
 
-    List<Long> deltas = computeDeltas(store, indices, oldBalances, newBalances);
+    List<Long> deltas = computeDeltas(votes, indices, oldBalances, newBalances);
     assertThat(deltas).hasSize(2);
 
     // Block 1 should have lost both balances
@@ -283,12 +279,12 @@ public class ProtoArrayForkChoiceStrategyTest {
     // Block 2 should have only gained one balance
     assertThat(deltas.get(1)).isEqualTo(BALANCE.longValue());
 
-    votesShouldBeUpdated(store);
+    votesShouldBeUpdated();
   }
 
-  private void votesShouldBeUpdated(MutableStore store) {
-    for (UnsignedLong i : store.getVotedValidatorIndices()) {
-      VoteTracker vote = store.getVote(i);
+  private void votesShouldBeUpdated() {
+    for (UnsignedLong i : votes.getIndices()) {
+      VoteTracker vote = votes.getVote(i);
       assertThat(vote.getCurrentRoot()).isEqualTo(vote.getNextRoot());
     }
   }

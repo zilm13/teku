@@ -30,13 +30,20 @@ public class StatusLogger {
     this.log = LogManager.getLogger(name);
   }
 
+  public void onStartup(final String version) {
+    log.info("Teku version: {}", version);
+  }
+
+  public void fatalError(final String description, final Throwable cause) {
+    log.fatal("Exiting due to fatal error in {}", description, cause);
+  }
+
   public void specificationFailure(final String description, final Throwable cause) {
     log.warn("Spec failed for {}: {}", description, cause, cause);
   }
 
   public void unexpectedFailure(final String description, final Throwable cause) {
-    log.fatal(
-        "PLEASE FIX OR REPORT | Unexpected exception thrown for {}: {}", cause, description, cause);
+    log.error("PLEASE FIX OR REPORT | Unexpected exception thrown for {}", description, cause);
   }
 
   public void listeningForLibP2P(final String address) {
@@ -100,10 +107,18 @@ public class StatusLogger {
   }
 
   public void minGenesisTimeReached() {
-    log.info("Minimum genesis time reached");
+    log.info("ETH1 block satisfying minimum genesis time found");
   }
 
   public void dataPathSet(final String dataPath) {
     log.info("Using data path: {}", dataPath);
+  }
+
+  public void eth1ServiceDown(final long interval) {
+    log.warn("Eth1 service down for {}s, retrying", interval);
+  }
+
+  public void eth1AtHead() {
+    log.info("Eth1 tracker successfully caught up to chain head");
   }
 }

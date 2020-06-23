@@ -13,12 +13,14 @@
 
 package tech.pegasys.teku.storage.client;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.google.common.primitives.UnsignedLong;
 import tech.pegasys.teku.core.ChainBuilder;
 import tech.pegasys.teku.core.StateTransitionException;
 import tech.pegasys.teku.datastructures.blocks.SignedBlockAndState;
 import tech.pegasys.teku.datastructures.state.Checkpoint;
-import tech.pegasys.teku.storage.Store.Transaction;
+import tech.pegasys.teku.storage.store.UpdatableStore.StoreTransaction;
 
 public class ChainUpdater {
 
@@ -57,8 +59,18 @@ public class ChainUpdater {
         chainBuilder.getLatestBlockAndStateAtEpochBoundary(epoch);
     final Checkpoint checkpoint = new Checkpoint(epoch, blockAndState.getRoot());
 
-    final Transaction tx = recentChainData.startStoreTransaction();
+    final StoreTransaction tx = recentChainData.startStoreTransaction();
     tx.setFinalizedCheckpoint(checkpoint);
+    tx.putCheckpointState(checkpoint, blockAndState.getState());
+    if (recentChainData
+            .getStore()
+            .getJustifiedCheckpoint()
+            .getEpoch()
+            .compareTo(checkpoint.getEpoch())
+        < 0) {
+      // Justified checkpoint must be at or beyond finalized checkpoint
+      tx.setJustifiedCheckpoint(checkpoint);
+    }
     tx.commit().reportExceptions();
 
     return blockAndState;
@@ -95,9 +107,8 @@ public class ChainUpdater {
   }
 
   public void saveBlock(final SignedBlockAndState block) {
-    final Transaction tx = recentChainData.startStoreTransaction();
-    tx.putBlock(block.getRoot(), block.getBlock());
-    tx.putBlockState(block.getRoot(), block.getState());
-    tx.commit().reportExceptions();
+    final StoreTransaction tx = recentChainData.startStoreTransaction();
+    tx.putBlockAndState(block.getBlock(), block.getState());
+    assertThat(tx.commit()).isCompleted();
   }
 }

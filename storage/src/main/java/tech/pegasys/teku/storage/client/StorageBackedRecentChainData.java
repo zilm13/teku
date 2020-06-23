@@ -15,32 +15,37 @@ package tech.pegasys.teku.storage.client;
 
 import static tech.pegasys.teku.logging.StatusLogger.STATUS_LOG;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.eventbus.EventBus;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-import tech.pegasys.teku.storage.Store;
+import org.hyperledger.besu.plugin.services.MetricsSystem;
 import tech.pegasys.teku.storage.api.FinalizedCheckpointChannel;
 import tech.pegasys.teku.storage.api.ReorgEventChannel;
 import tech.pegasys.teku.storage.api.StorageUpdateChannel;
+import tech.pegasys.teku.storage.store.UpdatableStore;
 import tech.pegasys.teku.util.async.AsyncRunner;
 import tech.pegasys.teku.util.async.SafeFuture;
 import tech.pegasys.teku.util.config.Constants;
 
 public class StorageBackedRecentChainData extends RecentChainData {
-  private final AsyncRunner asyncRunner;
-
   public StorageBackedRecentChainData(
-      final AsyncRunner asyncRunner,
+      final MetricsSystem metricsSystem,
       final StorageUpdateChannel storageUpdateChannel,
       final FinalizedCheckpointChannel finalizedCheckpointChannel,
       final ReorgEventChannel reorgEventChannel,
       final EventBus eventBus) {
-    super(storageUpdateChannel, finalizedCheckpointChannel, reorgEventChannel, eventBus);
-    this.asyncRunner = asyncRunner;
+    super(
+        metricsSystem,
+        storageUpdateChannel,
+        finalizedCheckpointChannel,
+        reorgEventChannel,
+        eventBus);
     eventBus.register(this);
   }
 
   public static SafeFuture<RecentChainData> create(
+      final MetricsSystem metricsSystem,
       final AsyncRunner asyncRunner,
       final StorageUpdateChannel storageUpdateChannel,
       final FinalizedCheckpointChannel finalizedCheckpointChannel,
@@ -48,12 +53,31 @@ public class StorageBackedRecentChainData extends RecentChainData {
       final EventBus eventBus) {
     StorageBackedRecentChainData client =
         new StorageBackedRecentChainData(
-            asyncRunner,
+            metricsSystem,
             storageUpdateChannel,
             finalizedCheckpointChannel,
             reorgEventChannel,
             eventBus);
-    return client.initializeFromStorage();
+
+    return client.initializeFromStorageWithRetry(asyncRunner);
+  }
+
+  @VisibleForTesting
+  public static RecentChainData createImmediately(
+      final MetricsSystem metricsSystem,
+      final StorageUpdateChannel storageUpdateChannel,
+      final FinalizedCheckpointChannel finalizedCheckpointChannel,
+      final ReorgEventChannel reorgEventChannel,
+      final EventBus eventBus) {
+    StorageBackedRecentChainData client =
+        new StorageBackedRecentChainData(
+            metricsSystem,
+            storageUpdateChannel,
+            finalizedCheckpointChannel,
+            reorgEventChannel,
+            eventBus);
+
+    return client.initializeFromStorage().join();
   }
 
   private SafeFuture<RecentChainData> initializeFromStorage() {
@@ -67,14 +91,31 @@ public class StorageBackedRecentChainData extends RecentChainData {
             });
   }
 
-  private SafeFuture<Optional<Store>> requestInitialStore() {
+  private SafeFuture<RecentChainData> initializeFromStorageWithRetry(
+      final AsyncRunner asyncRunner) {
+    STATUS_LOG.beginInitializingChainData();
+    return requestInitialStoreWithRetry(asyncRunner)
+        .thenApply(
+            maybeStore -> {
+              maybeStore.ifPresent(this::setStore);
+              STATUS_LOG.finishInitializingChainData();
+              return this;
+            });
+  }
+
+  private SafeFuture<Optional<UpdatableStore>> requestInitialStore() {
     return storageUpdateChannel
         .onStoreRequest()
-        .orTimeout(Constants.STORAGE_REQUEST_TIMEOUT, TimeUnit.SECONDS)
+        .orTimeout(Constants.STORAGE_REQUEST_TIMEOUT, TimeUnit.SECONDS);
+  }
+
+  private SafeFuture<Optional<UpdatableStore>> requestInitialStoreWithRetry(
+      final AsyncRunner asyncRunner) {
+    return requestInitialStore()
         .exceptionallyCompose(
             (err) ->
                 asyncRunner.runAfterDelay(
-                    this::requestInitialStore,
+                    () -> requestInitialStoreWithRetry(asyncRunner),
                     Constants.STORAGE_REQUEST_TIMEOUT,
                     TimeUnit.SECONDS));
   }

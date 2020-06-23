@@ -30,15 +30,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.datastructures.blocks.SignedBlockAndState;
 import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.networking.eth2.peers.Eth2Peer;
 import tech.pegasys.teku.networking.eth2.rpc.core.encodings.RpcEncoding;
 import tech.pegasys.teku.networking.p2p.peer.DisconnectRequestHandler.DisconnectReason;
 import tech.pegasys.teku.networking.p2p.peer.PeerDisconnectedException;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
-import tech.pegasys.teku.storage.Store.Transaction;
 import tech.pegasys.teku.storage.client.MemoryOnlyRecentChainData;
 import tech.pegasys.teku.storage.client.RecentChainData;
+import tech.pegasys.teku.storage.store.UpdatableStore.StoreTransaction;
 import tech.pegasys.teku.util.async.SafeFuture;
 
 public abstract class BeaconBlocksByRootIntegrationTest {
@@ -158,6 +159,18 @@ public abstract class BeaconBlocksByRootIntegrationTest {
   }
 
   @Test
+  public void shouldReturnMultipleLargeBlocksWhenAllRequestsMatch() throws Exception {
+    final List<SignedBeaconBlock> blocks = asList(addBlock(true), addBlock(true), addBlock(true));
+    final List<Bytes32> blockRoots =
+        blocks.stream()
+            .map(SignedBeaconBlock::getMessage)
+            .map(BeaconBlock::hash_tree_root)
+            .collect(toList());
+    final List<SignedBeaconBlock> response = requestBlocks(blockRoots);
+    assertThat(response).containsExactlyElementsOf(blocks);
+  }
+
+  @Test
   public void shouldReturnMatchingBlocksWhenSomeRequestsDoNotMatch() throws Exception {
     final List<SignedBeaconBlock> blocks = asList(addBlock(), addBlock(), addBlock());
 
@@ -174,12 +187,15 @@ public abstract class BeaconBlocksByRootIntegrationTest {
   }
 
   private SignedBeaconBlock addBlock() {
-    final SignedBeaconBlock block = dataStructureUtil.randomSignedBeaconBlock(1);
-    final Bytes32 blockRoot = block.getMessage().hash_tree_root();
-    final Transaction transaction = storageClient1.startStoreTransaction();
-    transaction.putBlock(blockRoot, block);
+    return addBlock(false);
+  }
+
+  private SignedBeaconBlock addBlock(boolean full) {
+    final SignedBlockAndState blockAndState = dataStructureUtil.randomSignedBlockAndState(1, full);
+    final StoreTransaction transaction = storageClient1.startStoreTransaction();
+    transaction.putBlockAndState(blockAndState);
     assertThat(transaction.commit()).isCompleted();
-    return block;
+    return blockAndState.getBlock();
   }
 
   private List<SignedBeaconBlock> requestBlocks(final List<Bytes32> blockRoots)

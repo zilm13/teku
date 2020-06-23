@@ -4,7 +4,7 @@ dependencies {
     implementation project(':ethereum:datastructures')
     implementation project(':ethereum:statetransition')
     implementation project(':logging')
-    implementation project(':networking:p2p')
+    implementation project(':networking:eth2')
     implementation project(':services:serviceutils')
     implementation project(':storage')
     implementation project(':sync')
@@ -29,6 +29,7 @@ dependencies {
 
     integrationTestImplementation testFixtures(project(':bls'))
     integrationTestImplementation testFixtures(project(':ethereum:datastructures'))
+    integrationTestImplementation testFixtures(project(':ethereum:core'))
 
     integrationTestImplementation 'com.squareup.okhttp3:okhttp'
     integrationTestImplementation testFixtures(project(':ethereum:statetransition'))

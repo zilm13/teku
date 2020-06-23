@@ -25,6 +25,7 @@ import org.apache.logging.log4j.Logger;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import org.jetbrains.annotations.NotNull;
 import tech.pegasys.teku.datastructures.networking.libp2p.rpc.GoodbyeMessage;
+import tech.pegasys.teku.datastructures.networking.libp2p.rpc.MetadataMessage;
 import tech.pegasys.teku.networking.eth2.AttestationSubnetService;
 import tech.pegasys.teku.networking.eth2.rpc.beaconchain.BeaconChainMethods;
 import tech.pegasys.teku.networking.eth2.rpc.beaconchain.methods.MetadataMessagesFactory;
@@ -41,7 +42,6 @@ import tech.pegasys.teku.storage.client.CombinedChainDataClient;
 import tech.pegasys.teku.storage.client.RecentChainData;
 import tech.pegasys.teku.util.async.AsyncRunner;
 import tech.pegasys.teku.util.async.Cancellable;
-import tech.pegasys.teku.util.async.DelayedExecutorAsyncRunner;
 import tech.pegasys.teku.util.async.RootCauseExceptionHandler;
 import tech.pegasys.teku.util.events.Subscribers;
 
@@ -82,7 +82,7 @@ public class Eth2PeerManager implements PeerLookup, PeerHandler {
     this.peerValidatorFactory = peerValidatorFactory;
     this.rpcMethods =
         BeaconChainMethods.create(
-            DelayedExecutorAsyncRunner.create(),
+            asyncRunner,
             this,
             combinedChainDataClient,
             storageClient,
@@ -119,6 +119,10 @@ public class Eth2PeerManager implements PeerLookup, PeerHandler {
         eth2RpcPingInterval,
         eth2RpcOutstandingPingThreshold,
         eth2StatusUpdateInterval);
+  }
+
+  public MetadataMessage getMetadataMessage() {
+    return metadataMessagesFactory.createMetadataMessage();
   }
 
   private void setUpPeriodicTasksForPeer(Eth2Peer peer) {
@@ -187,7 +191,8 @@ public class Eth2PeerManager implements PeerLookup, PeerHandler {
                         connectSubscribers.forEach(c -> c.onConnected(eth2Peer));
                         setUpPeriodicTasksForPeer(eth2Peer);
                       }
-                    }));
+                    },
+                    error -> LOG.debug("Error while validating peer", error)));
   }
 
   @VisibleForTesting

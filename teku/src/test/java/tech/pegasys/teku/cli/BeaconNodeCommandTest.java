@@ -203,7 +203,9 @@ public class BeaconNodeCommandTest extends AbstractBeaconNodeCommandTest {
     final URL configFile = this.getClass().getResource("/complete_config.yaml");
     final String updatedConfig =
         Resources.toString(configFile, UTF_8)
-            .replace("data-path: \".\"", "data-path: \"" + dataPath.toString() + "\"");
+            .replace(
+                "data-path: \".\"",
+                "data-path: \"" + dataPath.toString().replace("\\", "\\\\") + "\"");
     return createTempFile(updatedConfig.getBytes(UTF_8));
   }
 
@@ -286,13 +288,13 @@ public class BeaconNodeCommandTest extends AbstractBeaconNodeCommandTest {
         .setInteropEnabled(true)
         .setEth1DepositContractAddress(address)
         .setEth1Endpoint("http://localhost:8545")
-        .setEth1Enabled(true)
+        .setEth1DepositsFromStorageEnabled(true)
         .setMetricsEnabled(false)
         .setMetricsPort(8008)
         .setMetricsInterface("127.0.0.1")
         .setMetricsCategories(
             Arrays.asList("BEACON", "LIBP2P", "NETWORK", "EVENTBUS", "JVM", "PROCESS"))
-        .setMetricsHostWhitelist(List.of("127.0.0.1", "localhost"))
+        .setMetricsHostAllowlist(List.of("127.0.0.1", "localhost"))
         .setLogColorEnabled(true)
         .setLogDestination(DEFAULT_BOTH)
         .setLogFile(DEFAULT_LOG_FILE)
@@ -303,10 +305,13 @@ public class BeaconNodeCommandTest extends AbstractBeaconNodeCommandTest {
         .setValidatorExternalSignerTimeout(1000)
         .setDataPath(dataPath.toString())
         .setDataStorageMode(PRUNE)
+        .setDataStorageFrequency(2048L)
+        .setDataStorageCreateDbVersion("3.0")
         .setRestApiPort(5051)
         .setRestApiDocsEnabled(false)
         .setRestApiEnabled(false)
-        .setRestApiInterface("127.0.0.1");
+        .setRestApiInterface("127.0.0.1")
+        .setRestApiHostAllowlist(List.of("127.0.0.1", "localhost"));
   }
 
   private void assertTekuConfiguration(final TekuConfiguration expected) {

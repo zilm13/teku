@@ -2,12 +2,17 @@ jar { enabled = false }
 
 dependencies {
   referenceTestImplementation project(':bls')
+  referenceTestImplementation project(':data')
   referenceTestImplementation project(':ethereum:core')
   referenceTestImplementation project(':ethereum:datastructures')
+  referenceTestImplementation project(':ethereum:statetransition')
   referenceTestImplementation project(':eth-tests')
+  referenceTestImplementation project(':protoarray')
   referenceTestImplementation project(':ssz')
   referenceTestImplementation project(':storage')
   referenceTestImplementation project(':util')
+
+  referenceTestImplementation testFixtures(project(':storage'))
 
   referenceTestImplementation 'com.fasterxml.jackson.core:jackson-databind'
   referenceTestImplementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml'
@@ -15,3 +20,19 @@ dependencies {
   referenceTestImplementation 'org.apache.tuweni:tuweni-junit'
   referenceTestImplementation 'org.miracl.milagro.amcl:milagro-crypto-java'
 }
+
+task cleanReferenceTestClasses(type: Delete) {
+  delete project.file('src/referenceTest/generated')
+}
+
+task generateReferenceTestClasses(type: JavaExec) {
+  dependsOn(cleanReferenceTestClasses)
+  group = "Execution"
+  description = "Generate reference test classes"
+  classpath = project.project(':eth-tests').sourceSets.referenceTest.runtimeClasspath
+  main = 'tech.pegasys.teku.ethtests.ReferenceTestGenerator'
+  args = [project.file('src/referenceTest/generated').absolutePath]
+  systemProperty("teku.ref-test-module.path", project.file("../eth-reference-tests").absolutePath)
+}
+
+compileReferenceTestJava.dependsOn(generateReferenceTestClasses)

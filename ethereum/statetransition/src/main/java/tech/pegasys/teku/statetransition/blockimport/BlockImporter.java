@@ -13,31 +13,45 @@
 
 package tech.pegasys.teku.statetransition.blockimport;
 
+import static tech.pegasys.teku.core.ForkChoiceUtil.on_block;
+
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
 import java.util.Optional;
 import javax.annotation.CheckReturnValue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import tech.pegasys.teku.core.StateTransition;
 import tech.pegasys.teku.core.results.BlockImportResult;
 import tech.pegasys.teku.data.BlockProcessingRecord;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.datastructures.operations.Attestation;
+import tech.pegasys.teku.datastructures.operations.AttesterSlashing;
+import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
+import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
 import tech.pegasys.teku.statetransition.events.block.ImportedBlockEvent;
 import tech.pegasys.teku.statetransition.events.block.ProposedBlockEvent;
-import tech.pegasys.teku.statetransition.forkchoice.ForkChoice;
 import tech.pegasys.teku.storage.client.RecentChainData;
+import tech.pegasys.teku.storage.store.UpdatableStore.StoreTransaction;
 import tech.pegasys.teku.util.async.SafeFuture;
+import tech.pegasys.teku.util.events.Subscribers;
 
 public class BlockImporter {
   private static final Logger LOG = LogManager.getLogger();
   private final RecentChainData recentChainData;
-  private final ForkChoice forkChoice;
   private final EventBus eventBus;
 
-  public BlockImporter(
-      final RecentChainData recentChainData, final ForkChoice forkChoice, final EventBus eventBus) {
+  private Subscribers<VerifiedBlockOperationsListener<Attestation>> attestationSubscribers =
+      Subscribers.create(true);
+  private Subscribers<VerifiedBlockOperationsListener<AttesterSlashing>>
+      attesterSlashingSubscribers = Subscribers.create(true);
+  private Subscribers<VerifiedBlockOperationsListener<ProposerSlashing>>
+      proposerSlashingSubscribers = Subscribers.create(true);
+  private Subscribers<VerifiedBlockOperationsListener<SignedVoluntaryExit>>
+      voluntaryExitSubscribers = Subscribers.create(true);
+
+  public BlockImporter(final RecentChainData recentChainData, final EventBus eventBus) {
     this.recentChainData = recentChainData;
-    this.forkChoice = forkChoice;
     this.eventBus = eventBus;
     eventBus.register(this);
   }
@@ -53,7 +67,10 @@ public class BlockImporter {
         return BlockImportResult.knownBlock(block);
       }
 
-      BlockImportResult result = forkChoice.onBlock(block);
+      StoreTransaction transaction = recentChainData.startStoreTransaction();
+      final BlockImportResult result =
+          on_block(transaction, block, new StateTransition(), transaction);
+
       if (!result.isSuccessful()) {
         LOG.trace(
             "Failed to import block for reason {}: {}",
@@ -61,10 +78,13 @@ public class BlockImporter {
             block.getMessage());
         return result;
       }
+
+      transaction.commit().join();
       LOG.trace("Successfully imported block {}", block.getMessage().hash_tree_root());
 
       final Optional<BlockProcessingRecord> record = result.getBlockProcessingRecord();
       eventBus.post(new ImportedBlockEvent(block));
+      notifyBlockOperationSubscribers(block);
       record.ifPresent(eventBus::post);
 
       return result;
@@ -93,5 +113,40 @@ public class BlockImporter {
               + blockProposedEvent,
           result.getFailureCause().orElse(null));
     }
+  }
+
+  private void notifyBlockOperationSubscribers(SignedBeaconBlock block) {
+    attestationSubscribers.deliver(
+        VerifiedBlockOperationsListener::onOperationsFromBlock,
+        block.getMessage().getBody().getAttestations());
+    attesterSlashingSubscribers.deliver(
+        VerifiedBlockOperationsListener::onOperationsFromBlock,
+        block.getMessage().getBody().getAttester_slashings());
+    proposerSlashingSubscribers.deliver(
+        VerifiedBlockOperationsListener::onOperationsFromBlock,
+        block.getMessage().getBody().getProposer_slashings());
+    voluntaryExitSubscribers.deliver(
+        VerifiedBlockOperationsListener::onOperationsFromBlock,
+        block.getMessage().getBody().getVoluntary_exits());
+  }
+
+  public void subscribeToVerifiedBlockAttestations(
+      VerifiedBlockOperationsListener<Attestation> verifiedBlockAttestationsListener) {
+    attestationSubscribers.subscribe(verifiedBlockAttestationsListener);
+  }
+
+  public void subscribeToVerifiedBlockAttesterSlashings(
+      VerifiedBlockOperationsListener<AttesterSlashing> verifiedBlockAttesterSlashingsListener) {
+    attesterSlashingSubscribers.subscribe(verifiedBlockAttesterSlashingsListener);
+  }
+
+  public void subscribeToVerifiedBlockProposerSlashings(
+      VerifiedBlockOperationsListener<ProposerSlashing> verifiedBlockProposerSlashingsListener) {
+    proposerSlashingSubscribers.subscribe(verifiedBlockProposerSlashingsListener);
+  }
+
+  public void subscribeToVerifiedBlockVoluntaryExits(
+      VerifiedBlockOperationsListener<SignedVoluntaryExit> verifiedBlockVoluntaryExitsListener) {
+    voluntaryExitSubscribers.subscribe(verifiedBlockVoluntaryExitsListener);
   }
 }

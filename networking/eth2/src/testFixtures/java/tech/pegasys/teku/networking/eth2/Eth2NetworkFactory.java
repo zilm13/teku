@@ -36,7 +36,16 @@ import java.util.stream.Stream;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
+import tech.pegasys.teku.datastructures.attestation.ProcessedAttestationListener;
+import tech.pegasys.teku.datastructures.attestation.ValidateableAttestation;
+import tech.pegasys.teku.datastructures.operations.Attestation;
+import tech.pegasys.teku.datastructures.operations.AttesterSlashing;
+import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
+import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
 import tech.pegasys.teku.networking.eth2.gossip.encoding.GossipEncoding;
+import tech.pegasys.teku.networking.eth2.gossip.topics.GossipedOperationConsumer;
+import tech.pegasys.teku.networking.eth2.gossip.topics.ProcessedAttestationSubscriptionProvider;
+import tech.pegasys.teku.networking.eth2.gossip.topics.VerifiedBlockAttestationsSubscriptionProvider;
 import tech.pegasys.teku.networking.eth2.peers.Eth2PeerManager;
 import tech.pegasys.teku.networking.eth2.rpc.core.encodings.RpcEncoding;
 import tech.pegasys.teku.networking.p2p.DiscoveryNetwork;
@@ -50,6 +59,7 @@ import tech.pegasys.teku.networking.p2p.network.PeerHandler;
 import tech.pegasys.teku.networking.p2p.network.WireLogsConfig;
 import tech.pegasys.teku.networking.p2p.rpc.RpcMethod;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
+import tech.pegasys.teku.statetransition.blockimport.VerifiedBlockOperationsListener;
 import tech.pegasys.teku.storage.api.StorageQueryChannel;
 import tech.pegasys.teku.storage.api.StubStorageQueryChannel;
 import tech.pegasys.teku.storage.client.MemoryOnlyRecentChainData;
@@ -58,6 +68,7 @@ import tech.pegasys.teku.util.Waiter;
 import tech.pegasys.teku.util.async.AsyncRunner;
 import tech.pegasys.teku.util.async.DelayedExecutorAsyncRunner;
 import tech.pegasys.teku.util.config.Constants;
+import tech.pegasys.teku.util.events.Subscribers;
 import tech.pegasys.teku.util.time.StubTimeProvider;
 
 public class Eth2NetworkFactory {
@@ -83,6 +94,13 @@ public class Eth2NetworkFactory {
     protected AsyncRunner asyncRunner;
     protected EventBus eventBus;
     protected RecentChainData recentChainData;
+    protected GossipedOperationConsumer<ValidateableAttestation> gossipedAttestationConsumer;
+    protected GossipedOperationConsumer<AttesterSlashing> gossipedAttesterSlashingConsumer;
+    protected GossipedOperationConsumer<ProposerSlashing> gossipedProposerSlashingConsumer;
+    protected GossipedOperationConsumer<SignedVoluntaryExit> gossipedVoluntaryExitConsumer;
+    protected ProcessedAttestationSubscriptionProvider processedAttestationSubscriptionProvider;
+    protected VerifiedBlockAttestationsSubscriptionProvider
+        verifiedBlockAttestationsSubscriptionProvider;
     protected Function<RpcMethod, Stream<RpcMethod>> rpcMethodsModifier = Stream::of;
     protected List<PeerHandler> peerHandlers = new ArrayList<>();
     protected RpcEncoding rpcEncoding = RpcEncoding.SSZ_SNAPPY;
@@ -154,7 +172,9 @@ public class Eth2NetworkFactory {
                 StubTimeProvider.withTimeInSeconds(1000), Constants.REPUTATION_MANAGER_CAPACITY);
         final DiscoveryNetwork<?> network =
             DiscoveryNetwork.create(
+                asyncRunner,
                 new LibP2PNetwork(
+                    asyncRunner,
                     config,
                     reputationManager,
                     METRICS_SYSTEM,
@@ -169,7 +189,13 @@ public class Eth2NetworkFactory {
             eventBus,
             recentChainData,
             gossipEncoding,
-            attestationSubnetService);
+            attestationSubnetService,
+            gossipedAttestationConsumer,
+            gossipedAttesterSlashingConsumer,
+            gossipedProposerSlashingConsumer,
+            gossipedVoluntaryExitConsumer,
+            processedAttestationSubscriptionProvider,
+            verifiedBlockAttestationsSubscriptionProvider);
       }
     }
 
@@ -215,6 +241,27 @@ public class Eth2NetworkFactory {
         recentChainData = MemoryOnlyRecentChainData.create(eventBus);
         BeaconChainUtil.create(0, recentChainData).initializeStorage();
       }
+      if (processedAttestationSubscriptionProvider == null) {
+        Subscribers<ProcessedAttestationListener> subscribers = Subscribers.create(false);
+        processedAttestationSubscriptionProvider = subscribers::subscribe;
+      }
+      if (verifiedBlockAttestationsSubscriptionProvider == null) {
+        Subscribers<VerifiedBlockOperationsListener<Attestation>> subscribers =
+            Subscribers.create(false);
+        verifiedBlockAttestationsSubscriptionProvider = subscribers::subscribe;
+      }
+      if (gossipedAttestationConsumer == null) {
+        gossipedAttestationConsumer = GossipedOperationConsumer.noop();
+      }
+      if (gossipedAttesterSlashingConsumer == null) {
+        gossipedAttesterSlashingConsumer = GossipedOperationConsumer.noop();
+      }
+      if (gossipedProposerSlashingConsumer == null) {
+        gossipedProposerSlashingConsumer = GossipedOperationConsumer.noop();
+      }
+      if (gossipedVoluntaryExitConsumer == null) {
+        gossipedVoluntaryExitConsumer = GossipedOperationConsumer.noop();
+      }
     }
 
     public Eth2P2PNetworkBuilder rpcEncoding(final RpcEncoding rpcEncoding) {
@@ -243,6 +290,50 @@ public class Eth2NetworkFactory {
     public Eth2P2PNetworkBuilder recentChainData(final RecentChainData recentChainData) {
       checkNotNull(recentChainData);
       this.recentChainData = recentChainData;
+      return this;
+    }
+
+    public Eth2P2PNetworkBuilder gossipedAttestationConsumer(
+        final GossipedOperationConsumer<ValidateableAttestation> gossipedAttestationConsumer) {
+      checkNotNull(gossipedAttestationConsumer);
+      this.gossipedAttestationConsumer = gossipedAttestationConsumer;
+      return this;
+    }
+
+    public Eth2P2PNetworkBuilder gossipedAttesterSlashingConsumer(
+        final GossipedOperationConsumer<AttesterSlashing> gossipedAttesterSlashingConsumer) {
+      checkNotNull(gossipedAttesterSlashingConsumer);
+      this.gossipedAttesterSlashingConsumer = gossipedAttesterSlashingConsumer;
+      return this;
+    }
+
+    public Eth2P2PNetworkBuilder gossipedProposerSlashingConsumer(
+        final GossipedOperationConsumer<ProposerSlashing> gossipedProposerSlashingConsumer) {
+      checkNotNull(gossipedProposerSlashingConsumer);
+      this.gossipedProposerSlashingConsumer = gossipedProposerSlashingConsumer;
+      return this;
+    }
+
+    public Eth2P2PNetworkBuilder gossipedVoluntaryExitConsumer(
+        final GossipedOperationConsumer<SignedVoluntaryExit> gossipedVoluntaryExitConsumer) {
+      checkNotNull(gossipedVoluntaryExitConsumer);
+      this.gossipedVoluntaryExitConsumer = gossipedVoluntaryExitConsumer;
+      return this;
+    }
+
+    public Eth2P2PNetworkBuilder processedAttestationSubscriptionProvider(
+        final ProcessedAttestationSubscriptionProvider processedAttestationSubscriptionProvider) {
+      checkNotNull(processedAttestationSubscriptionProvider);
+      this.processedAttestationSubscriptionProvider = processedAttestationSubscriptionProvider;
+      return this;
+    }
+
+    public Eth2P2PNetworkBuilder verifiedBlockAttestationsSubscriptionProvider(
+        final VerifiedBlockAttestationsSubscriptionProvider
+            verifiedBlockAttestationsSubscriptionProvider) {
+      checkNotNull(verifiedBlockAttestationsSubscriptionProvider);
+      this.verifiedBlockAttestationsSubscriptionProvider =
+          verifiedBlockAttestationsSubscriptionProvider;
       return this;
     }
 

@@ -52,7 +52,12 @@ public class LibP2PPeer implements Peer {
     final PeerId peerId = connection.secureSession().getRemoteId();
     final NodeId nodeId = new LibP2PNodeId(peerId);
     peerAddress = new MultiaddrPeerAddress(nodeId, connection.remoteAddress());
-    SafeFuture.of(connection.closeFuture()).finish(this::handleConnectionClosed);
+    SafeFuture.of(connection.closeFuture())
+        .finish(
+            this::handleConnectionClosed,
+            error ->
+                LOG.trace(
+                    "Peer {} connection close future completed exceptionally", peerId, error));
   }
 
   @Override
@@ -66,10 +71,12 @@ public class LibP2PPeer implements Peer {
   }
 
   @Override
-  @SuppressWarnings("FutureReturnValueIgnored")
   public void disconnectImmediately() {
     connected.set(false);
-    connection.close();
+    SafeFuture.of(connection.close())
+        .finish(
+            () -> LOG.trace("Disconnected from {}", getId()),
+            error -> LOG.warn("Failed to disconnect from peer {}", getId(), error));
   }
 
   @Override
@@ -92,7 +99,7 @@ public class LibP2PPeer implements Peer {
 
   @Override
   public void subscribeDisconnect(final PeerDisconnectedSubscriber subscriber) {
-    SafeFuture.of(connection.closeFuture()).finish(subscriber::onDisconnected);
+    SafeFuture.of(connection.closeFuture()).always(subscriber::onDisconnected);
   }
 
   @Override

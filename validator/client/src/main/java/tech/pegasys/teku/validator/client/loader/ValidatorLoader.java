@@ -21,6 +21,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -30,6 +31,7 @@ import tech.pegasys.teku.bls.BLSKeyPair;
 import tech.pegasys.teku.bls.BLSPublicKey;
 import tech.pegasys.teku.core.signatures.LocalMessageSignerService;
 import tech.pegasys.teku.core.signatures.Signer;
+import tech.pegasys.teku.util.bytes.KeyFormatter;
 import tech.pegasys.teku.util.config.TekuConfiguration;
 import tech.pegasys.teku.validator.client.Validator;
 import tech.pegasys.teku.validator.client.signer.ExternalMessageSignerService;
@@ -46,13 +48,25 @@ public class ValidatorLoader {
     validators.putAll(createLocalSignerValidator(config));
     validators.putAll(createExternalSignerValidator(config));
 
-    LOG.debug(
-        "Loaded validators: {}",
-        () ->
-            validators.values().stream()
-                .map(Validator::getPublicKey)
-                .map(BLSPublicKey::toString)
-                .collect(joining(", ")));
+    if (validators.size() > 100) {
+      LOG.info("Loaded {} validators", validators.size());
+      LOG.debug(
+          "validators: {}",
+          () ->
+              validators.values().stream()
+                  .map(Validator::getPublicKey)
+                  .map(KeyFormatter::shortPublicKey)
+                  .collect(joining(", ")));
+    } else {
+      LOG.info(
+          "Loaded {} Validators: {}",
+          validators::size,
+          () ->
+              validators.values().stream()
+                  .map(Validator::getPublicKey)
+                  .map(KeyFormatter::shortPublicKey)
+                  .collect(joining(", ")));
+    }
     return validators;
   }
 
@@ -63,7 +77,8 @@ public class ValidatorLoader {
             blsKeyPair ->
                 new Validator(
                     blsKeyPair.getPublicKey(),
-                    new Signer(new LocalMessageSignerService(blsKeyPair))))
+                    new Signer(new LocalMessageSignerService(blsKeyPair)),
+                    Optional.ofNullable(config.getGraffiti())))
         .collect(toMap(Validator::getPublicKey, Function.identity()));
   }
 
@@ -77,14 +92,14 @@ public class ValidatorLoader {
                     publicKey,
                     new Signer(
                         new ExternalMessageSignerService(
-                            config.getValidatorExternalSignerUrl(), publicKey, timeout))))
+                            config.getValidatorExternalSignerUrl(), publicKey, timeout)),
+                    Optional.ofNullable(config.getGraffiti())))
         .collect(toMap(Validator::getPublicKey, Function.identity()));
   }
 
   private static Collection<BLSKeyPair> loadValidatorKeys(final TekuConfiguration config) {
     final Set<ValidatorKeyProvider> keyProviders = new LinkedHashSet<>();
-    if (config.getValidatorsKeyFile() == null
-        && config.getValidatorKeystorePasswordFilePairs() == null) {
+    if (config.isInteropEnabled()) {
       keyProviders.add(new MockStartValidatorKeyProvider());
     } else {
       // support loading keys both from unencrypted yaml and encrypted keystores
