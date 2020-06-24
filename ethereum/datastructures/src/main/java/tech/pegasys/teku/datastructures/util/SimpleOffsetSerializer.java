@@ -59,27 +59,6 @@ import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
 import tech.pegasys.teku.datastructures.operations.SignedAggregateAndProof;
 import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
 import tech.pegasys.teku.datastructures.operations.VoluntaryExit;
-import tech.pegasys.teku.datastructures.phase1.blocks.BeaconBlockBodyPhase1;
-import tech.pegasys.teku.datastructures.phase1.blocks.BeaconBlockPhase1;
-import tech.pegasys.teku.datastructures.phase1.blocks.SignedBeaconBlockPhase1;
-import tech.pegasys.teku.datastructures.phase1.operations.AttestationCustodyBitWrapper;
-import tech.pegasys.teku.datastructures.phase1.operations.AttestationDataPhase1;
-import tech.pegasys.teku.datastructures.phase1.operations.AttesterSlashingPhase1;
-import tech.pegasys.teku.datastructures.phase1.operations.CustodyKeyReveal;
-import tech.pegasys.teku.datastructures.phase1.operations.CustodySlashing;
-import tech.pegasys.teku.datastructures.phase1.operations.EarlyDerivedSecretReveal;
-import tech.pegasys.teku.datastructures.phase1.operations.IndexedAttestationPhase1;
-import tech.pegasys.teku.datastructures.phase1.operations.SignedCustodySlashing;
-import tech.pegasys.teku.datastructures.phase1.shard.ShardBlock;
-import tech.pegasys.teku.datastructures.phase1.shard.ShardBlockHeader;
-import tech.pegasys.teku.datastructures.phase1.shard.ShardState;
-import tech.pegasys.teku.datastructures.phase1.shard.ShardTransition;
-import tech.pegasys.teku.datastructures.phase1.shard.SignedShardBlock;
-import tech.pegasys.teku.datastructures.phase1.state.BeaconStatePhase1Impl;
-import tech.pegasys.teku.datastructures.phase1.state.CompactCommittee;
-import tech.pegasys.teku.datastructures.phase1.state.ExposedValidatorIndices;
-import tech.pegasys.teku.datastructures.phase1.state.PendingAttestationPhase1;
-import tech.pegasys.teku.datastructures.phase1.state.ValidatorPhase1;
 import tech.pegasys.teku.datastructures.state.BeaconStateImpl;
 import tech.pegasys.teku.datastructures.state.Checkpoint;
 import tech.pegasys.teku.datastructures.state.Fork;
@@ -137,31 +116,7 @@ public class SimpleOffsetSerializer {
             VoteTracker.class,
             MetadataMessage.class,
             EmptyMessage.class,
-            PingMessage.class,
-
-            // Phase 1
-            BeaconBlockBodyPhase1.class,
-            BeaconBlockPhase1.class,
-            SignedBeaconBlockPhase1.class,
-            AttestationCustodyBitWrapper.class,
-            AttestationDataPhase1.class,
-            AttestationDataPhase1.class,
-            IndexedAttestationPhase1.class,
-            AttesterSlashingPhase1.class,
-            CustodyKeyReveal.class,
-            CustodySlashing.class,
-            EarlyDerivedSecretReveal.class,
-            SignedCustodySlashing.class,
-            ShardBlock.class,
-            ShardBlockHeader.class,
-            ShardState.class,
-            ShardTransition.class,
-            SignedShardBlock.class,
-            CompactCommittee.class,
-            ExposedValidatorIndices.class,
-            PendingAttestationPhase1.class,
-            ValidatorPhase1.class,
-            BeaconStatePhase1Impl.class);
+            PingMessage.class);
 
     for (Class classItem : classes) {
       classReflectionInfo.put(classItem, new ReflectionInformation(classItem));
