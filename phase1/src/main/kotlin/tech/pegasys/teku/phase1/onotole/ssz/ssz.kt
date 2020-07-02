@@ -1,12 +1,14 @@
 package tech.pegasys.teku.phase1.onotole.ssz
 
+import tech.pegasys.teku.phase1.integration.UInt8View
 import tech.pegasys.teku.phase1.integration.ssz.SSZBitlistImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZBitvectorImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZByteListImpl
+import tech.pegasys.teku.phase1.integration.ssz.SSZListImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZMutableListImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZMutableVectorImpl
+import tech.pegasys.teku.phase1.integration.ssz.SSZVectorImpl
 import tech.pegasys.teku.phase1.integration.toUnsignedLong
-import tech.pegasys.teku.phase1.onotole.phase1.Root
 import tech.pegasys.teku.phase1.onotole.pylib.pybytes
 import tech.pegasys.teku.phase1.onotole.pylib.pyint
 import tech.pegasys.teku.ssz.SSZTypes.Bitvector
@@ -16,7 +18,6 @@ import tech.pegasys.teku.ssz.backing.tree.TreeNode.BranchNode
 import tech.pegasys.teku.ssz.backing.tree.TreeNode.LeafNode
 import tech.pegasys.teku.ssz.backing.type.ViewType
 import tech.pegasys.teku.ssz.backing.view.BasicViews
-import kotlin.reflect.KClass
 import org.apache.tuweni.bytes.Bytes as TuweniBytes
 import org.apache.tuweni.bytes.Bytes32 as TuweniBytes32
 import org.apache.tuweni.bytes.Bytes48 as TuweniBytes48
@@ -35,7 +36,11 @@ typealias Bytes4 = TekuBytes4
 typealias Bytes32 = TuweniBytes32
 typealias Bytes48 = TuweniBytes48
 
-data class Bytes96(val wrappedBytes: Bytes)
+data class Bytes96(val wrappedBytes: Bytes) {
+  override fun toString(): String {
+    return wrappedBytes.toString()
+  }
+}
 
 typealias SSZDict<K, V> = MutableMap<K, V>
 
@@ -50,10 +55,6 @@ fun Bytes96(): Bytes96 = Bytes96(TuweniBytes.concatenate(Bytes48.ZERO, Bytes48.Z
 
 fun <K, V> SSZDict() = mutableMapOf<K, V>()
 
-interface SSZContainer {
-  fun hashTreeRoot(): Root
-}
-
 interface SSZCollection<T : Any> : Sequence<T> {
   operator fun get(index: ULong): T
   override operator fun get(index: Int): T = get(index.toULong())
@@ -66,6 +67,7 @@ interface SSZMutableCollection<T : Any> : SSZCollection<T> {
 
 interface SSZList<T : Any> : SSZCollection<T> {
   val maxSize: ULong
+  fun updated(mutator: (SSZMutableList<T>) -> Unit): SSZList<T>
 }
 
 interface SSZMutableList<T : Any> : SSZList<T>, SSZMutableCollection<T> {
@@ -76,7 +78,9 @@ interface SSZMutableList<T : Any> : SSZList<T>, SSZMutableCollection<T> {
 interface SSZBitlist : SSZList<Boolean>
 interface SSZMutableBitlist : SSZMutableList<Boolean>, SSZBitlist
 interface SSZByteList : SSZList<Byte>
-interface SSZVector<T : Any> : SSZCollection<T>
+interface SSZVector<T : Any> : SSZCollection<T> {
+  fun updated(mutator: (SSZMutableVector<T>) -> Unit): SSZVector<T>
+}
 interface SSZByteVector : SSZVector<Byte>
 interface SSZMutableVector<T : Any> : SSZVector<T>, SSZMutableCollection<T>
 interface SSZBitvector : SSZVector<Boolean>
@@ -111,8 +115,8 @@ fun SSZByteList.get_backing(): TreeNode = buildNodeDelegate((this as SSZByteList
 fun <T : Any> SSZVector(
   elementType: ViewType,
   size: ULong,
-  unwrapper: (ViewRead) -> T = getUnwrapper(elementType.default::class),
-  wrapper: (T) -> ViewRead = getWrapper(elementType.default::class)
+  unwrapper: (ViewRead) -> T = getUnwrapper(elementType.default),
+  wrapper: (T) -> ViewRead = getWrapper(elementType.default)
 ): SSZMutableVector<T> =
   SSZMutableVectorImpl(
     elementType,
@@ -124,8 +128,8 @@ fun <T : Any> SSZVector(
 fun <T : Any> SSZVector(
   elementType: ViewType,
   elements: List<T>,
-  unwrapper: (ViewRead) -> T = getUnwrapper(elementType.default::class),
-  wrapper: (T) -> ViewRead = getWrapper(elementType.default::class)
+  unwrapper: (ViewRead) -> T = getUnwrapper(elementType.default),
+  wrapper: (T) -> ViewRead = getWrapper(elementType.default)
 ): SSZMutableVector<T> =
   SSZMutableVectorImpl(
     elementType,
@@ -134,14 +138,42 @@ fun <T : Any> SSZVector(
     wrapper
   )
 
+fun <T : Any> SSZImmutableVector(
+  elementType: ViewType,
+  size: ULong,
+  unwrapper: (ViewRead) -> T = getUnwrapper(elementType.default)
+): SSZVector<T> = SSZVectorImpl(elementType, size.toLong(), unwrapper)
+
+fun <T : Any> SSZImmutableVector(
+  elementType: ViewType,
+  elements: List<T>,
+  unwrapper: (ViewRead) -> T = getUnwrapper(elementType.default),
+  wrapper: (T) -> ViewRead = getWrapper(elementType.default)
+): SSZVector<T> = SSZVectorImpl(elementType, elements, unwrapper, wrapper)
+
 fun <T : Any> SSZList(
   elementType: ViewType,
   maxSize: ULong,
   elements: List<T> = listOf(),
-  unwrapper: (ViewRead) -> T = getUnwrapper(elementType.default::class),
-  wrapper: (T) -> ViewRead = getWrapper(elementType.default::class)
+  unwrapper: (ViewRead) -> T = getUnwrapper(elementType.default),
+  wrapper: (T) -> ViewRead = getWrapper(elementType.default)
 ): SSZMutableList<T> =
   SSZMutableListImpl(
+    elementType,
+    maxSize,
+    elements,
+    unwrapper,
+    wrapper
+  )
+
+fun <T : Any> SSZImmutableList(
+  elementType: ViewType,
+  maxSize: ULong,
+  elements: List<T> = listOf(),
+  unwrapper: (ViewRead) -> T = getUnwrapper(elementType.default),
+  wrapper: (T) -> ViewRead = getWrapper(elementType.default)
+): SSZList<T> =
+  SSZListImpl(
     elementType,
     maxSize,
     elements,
@@ -156,26 +188,28 @@ fun SSZBitvector(bitvector: Bitvector): SSZBitvector {
   return SSZBitvectorImpl((0 until bitvector.size).map { bitvector.getBit(it) }.toList())
 }
 
-fun <U : Any, V : ViewRead> getWrapper(viewType: KClass<out V>): (U) -> V {
-  return when (viewType) {
-    ContainerViewRead::class -> { e -> e as V }
-    BasicViews.BitView::class -> { e -> BasicViews.BitView(e as boolean) as V }
-    BasicViews.ByteView::class -> { e -> BasicViews.ByteView(e as Byte) as V }
-    BasicViews.UInt64View::class -> { e -> BasicViews.UInt64View((e as uint64).toUnsignedLong()) as V }
-    BasicViews.Bytes4View::class -> { e -> BasicViews.Bytes4View(e as Bytes4) as V }
-    BasicViews.Bytes32View::class -> { e -> BasicViews.Bytes32View(e as Bytes32) as V }
-    else -> throw IllegalArgumentException("Unsupported type ${viewType.qualifiedName}")
+fun <U : Any, V : ViewRead> getWrapper(view: ViewRead): (U) -> V {
+  return when (view) {
+    is ContainerViewRead -> { e -> e as V }
+    is BasicViews.BitView -> { e -> BasicViews.BitView(e as boolean) as V }
+    is BasicViews.ByteView -> { e -> BasicViews.ByteView(e as Byte) as V }
+    is UInt8View -> { e -> UInt8View(e as uint8) as V }
+    is BasicViews.UInt64View -> { e -> BasicViews.UInt64View((e as uint64).toUnsignedLong()) as V }
+    is BasicViews.Bytes4View -> { e -> BasicViews.Bytes4View(e as Bytes4) as V }
+    is BasicViews.Bytes32View -> { e -> BasicViews.Bytes32View(e as Bytes32) as V }
+    else -> throw IllegalArgumentException("Unsupported type ${view::class.qualifiedName}")
   }
 }
 
-fun <U : Any, V : ViewRead> getUnwrapper(viewType: KClass<out V>): (V) -> U {
-  return when (viewType) {
-    ContainerViewRead::class -> { v -> v as U }
-    BasicViews.BitView::class -> { v -> (v as BasicViews.BitView).get() as U }
-    BasicViews.ByteView::class -> { v -> (v as BasicViews.ByteView).get() as U }
-    BasicViews.UInt64View::class -> { v -> (v as BasicViews.UInt64View).get() as U }
-    BasicViews.Bytes4View::class -> { v -> (v as BasicViews.Bytes4View).get() as U }
-    BasicViews.Bytes32View::class -> { v -> (v as BasicViews.Bytes32View).get() as U }
-    else -> throw IllegalArgumentException("Unsupported type ${viewType.qualifiedName}")
+fun <U : Any, V : ViewRead> getUnwrapper(view: ViewRead): (V) -> U {
+  return when (view) {
+    is ContainerViewRead -> { v -> v as U }
+    is BasicViews.BitView -> { v -> (v as BasicViews.BitView).get() as U }
+    is BasicViews.ByteView -> { v -> (v as BasicViews.ByteView).get() as U }
+    is UInt8View -> { v -> (v as UInt8View).get() as U }
+    is BasicViews.UInt64View -> { v -> (v as BasicViews.UInt64View).get() as U }
+    is BasicViews.Bytes4View -> { v -> (v as BasicViews.Bytes4View).get() as U }
+    is BasicViews.Bytes32View -> { v -> (v as BasicViews.Bytes32View).get() as U }
+    else -> throw IllegalArgumentException("Unsupported type ${view::class.qualifiedName}")
   }
 }

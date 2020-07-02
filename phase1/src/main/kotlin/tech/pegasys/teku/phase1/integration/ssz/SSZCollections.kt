@@ -11,11 +11,13 @@ import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableBitvector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableVector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZVector
+import tech.pegasys.teku.phase1.onotole.ssz.getWrapper
 import tech.pegasys.teku.ssz.backing.CompositeViewRead
 import tech.pegasys.teku.ssz.backing.ListViewRead
 import tech.pegasys.teku.ssz.backing.ListViewWrite
 import tech.pegasys.teku.ssz.backing.VectorViewRead
 import tech.pegasys.teku.ssz.backing.VectorViewWrite
+import tech.pegasys.teku.ssz.backing.VectorViewWriteRef
 import tech.pegasys.teku.ssz.backing.ViewRead
 import tech.pegasys.teku.ssz.backing.tree.TreeNode
 import tech.pegasys.teku.ssz.backing.type.BasicViewTypes
@@ -62,6 +64,10 @@ abstract class SSZAbstractCollection<U : Any, V : ViewRead> : SSZCollection<U> {
     return (fromIndex until toIndex).map { get(it) }
   }
 
+  override fun toString(): String {
+    return "[${this.joinToString { it.toString() }}]"
+  }
+
   override fun lastIndexOf(element: U): Int = throw UnsupportedOperationException()
   override fun containsAll(elements: Collection<U>): Boolean = throw UnsupportedOperationException()
   override fun listIterator(): ListIterator<U> = throw UnsupportedOperationException()
@@ -86,6 +92,16 @@ class SSZVectorImpl<U : Any, V : ViewRead>(
     VectorViewType<V>(elementType, size).default,
     unwrapper
   )
+
+  override fun updated(mutator: (SSZMutableVector<U>) -> Unit): SSZVector<U> {
+    val mutableCopy = SSZMutableVectorImpl<U, V>(
+      view.createWritableCopy(),
+      unwrapper,
+      getWrapper(view.type.elementType.default)
+    )
+    mutator(mutableCopy)
+    return SSZVectorImpl<U, V>(mutableCopy.view.commitChanges(), unwrapper)
+  }
 }
 
 class SSZMutableVectorImpl<U : Any, V : ViewRead>(
@@ -108,8 +124,14 @@ class SSZMutableVectorImpl<U : Any, V : ViewRead>(
   ) : this(initializeVectorView<U, V>(elementType, elements, wrapper), unwrapper, wrapper)
 
   constructor(elementType: ViewType, size: ULong, unwrapper: (V) -> U, wrapper: (U) -> V) : this(
-    VectorViewType<V>(elementType, size.toLong()).default.createWritableCopy(), unwrapper, wrapper
+    VectorViewType<V>(
+      elementType,
+      size.toLong()
+    ).default.createWritableCopy() as VectorViewWriteRef<V, *>, unwrapper, wrapper
   )
+
+  override fun updated(mutator: (SSZMutableVector<U>) -> Unit): SSZVector<U> =
+    throw UnsupportedOperationException()
 }
 
 class SSZListImpl<U : Any, V : ViewRead>(
@@ -130,6 +152,16 @@ class SSZListImpl<U : Any, V : ViewRead>(
     initializeListView<U, V>(elementType, maxSize, elements, wrapper).commitChanges(),
     unwrapper
   )
+
+  override fun updated(mutator: (SSZMutableList<U>) -> Unit): SSZList<U> {
+    val mutableCopy = SSZMutableListImpl<U, V>(
+      view.createWritableCopy(),
+      unwrapper,
+      getWrapper(view.type.elementType.default)
+    )
+    mutator(mutableCopy)
+    return SSZListImpl<U, V>(mutableCopy.view.commitChanges(), unwrapper)
+  }
 }
 
 class SSZMutableListImpl<U : Any, V : ViewRead>(
@@ -151,7 +183,7 @@ class SSZMutableListImpl<U : Any, V : ViewRead>(
     if (size.toULong() >= maxSize) {
       throw IndexOutOfBoundsException()
     }
-    set(size + 1, item)
+    view.append(wrapper(item))
   }
 
   override fun clear() = view.clear()
@@ -167,6 +199,9 @@ class SSZMutableListImpl<U : Any, V : ViewRead>(
     unwrapper,
     wrapper
   )
+
+  override fun updated(mutator: (SSZMutableList<U>) -> Unit): SSZList<U> =
+    throw UnsupportedOperationException()
 }
 
 class SSZBitvectorImpl(override val view: VectorViewRead<BitView>) :
@@ -181,13 +216,23 @@ class SSZBitvectorImpl(override val view: VectorViewRead<BitView>) :
   )
 
   constructor(elements: List<Boolean>) : this(
-    initializeVectorView<Boolean, BitView>(BasicViewTypes.BIT_TYPE, elements, ::BitView)
+    initializeVectorView<Boolean, BitView>(
+      BasicViewTypes.BIT_TYPE,
+      elements,
+      ::BitView
+    ).commitChanges()
   )
+
+  override fun updated(mutator: (SSZMutableVector<Boolean>) -> Unit): SSZVector<Boolean> =
+    throw UnsupportedOperationException()
 }
 
 class SSZMutableBitvectorImpl(override val view: VectorViewWrite<BitView>) :
   SSZAbstractCollection<Boolean, BitView>(), SSZMutableBitvector {
   override val unwrapper: (BitView) -> Boolean = BitView::get
+  override fun updated(mutator: (SSZMutableVector<Boolean>) -> Unit): SSZVector<Boolean> =
+    throw UnsupportedOperationException()
+
   override fun set(index: ULong, item: Boolean): Boolean {
     val oldValue = get(index)
     view.set(index.toInt(), BitView(item))
@@ -212,8 +257,16 @@ class SSZBitlistImpl(override val view: ListViewRead<BitView>) :
   override val maxSize: ULong
     get() = view.type.maxLength.toULong()
 
+  override fun updated(mutator: (SSZMutableList<Boolean>) -> Unit): SSZList<Boolean> =
+    throw UnsupportedOperationException()
+
   constructor(maxSize: ULong, elements: List<Boolean>) : this(
-    initializeListView<Boolean, BitView>(BasicViewTypes.BIT_TYPE, maxSize, elements, ::BitView)
+    initializeListView<Boolean, BitView>(
+      BasicViewTypes.BIT_TYPE,
+      maxSize,
+      elements,
+      ::BitView
+    ).commitChanges()
   )
 }
 
@@ -223,11 +276,14 @@ class SSZMutableBitlistImpl(override val view: ListViewWrite<BitView>) :
   override val maxSize: ULong
     get() = view.type.maxLength.toULong()
 
+  override fun updated(mutator: (SSZMutableList<Boolean>) -> Unit): SSZList<Boolean> =
+    throw UnsupportedOperationException()
+
   override fun append(item: Boolean) {
     if (size.toULong() >= maxSize) {
       throw IndexOutOfBoundsException()
     }
-    set(size + 1, item)
+    view.append(BitView(item))
   }
 
   override fun clear() = view.clear()
@@ -248,6 +304,10 @@ class SSZByteListImpl(override val view: ListViewRead<ByteView>) :
   override val unwrapper: (ByteView) -> Byte = ByteView::get
   override val maxSize: ULong
     get() = view.type.maxLength.toULong()
+
+  override fun updated(mutator: (SSZMutableList<Byte>) -> Unit): SSZList<Byte> =
+    throw UnsupportedOperationException()
+
   val backingNode: TreeNode
     get() = view.backingNode
 
@@ -264,13 +324,16 @@ class SSZByteListImpl(override val view: ListViewRead<ByteView>) :
 class SSZByteVectorImpl(override val view: VectorViewRead<ByteView>) :
   SSZAbstractCollection<Byte, ByteView>(), SSZByteVector {
   override val unwrapper: (ByteView) -> Byte = ByteView::get
+  override fun updated(mutator: (SSZMutableVector<Byte>) -> Unit): SSZVector<Byte> =
+    throw UnsupportedOperationException()
+
   override val size: Int
     get() = view.size()
   val backingNode: TreeNode
     get() = view.backingNode
 
   constructor(elements: List<Byte>) : this(
-    initializeVectorView(BasicViewTypes.BYTES32_TYPE, elements, ::ByteView)
+    initializeVectorView(BasicViewTypes.BYTES32_TYPE, elements, ::ByteView).commitChanges()
   )
 }
 
@@ -280,7 +343,7 @@ private fun <U : Any, V : ViewRead> initializeVectorView(
   wrapper: (U) -> V
 ): VectorViewWrite<V> {
   val type = VectorViewType<V>(elementType, elements.size.toLong())
-  val view = type.default.createWritableCopy()
+  val view = type.default.createWritableCopy() as VectorViewWrite<V>
   elements.forEachIndexed { index, item -> view.set(index, wrapper(item)) }
   return view
 }
@@ -292,7 +355,7 @@ private fun <U : Any, V : ViewRead> initializeListView(
   wrapper: (U) -> V
 ): ListViewWrite<V> {
   val type = ListViewType<V>(elementType, maxSize.toLong())
-  val view = type.default.createWritableCopy()
+  val view = type.default.createWritableCopy() as ListViewWrite<V>
   elements.forEachIndexed { index, item -> view.set(index, wrapper(item)) }
   return view
 }

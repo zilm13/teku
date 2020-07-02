@@ -1,6 +1,10 @@
 package tech.pegasys.teku.phase1.integration.datastructures
 
 import org.apache.tuweni.bytes.Bytes48
+import tech.pegasys.teku.phase1.integration.Bytes48Type
+import tech.pegasys.teku.phase1.integration.UInt8Type
+import tech.pegasys.teku.phase1.integration.UInt8View
+import tech.pegasys.teku.phase1.integration.getBasicValue
 import tech.pegasys.teku.phase1.integration.ssz.SSZAbstractCollection
 import tech.pegasys.teku.phase1.integration.ssz.SSZBitlistImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZListImpl
@@ -8,10 +12,7 @@ import tech.pegasys.teku.phase1.integration.ssz.SSZMutableBitvectorImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZMutableListImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZMutableVectorImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZVectorImpl
-import tech.pegasys.teku.phase1.integration.Bytes48Type
-import tech.pegasys.teku.phase1.integration.getBasicValue
 import tech.pegasys.teku.phase1.integration.toUInt64
-import tech.pegasys.teku.phase1.integration.toUnsignedLong
 import tech.pegasys.teku.phase1.integration.wrapBasicValue
 import tech.pegasys.teku.phase1.integration.wrapValues
 import tech.pegasys.teku.phase1.onotole.phase1.BLSPubkey
@@ -51,7 +52,7 @@ import tech.pegasys.teku.phase1.onotole.ssz.boolean
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
 import tech.pegasys.teku.ssz.backing.ContainerViewRead
 import tech.pegasys.teku.ssz.backing.ListViewRead
-import tech.pegasys.teku.ssz.backing.ListViewWrite
+import tech.pegasys.teku.ssz.backing.ListViewWriteRef
 import tech.pegasys.teku.ssz.backing.VectorViewRead
 import tech.pegasys.teku.ssz.backing.VectorViewWrite
 import tech.pegasys.teku.ssz.backing.tree.TreeNode
@@ -135,10 +136,11 @@ class Checkpoint : AbstractImmutableContainer {
   val root: Root
     get() = getBasicValue(get(1))
 
-  constructor(epoch: Epoch, root: Root) : super(TYPE, *wrapValues(
-    epoch,
-    root
-  )
+  constructor(epoch: Epoch, root: Root) : super(
+    TYPE, *wrapValues(
+      epoch,
+      root
+    )
   )
 
   constructor(
@@ -155,51 +157,53 @@ class Checkpoint : AbstractImmutableContainer {
   }
 }
 
-class Validator : AbstractMutableContainer {
+data class MutableValidator(
+  var pubkey: BLSPubkey,
+  var withdrawal_credentials: Bytes32,
+  var effective_balance: Gwei,
+  var slashed: boolean,
+  var activation_eligibility_epoch: Epoch,
+  var activation_epoch: Epoch,
+  var exit_epoch: Epoch,
+  var withdrawable_epoch: Epoch,
+  var next_custody_secret_to_reveal: uint64,
+  var all_custody_secrets_revealed_epoch: Epoch
+) {
+  constructor(validator: Validator) : this(
+    validator.pubkey,
+    validator.withdrawal_credentials,
+    validator.effective_balance,
+    validator.slashed,
+    validator.activation_eligibility_epoch,
+    validator.activation_epoch,
+    validator.exit_epoch,
+    validator.withdrawable_epoch,
+    validator.next_custody_secret_to_reveal,
+    validator.all_custody_secrets_revealed_epoch
+  )
+}
+
+class Validator : AbstractImmutableContainer {
   val pubkey: BLSPubkey
     get() = BLSPubkey(Bytes48.wrap(ViewUtils.getAllBytes(getAny(0))))
   val withdrawal_credentials: Bytes32
     get() = getBasicValue(get(1))
-  var effective_balance: Gwei
+  val effective_balance: Gwei
     get() = getBasicValue(get(2))
-    set(value) {
-      set(1, wrapBasicValue(value))
-    }
-  var slashed: boolean
+  val slashed: boolean
     get() = getBasicValue(get(3))
-    set(value) {
-      set(2, wrapBasicValue(value))
-    }
-  var activation_eligibility_epoch: Epoch
+  val activation_eligibility_epoch: Epoch
     get() = getBasicValue(get(4))
-    set(value) {
-      set(3, wrapBasicValue(value))
-    }
-  var activation_epoch: Epoch
+  val activation_epoch: Epoch
     get() = getBasicValue(get(5))
-    set(value) {
-      set(4, wrapBasicValue(value))
-    }
-  var exit_epoch: Epoch
+  val exit_epoch: Epoch
     get() = getBasicValue(get(6))
-    set(value) {
-      set(5, wrapBasicValue(value))
-    }
-  var withdrawable_epoch: Epoch
+  val withdrawable_epoch: Epoch
     get() = getBasicValue(get(7))
-    set(value) {
-      set(6, wrapBasicValue(value))
-    }
-  var next_custody_secret_to_reveal: uint64
+  val next_custody_secret_to_reveal: uint64
     get() = getBasicValue(get(8))
-    set(value) {
-      set(7, wrapBasicValue(value))
-    }
-  var all_custody_secrets_revealed_epoch: Epoch
+  val all_custody_secrets_revealed_epoch: Epoch
     get() = getBasicValue(get(9))
-    set(value) {
-      set(8, wrapBasicValue(value))
-    }
 
   constructor(
     pubkey: BLSPubkey,
@@ -228,17 +232,60 @@ class Validator : AbstractMutableContainer {
     )
   )
 
-  constructor(type: ContainerViewType<out ContainerViewRead>?, backingNode: TreeNode?) : super(
-    type,
-    backingNode
-  )
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
   constructor() : super(TYPE)
+
+  constructor(v: MutableValidator) : this(
+    v.pubkey,
+    v.withdrawal_credentials,
+    v.effective_balance,
+    v.slashed,
+    v.activation_eligibility_epoch,
+    v.activation_epoch,
+    v.exit_epoch,
+    v.withdrawable_epoch,
+    v.next_custody_secret_to_reveal,
+    v.all_custody_secrets_revealed_epoch
+  )
+
+  fun copy(
+    pubkey: BLSPubkey = this.pubkey,
+    withdrawal_credentials: Bytes32 = this.withdrawal_credentials,
+    effective_balance: Gwei = this.effective_balance,
+    slashed: boolean = this.slashed,
+    activation_eligibility_epoch: Epoch = this.activation_eligibility_epoch,
+    activation_epoch: Epoch = this.activation_epoch,
+    exit_epoch: Epoch = this.exit_epoch,
+    withdrawable_epoch: Epoch = this.withdrawable_epoch,
+    next_custody_secret_to_reveal: uint64 = this.next_custody_secret_to_reveal,
+    all_custody_secrets_revealed_epoch: Epoch = this.all_custody_secrets_revealed_epoch
+  ): Validator = Validator(
+    pubkey,
+    withdrawal_credentials,
+    effective_balance,
+    slashed,
+    activation_eligibility_epoch,
+    activation_epoch,
+    exit_epoch,
+    withdrawable_epoch,
+    next_custody_secret_to_reveal,
+    all_custody_secrets_revealed_epoch
+  )
+
+  fun updated(mutation: (MutableValidator) -> Unit): Validator {
+    val mutableCopy = MutableValidator(this)
+    mutation(mutableCopy)
+    return Validator(mutableCopy)
+  }
 
   companion object {
     val TYPE = ContainerViewType<Validator>(
       listOf(
-        VectorViewType<ByteView>(BasicViewTypes.BYTE_TYPE, 48),
+        Bytes48Type,
         BasicViewTypes.BYTES32_TYPE,
         BasicViewTypes.UINT64_TYPE,
         BasicViewTypes.BIT_TYPE,
@@ -253,7 +300,7 @@ class Validator : AbstractMutableContainer {
   }
 }
 
-class PendingAttestation : AbstractMutableContainer {
+class PendingAttestation : AbstractImmutableContainer {
   val aggregation_bits: SSZBitlist
     get() = SSZBitlistImpl(getAny(0))
   val data: AttestationData
@@ -262,11 +309,8 @@ class PendingAttestation : AbstractMutableContainer {
     get() = (get(2) as UInt64View).get().toUInt64()
   val proposer_index: ValidatorIndex
     get() = (get(3) as UInt64View).get().toUInt64()
-  var crosslink_success: boolean
+  val crosslink_success: boolean
     get() = (get(4) as BitView).get()
-    set(value) {
-      set(4, BitView(value))
-    }
 
   constructor(
     aggregation_bits: SSZBitlist,
@@ -276,11 +320,13 @@ class PendingAttestation : AbstractMutableContainer {
     crosslink_success: boolean
   ) : super(
     TYPE,
-    (aggregation_bits as SSZAbstractCollection<*, *>).view,
-    data,
-    UInt64View(inclusion_delay.toUnsignedLong()),
-    UInt64View(proposer_index.toUnsignedLong()),
-    BitView(crosslink_success)
+    *wrapValues(
+      aggregation_bits,
+      data,
+      inclusion_delay,
+      proposer_index,
+      crosslink_success
+    )
   )
 
   constructor(type: ContainerViewType<PendingAttestation>, backingNode: TreeNode) : super(
@@ -289,6 +335,15 @@ class PendingAttestation : AbstractMutableContainer {
   )
 
   constructor() : super(TYPE)
+
+  fun copy(
+    aggregation_bits: SSZBitlist = this.aggregation_bits,
+    data: AttestationData = this.data,
+    inclusion_delay: Slot = this.inclusion_delay,
+    proposer_index: ValidatorIndex = this.proposer_index,
+    crosslink_success: boolean = this.crosslink_success
+  ): PendingAttestation =
+    PendingAttestation(aggregation_bits, data, inclusion_delay, proposer_index, crosslink_success)
 
   companion object {
     val TYPE = ContainerViewType(
@@ -315,11 +370,11 @@ class HistoricalBatch : AbstractImmutableContainer {
   constructor(type: ContainerViewType<HistoricalBatch>, backingNode: TreeNode) :
       super(type, backingNode)
 
-  constructor(block_roots: SSZVector<Root>, state_roots: SSZVector<Root>) :
+  constructor(block_roots: SSZMutableVector<Root>, state_roots: SSZMutableVector<Root>) :
       super(
         TYPE,
-        (block_roots as SSZAbstractCollection<*, *>).view,
-        (state_roots as SSZAbstractCollection<*, *>).view
+        (block_roots as SSZMutableVectorImpl<*, *>).view.commitChanges(),
+        (state_roots as SSZMutableVectorImpl<*, *>).view.commitChanges()
       )
 
   constructor() : super(TYPE)
@@ -329,11 +384,11 @@ class HistoricalBatch : AbstractImmutableContainer {
       listOf(
         VectorViewType<Root>(
           BasicViewTypes.BYTES32_TYPE,
-          HISTORICAL_ROOTS_LIMIT.toLong()
+          SLOTS_PER_HISTORICAL_ROOT.toLong()
         ),
         VectorViewType<Root>(
           BasicViewTypes.BYTES32_TYPE,
-          HISTORICAL_ROOTS_LIMIT.toLong()
+          SLOTS_PER_HISTORICAL_ROOT.toLong()
         )
       ), ::HistoricalBatch
     )
@@ -369,15 +424,11 @@ class SigningRoot : AbstractImmutableContainer {
 
 class CompactCommittee : AbstractImmutableContainer {
   val pubkeys: SSZList<BLSPubkey>
-    get() = SSZListImpl<BLSPubkey, VectorViewRead<ByteView>>(getAny(0)) { v ->
-      BLSPubkey(
-        Bytes48.wrap(
-          ViewUtils.getAllBytes(v)
-        )
-      )
+    get() = SSZListImpl<BLSPubkey, VectorViewRead<ByteView>>(getAny(0)) {
+      BLSPubkey(Bytes48.wrap(ViewUtils.getAllBytes(it)))
     }
   val compact_validators: SSZList<uint64>
-    get() = SSZListImpl<uint64, UInt64View>(getAny(1)) { v -> v.get().toUInt64() }
+    get() = SSZListImpl<uint64, UInt64View>(getAny(1)) { it.get().toUInt64() }
 
   constructor(
     type: ContainerViewType<out AbstractImmutableContainer>,
@@ -401,15 +452,15 @@ class CompactCommittee : AbstractImmutableContainer {
       Bytes48Type,
       MAX_VALIDATORS_PER_COMMITTEE,
       pubkeys,
-      { v -> getBasicValue(v) },
-      { u -> wrapBasicValue(u) }
+      { getBasicValue(it) },
+      { wrapBasicValue(it) }
     ),
     SSZListImpl<uint64, UInt64View>(
       BasicViewTypes.UINT64_TYPE,
       MAX_VALIDATORS_PER_COMMITTEE,
       compact_validators,
-      { v -> getBasicValue(v) },
-      { u -> wrapBasicValue(u) }
+      { getBasicValue(it) },
+      { wrapBasicValue(it) }
     )
   )
 
@@ -484,12 +535,14 @@ class CustodyChunkChallengeRecord : AbstractImmutableContainer {
 class BeaconState : AbstractMutableContainer {
   var genesis_time: uint64
     get() = getBasicValue(get(0))
-    set(value) = set(0,
+    set(value) = set(
+      0,
       wrapBasicValue(value)
     )
   var genesis_validators_root: Root
     get() = getBasicValue(get(1))
-    set(value) = set(1,
+    set(value) = set(
+      1,
       wrapBasicValue(value)
     )
   var slot: Slot
@@ -514,12 +567,12 @@ class BeaconState : AbstractMutableContainer {
   val historical_roots: SSZMutableList<Root>
     get() = SSZMutableListImpl(getAnyByRef(7), Bytes32View::get, ::Bytes32View)
   var eth1_data: Eth1Data
-    get() = getAnyByRef(8)
+    get() = getAny(8)
     set(value) {
       set(8, value)
     }
   var eth1_data_votes: SSZMutableList<Eth1Data>
-    get() = SSZMutableListImpl<Eth1Data, Eth1Data>(getAnyByRef(9), { v -> v }, { v -> v })
+    get() = SSZMutableListImpl<Eth1Data, Eth1Data>(getAnyByRef(9), { it }, { it })
     set(value) {
       set(9, (value as SSZAbstractCollection<*, *>).view)
     }
@@ -529,33 +582,38 @@ class BeaconState : AbstractMutableContainer {
       set(10, wrapBasicValue(value))
     }
   val validators: SSZMutableList<Validator>
-    get() = SSZMutableListImpl<Validator, Validator>(getAnyByRef(11), { v -> v }, { v -> v })
+    get() = SSZMutableListImpl<Validator, Validator>(getAnyByRef(11), { it }, { it })
   val balances: SSZMutableList<Gwei>
     get() = SSZMutableListImpl<Gwei, UInt64View>(
       getAnyByRef(12),
-      { v -> getBasicValue(v) },
-      { v -> wrapBasicValue(v) })
+      { getBasicValue(it) },
+      { wrapBasicValue(it) })
   var randao_mixes: SSZMutableVector<Root>
     get() = SSZMutableVectorImpl(getAnyByRef(13), Bytes32View::get, ::Bytes32View)
     set(value) = set(13, (value as SSZAbstractCollection<*, *>).view)
   val slashings: SSZMutableVector<Gwei>
     get() = SSZMutableVectorImpl<Gwei, UInt64View>(
       getAnyByRef(14),
-      { v -> getBasicValue(v) },
-      { v -> wrapBasicValue(v) })
+      { getBasicValue(it) },
+      { wrapBasicValue(it) })
   var previous_epoch_attestations: SSZMutableList<PendingAttestation>
     get() = SSZMutableListImpl<PendingAttestation, PendingAttestation>(
       getAnyByRef(15),
-      { v -> v },
-      { v -> v })
+      { it },
+      { it })
     set(value) {
-      set(15, (value as SSZAbstractCollection<*, *>).view)
+      val thisView = getAnyByRef<ListViewWriteRef<PendingAttestation, *>>(15)
+      thisView.clear()
+      val givenView = (value as SSZAbstractCollection<PendingAttestation, PendingAttestation>).view
+      for (i in 0 until givenView.size()) {
+        thisView.append(givenView.get(i))
+      }
     }
   var current_epoch_attestations: SSZMutableList<PendingAttestation>
     get() = SSZMutableListImpl<PendingAttestation, PendingAttestation>(
       getAnyByRef(16),
-      { v -> v },
-      { v -> v })
+      { it },
+      { it })
     set(value) {
       set(16, (value as SSZAbstractCollection<*, *>).view)
     }
@@ -576,19 +634,20 @@ class BeaconState : AbstractMutableContainer {
     set(value) = set(20, value)
   var current_epoch_start_shard: Shard
     get() = getBasicValue(get(21))
-    set(value) = set(21,
+    set(value) = set(
+      21,
       wrapBasicValue(value)
     )
   val shard_states: SSZMutableList<ShardState>
     get() = SSZMutableListImpl<ShardState, ShardState>(
       getAnyByRef(22),
-      { v -> v },
-      { v -> v })
+      { it },
+      { it })
   val online_countdown: SSZMutableList<OnlineEpochs>
-    get() = SSZMutableListImpl<OnlineEpochs, ByteView>(
+    get() = SSZMutableListImpl<OnlineEpochs, UInt8View>(
       getAnyByRef(23),
-      { v -> getBasicValue(v) },
-      { v -> wrapBasicValue(v) })
+      { getBasicValue(it) },
+      { wrapBasicValue(it) })
   var current_light_committee: CompactCommittee
     get() = getAny(24)
     set(value) {
@@ -599,24 +658,15 @@ class BeaconState : AbstractMutableContainer {
     set(value) {
       set(25, value)
     }
-  val exposed_derived_secrets: SSZMutableVector<SSZMutableList<ValidatorIndex>>
-    get() = SSZMutableVectorImpl<SSZMutableList<ValidatorIndex>, ListViewWrite<UInt64View>>(
+  val exposed_derived_secrets: SSZMutableVector<SSZList<ValidatorIndex>>
+    get() = SSZMutableVectorImpl<SSZList<ValidatorIndex>, ListViewRead<UInt64View>>(
       getAnyByRef(26),
-      { v ->
-        SSZMutableListImpl(
-          v,
-          { u ->
-            getBasicValue<ValidatorIndex>(
-              u
-            )
-          },
-          { u -> wrapBasicValue(u) })
-      },
-      { v -> (v as SSZMutableListImpl<ValidatorIndex, UInt64View>).view }
+      { v -> SSZListImpl(v) { getBasicValue<ValidatorIndex>(it) } },
+      { (it as SSZListImpl<ValidatorIndex, UInt64View>).view }
     )
   var custody_chunk_challenge_records: SSZMutableList<CustodyChunkChallengeRecord>
     get() = SSZMutableListImpl<CustodyChunkChallengeRecord, CustodyChunkChallengeRecord>(
-      getAnyByRef(27), { v -> v }, { v -> v })
+      getAnyByRef(27), { it }, { it })
     set(value) {
       set(27, (value as SSZAbstractCollection<*, *>).view)
     }
@@ -659,7 +709,7 @@ class BeaconState : AbstractMutableContainer {
         CustodyChunkChallengeRecord.TYPE,
         MAX_CUSTODY_CHUNK_CHALLENGE_RECORDS.toLong()
       ).default
-    ) { v -> v },
+    ) { it },
     custody_chunk_challenge_index: uint64 = 0uL
   ) : super(
     TYPE,
@@ -717,6 +767,10 @@ class BeaconState : AbstractMutableContainer {
 
   constructor() : super(TYPE)
 
+  fun applyChanges(): BeaconState {
+    return BeaconState(TYPE, super.commitChanges().backingNode)
+  }
+
   companion object {
     val TYPE = ContainerViewType<BeaconState>(
       listOf(
@@ -764,7 +818,7 @@ class BeaconState : AbstractMutableContainer {
         Checkpoint.TYPE,
         BasicViewTypes.UINT64_TYPE,
         ListViewType<ShardState>(ShardState.TYPE, MAX_SHARDS.toLong()),
-        ListViewType<UInt64View>(BasicViewTypes.UINT64_TYPE, VALIDATOR_REGISTRY_LIMIT.toLong()),
+        ListViewType<UInt8View>(UInt8Type, VALIDATOR_REGISTRY_LIMIT.toLong()),
         CompactCommittee.TYPE,
         CompactCommittee.TYPE,
         VectorViewType<ListViewRead<UInt64View>>(
@@ -783,5 +837,9 @@ class BeaconState : AbstractMutableContainer {
     )
   }
 
-  fun copy(): BeaconState = BeaconState(TYPE, this.backingNode)
+  fun copy(): BeaconState = applyChanges()
+
+  override fun toString(): String {
+    return "BeaconState(root='${hashTreeRoot()}', slot='$slot', eth1_data='$eth1_data', eth1_data_votes='$eth1_data_votes')"
+  }
 }

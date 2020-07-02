@@ -1,14 +1,13 @@
 package tech.pegasys.teku.phase1.integration.datastructures
 
+import tech.pegasys.teku.phase1.integration.Bytes96Type
+import tech.pegasys.teku.phase1.integration.getBasicValue
 import tech.pegasys.teku.phase1.integration.ssz.SSZAbstractCollection
 import tech.pegasys.teku.phase1.integration.ssz.SSZBitvectorImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZListImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZVectorImpl
-import tech.pegasys.teku.phase1.integration.Bytes96Type
-import tech.pegasys.teku.phase1.integration.getBasicValue
 import tech.pegasys.teku.phase1.integration.toUInt64
 import tech.pegasys.teku.phase1.integration.toUnsignedLong
-import tech.pegasys.teku.phase1.integration.wrapBasicValue
 import tech.pegasys.teku.phase1.integration.wrapValues
 import tech.pegasys.teku.phase1.onotole.phase1.BLSSignature
 import tech.pegasys.teku.phase1.onotole.phase1.Domain
@@ -32,36 +31,30 @@ import tech.pegasys.teku.phase1.onotole.ssz.SSZBitvector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZVector
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
-import tech.pegasys.teku.ssz.backing.ContainerViewRead
 import tech.pegasys.teku.ssz.backing.VectorViewRead
-import tech.pegasys.teku.ssz.backing.ViewRead
 import tech.pegasys.teku.ssz.backing.tree.TreeNode
 import tech.pegasys.teku.ssz.backing.type.BasicViewTypes
 import tech.pegasys.teku.ssz.backing.type.ContainerViewType
 import tech.pegasys.teku.ssz.backing.type.ListViewType
 import tech.pegasys.teku.ssz.backing.type.VectorViewType
 import tech.pegasys.teku.ssz.backing.view.AbstractImmutableContainer
-import tech.pegasys.teku.ssz.backing.view.AbstractMutableContainer
 import tech.pegasys.teku.ssz.backing.view.BasicViews.BitView
 import tech.pegasys.teku.ssz.backing.view.BasicViews.Bytes32View
 import tech.pegasys.teku.ssz.backing.view.BasicViews.UInt64View
 import tech.pegasys.teku.ssz.backing.view.ViewUtils
 
-class Eth1Data : AbstractMutableContainer {
-  var deposit_root: Root
-    get() = (get(0) as Bytes32View).get()
-    set(value) {
-      set(0, Bytes32View(value))
-    }
+class Eth1Data : AbstractImmutableContainer {
+  val deposit_root: Root
+    get() = getBasicValue(get(0))
   val deposit_count: uint64
-    get() = (get(1) as UInt64View).get().toUInt64()
+    get() = getBasicValue(get(1))
   val block_hash: Bytes32
-    get() = (get(2) as Bytes32View).get()
+    get() = getBasicValue(get(2))
 
-  constructor(type: ContainerViewType<out ContainerViewRead>?, backingNode: TreeNode?) : super(
-    type,
-    backingNode
-  )
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
   constructor(deposit_root: Root = Root(), deposit_count: uint64, block_hash: Bytes32) : super(
     TYPE,
@@ -74,26 +67,33 @@ class Eth1Data : AbstractMutableContainer {
 
   constructor() : super(TYPE)
 
+  fun copy(
+    deposit_root: Root = this.deposit_root,
+    deposit_count: uint64 = this.deposit_count,
+    block_hash: Bytes32 = this.block_hash
+  ): Eth1Data = Eth1Data(deposit_root, deposit_count, block_hash)
+
   companion object {
     val TYPE = ContainerViewType(
       listOf(BasicViewTypes.BYTES32_TYPE, BasicViewTypes.UINT64_TYPE, BasicViewTypes.BYTES32_TYPE),
       ::Eth1Data
     )
   }
+
+  override fun toString(): String {
+    return "Eth1Data(deposit_root='$deposit_root', deposit_count='$deposit_count', block_hash='$block_hash')"
+  }
 }
 
-class BeaconBlockHeader : AbstractMutableContainer {
+class BeaconBlockHeader : AbstractImmutableContainer {
   val slot: Slot
     get() = getBasicValue(get(0))
   val proposer_index: ValidatorIndex
     get() = getBasicValue(get(1))
   val parent_root: Root
     get() = getBasicValue(get(2))
-  var state_root: Root
+  val state_root: Root
     get() = getBasicValue(get(3))
-    set(value) {
-      set(3, wrapBasicValue(value))
-    }
   val body_root: Root
     get() = getBasicValue(get(4))
 
@@ -103,28 +103,31 @@ class BeaconBlockHeader : AbstractMutableContainer {
     parent_root: Root = Root(),
     state_root: Root = Root(),
     body_root: Root
-  ) : super(TYPE, *wrapValues(
-    slot,
-    proposer_index,
-    parent_root,
-    state_root,
-    body_root
-  )
-  )
-
-  constructor(type: ContainerViewType<out ContainerViewRead>?, backingNode: TreeNode?) : super(
-    type,
-    backingNode
+  ) : super(
+    TYPE, *wrapValues(
+      slot,
+      proposer_index,
+      parent_root,
+      state_root,
+      body_root
+    )
   )
 
   constructor(
-    type: ContainerViewType<out ContainerViewRead>?,
-    vararg memberValues: ViewRead?
-  ) : super(type, *memberValues)
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
+
 
   constructor() : super(TYPE)
 
-  fun copy(): BeaconBlockHeader = BeaconBlockHeader(TYPE, this.backingNode)
+  fun copy(
+    slot: Slot = this.slot,
+    proposer_index: ValidatorIndex = this.proposer_index,
+    parent_root: Root = this.parent_root,
+    state_root: Root = this.state_root,
+    body_root: Root = this.body_root
+  ): BeaconBlockHeader = BeaconBlockHeader(slot, proposer_index, parent_root, state_root, body_root)
 
   companion object {
     val TYPE = ContainerViewType(
@@ -160,7 +163,8 @@ class SignedBeaconBlockHeader : AbstractImmutableContainer {
 
   companion object {
     val TYPE = ContainerViewType<SignedBeaconBlockHeader>(
-      listOf(BeaconBlockHeader.TYPE,
+      listOf(
+        BeaconBlockHeader.TYPE,
         Bytes96Type
       ), ::SignedBeaconBlockHeader
     )
@@ -235,6 +239,45 @@ class BeaconBlockBody : AbstractImmutableContainer {
   )
 
   constructor(
+    randao_reveal: BLSSignature,
+    eth1_data: Eth1Data,
+    graffiti: Bytes32
+  ) : super(
+    TYPE,
+    ViewUtils.createVectorFromBytes(randao_reveal.wrappedBytes),
+    eth1_data,
+    Bytes32View(graffiti),
+    ListViewType<ProposerSlashing>(ProposerSlashing.TYPE, MAX_PROPOSER_SLASHINGS.toLong()).default,
+    ListViewType<AttesterSlashing>(AttesterSlashing.TYPE, MAX_ATTESTER_SLASHINGS.toLong()).default,
+    ListViewType<Attestation>(Attestation.TYPE, MAX_ATTESTATIONS.toLong()).default,
+    ListViewType<Deposit>(Deposit.TYPE, MAX_DEPOSITS.toLong()).default,
+    ListViewType<SignedVoluntaryExit>(
+      SignedVoluntaryExit.TYPE,
+      MAX_VOLUNTARY_EXITS.toLong()
+    ).default,
+    ListViewType<CustodyChunkChallenge>(
+      CustodyChunkChallenge.TYPE,
+      MAX_CUSTODY_CHUNK_CHALLENGES.toLong()
+    ).default,
+    ListViewType<CustodyChunkResponse>(
+      CustodyChunkResponse.TYPE,
+      MAX_CUSTODY_CHUNK_CHALLENGE_RESPONSES.toLong()
+    ).default,
+    ListViewType<CustodyKeyReveal>(CustodyKeyReveal.TYPE, MAX_CUSTODY_KEY_REVEALS.toLong()).default,
+    ListViewType<EarlyDerivedSecretReveal>(
+      EarlyDerivedSecretReveal.TYPE,
+      MAX_EARLY_DERIVED_SECRET_REVEALS.toLong()
+    ).default,
+    ListViewType<SignedCustodySlashing>(
+      SignedCustodySlashing.TYPE,
+      MAX_CUSTODY_SLASHINGS.toLong()
+    ).default,
+    VectorViewType<ShardTransition>(ShardTransition.TYPE, MAX_PROPOSER_SLASHINGS.toLong()).default,
+    VectorViewType<BitView>(BasicViewTypes.BIT_TYPE, LIGHT_CLIENT_COMMITTEE_SIZE.toLong()).default,
+    Bytes96Type.default
+  )
+
+  constructor(
     type: ContainerViewType<out AbstractImmutableContainer>?,
     backingNode: TreeNode?
   ) : super(type, backingNode)
@@ -272,12 +315,18 @@ class BeaconBlockBody : AbstractImmutableContainer {
           SignedCustodySlashing.TYPE,
           MAX_CUSTODY_SLASHINGS.toLong()
         ),
-        ListViewType<ShardTransition>(ShardTransition.TYPE, MAX_PROPOSER_SLASHINGS.toLong()),
+        VectorViewType<ShardTransition>(ShardTransition.TYPE, MAX_PROPOSER_SLASHINGS.toLong()),
         VectorViewType<BitView>(BasicViewTypes.BIT_TYPE, LIGHT_CLIENT_COMMITTEE_SIZE.toLong()),
         Bytes96Type
       ), ::BeaconBlockBody
     )
   }
+
+  override fun toString(): String {
+    return "BeaconBlockBody(eth1_data='$eth1_data')"
+  }
+
+
 }
 
 class BeaconBlock : AbstractImmutableContainer {
@@ -307,6 +356,14 @@ class BeaconBlock : AbstractImmutableContainer {
     body
   )
 
+  constructor(state_root: Root) : this(
+    Slot(),
+    ValidatorIndex(),
+    Root(),
+    state_root,
+    BeaconBlockBody()
+  )
+
   constructor(
     type: ContainerViewType<out AbstractImmutableContainer>?,
     backingNode: TreeNode?
@@ -324,6 +381,18 @@ class BeaconBlock : AbstractImmutableContainer {
         BeaconBlockBody.TYPE
       ), ::BeaconBlock
     )
+  }
+
+  fun copy(
+    slot: Slot = this.slot,
+    proposer_index: ValidatorIndex = this.proposer_index,
+    parent_root: Root = this.parent_root,
+    state_root: Root = this.state_root,
+    body: BeaconBlockBody = this.body
+  ): BeaconBlock = BeaconBlock(slot, proposer_index, parent_root, state_root, body)
+
+  override fun toString(): String {
+    return "BeaconBlock(root='${hashTreeRoot()}', slot='$slot', body='$body')"
   }
 }
 
@@ -354,6 +423,10 @@ class SignedBeaconBlock : AbstractImmutableContainer {
       ),
       ::SignedBeaconBlock
     )
+  }
+
+  override fun toString(): String {
+    return "SignedBeaconBlock(message='$message', signature='$signature')"
   }
 }
 

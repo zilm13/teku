@@ -4,12 +4,8 @@ plugins {
 
 dependencies {
   implementation project(':bls')
-  implementation project(':data')
-  implementation project(':data:metrics')
   implementation project(':ethereum:datastructures')
   implementation project(':ssz')
-  implementation project(':storage')
-  implementation project(':util')
 
   api 'com.google.guava:guava'
   implementation 'org.miracl.milagro.amcl:milagro-crypto-java'
@@ -18,6 +14,7 @@ dependencies {
   implementation 'org.apache.tuweni:tuweni-bytes'
 
   implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+  implementation "org.jetbrains.kotlin:kotlin-reflect"
   implementation "org.jetbrains.kotlin:kotlin-test"
 
   testImplementation "org.jetbrains.kotlin:kotlin-test-junit"

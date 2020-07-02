@@ -19,6 +19,7 @@ import java.util.Objects;
 import java.util.stream.IntStream;
 import tech.pegasys.teku.ssz.backing.ContainerViewRead;
 import tech.pegasys.teku.ssz.backing.ViewRead;
+import tech.pegasys.teku.ssz.backing.ViewWrite;
 import tech.pegasys.teku.ssz.backing.tree.TreeNode;
 import tech.pegasys.teku.ssz.backing.tree.TreeUpdates;
 import tech.pegasys.teku.ssz.backing.type.ContainerViewType;
@@ -61,6 +62,16 @@ public abstract class AbstractMutableContainer extends ContainerViewWriteImpl {
                         type.getGeneralizedIndex(i), memberValues[i].getBackingNode()))
             .collect(TreeUpdates.collector());
     return type.getDefaultTree().updated(nodes);
+  }
+
+  @Override
+  public TreeNode getBackingNode() {
+    return commitChanges().getBackingNode();
+  }
+
+  @Override
+  public ViewWrite createWritableCopy() {
+    return this;
   }
 
   @Override

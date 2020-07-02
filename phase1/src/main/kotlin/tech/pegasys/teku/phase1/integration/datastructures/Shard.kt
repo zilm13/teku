@@ -87,42 +87,32 @@ class ShardTransition : AbstractImmutableContainer {
   }
 }
 
-class ShardState : AbstractMutableContainer {
-  var slot: Slot
-    get() = (get(0) as UInt64View).get().toUInt64()
-    set(value) {
-      set(0, UInt64View(value.toUnsignedLong()))
-    }
-  var gasprice: Gwei
-    get() = (get(1) as UInt64View).get().toUInt64()
-    set(value) {
-      set(1, UInt64View(value.toUnsignedLong()))
-    }
-  var latest_block_root: Root
-    get() = (get(2) as Bytes32View).get()
-    set(value) {
-      set(2, Bytes32View(value))
-    }
+class ShardState : AbstractImmutableContainer {
+  val slot: Slot
+    get() = getBasicValue(get(0))
+  val gasprice: Gwei
+    get() = getBasicValue(get(1))
+  val latest_block_root: Root
+    get() = getBasicValue(get(2))
 
   constructor(
     slot: Slot,
     gasprice: Gwei,
     latest_block_root: Root
-  ) : super(
-    TYPE,
-    UInt64View(slot.toUnsignedLong()),
-    UInt64View(gasprice.toUnsignedLong()),
-    Bytes32View(latest_block_root)
-  )
+  ) : super(TYPE, *wrapValues(slot, gasprice, latest_block_root))
 
-  constructor(type: ContainerViewType<out ContainerViewRead>?, backingNode: TreeNode?) : super(
-    type,
-    backingNode
-  )
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
 
   constructor() : super(TYPE)
 
-  fun copy(): ShardState = ShardState(TYPE, this.backingNode)
+  fun copy(
+    slot: Slot = this.slot,
+    gasprice: Gwei = this.gasprice,
+    latest_block_root: Root = this.latest_block_root
+  ): ShardState = ShardState(slot, gasprice, latest_block_root)
 
   companion object {
     val TYPE = ContainerViewType<ShardState>(
