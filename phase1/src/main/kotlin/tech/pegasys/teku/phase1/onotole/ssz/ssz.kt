@@ -5,8 +5,6 @@ import tech.pegasys.teku.phase1.integration.ssz.SSZBitlistImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZBitvectorImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZByteListImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZListImpl
-import tech.pegasys.teku.phase1.integration.ssz.SSZMutableListImpl
-import tech.pegasys.teku.phase1.integration.ssz.SSZMutableVectorImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZVectorImpl
 import tech.pegasys.teku.phase1.integration.toUnsignedLong
 import tech.pegasys.teku.phase1.onotole.pylib.pybytes
@@ -73,6 +71,7 @@ interface SSZList<T : Any> : SSZCollection<T> {
 interface SSZMutableList<T : Any> : SSZList<T>, SSZMutableCollection<T> {
   fun append(item: T)
   fun clear()
+  fun replaceAll(elements: Sequence<T>)
 }
 
 interface SSZBitlist : SSZList<Boolean>
@@ -81,6 +80,7 @@ interface SSZByteList : SSZList<Byte>
 interface SSZVector<T : Any> : SSZCollection<T> {
   fun updated(mutator: (SSZMutableVector<T>) -> Unit): SSZVector<T>
 }
+
 interface SSZByteVector : SSZVector<Byte>
 interface SSZMutableVector<T : Any> : SSZVector<T>, SSZMutableCollection<T>
 interface SSZBitvector : SSZVector<Boolean>
@@ -115,36 +115,10 @@ fun SSZByteList.get_backing(): TreeNode = buildNodeDelegate((this as SSZByteList
 fun <T : Any> SSZVector(
   elementType: ViewType,
   size: ULong,
-  unwrapper: (ViewRead) -> T = getUnwrapper(elementType.default),
-  wrapper: (T) -> ViewRead = getWrapper(elementType.default)
-): SSZMutableVector<T> =
-  SSZMutableVectorImpl(
-    elementType,
-    size,
-    unwrapper,
-    wrapper
-  )
-
-fun <T : Any> SSZVector(
-  elementType: ViewType,
-  elements: List<T>,
-  unwrapper: (ViewRead) -> T = getUnwrapper(elementType.default),
-  wrapper: (T) -> ViewRead = getWrapper(elementType.default)
-): SSZMutableVector<T> =
-  SSZMutableVectorImpl(
-    elementType,
-    elements,
-    unwrapper,
-    wrapper
-  )
-
-fun <T : Any> SSZImmutableVector(
-  elementType: ViewType,
-  size: ULong,
   unwrapper: (ViewRead) -> T = getUnwrapper(elementType.default)
 ): SSZVector<T> = SSZVectorImpl(elementType, size.toLong(), unwrapper)
 
-fun <T : Any> SSZImmutableVector(
+fun <T : Any> SSZVector(
   elementType: ViewType,
   elements: List<T>,
   unwrapper: (ViewRead) -> T = getUnwrapper(elementType.default),
@@ -152,21 +126,6 @@ fun <T : Any> SSZImmutableVector(
 ): SSZVector<T> = SSZVectorImpl(elementType, elements, unwrapper, wrapper)
 
 fun <T : Any> SSZList(
-  elementType: ViewType,
-  maxSize: ULong,
-  elements: List<T> = listOf(),
-  unwrapper: (ViewRead) -> T = getUnwrapper(elementType.default),
-  wrapper: (T) -> ViewRead = getWrapper(elementType.default)
-): SSZMutableList<T> =
-  SSZMutableListImpl(
-    elementType,
-    maxSize,
-    elements,
-    unwrapper,
-    wrapper
-  )
-
-fun <T : Any> SSZImmutableList(
   elementType: ViewType,
   maxSize: ULong,
   elements: List<T> = listOf(),

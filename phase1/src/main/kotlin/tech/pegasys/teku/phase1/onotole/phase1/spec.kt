@@ -97,11 +97,9 @@ import tech.pegasys.teku.phase1.onotole.ssz.SSZBitlist
 import tech.pegasys.teku.phase1.onotole.ssz.SSZBitvector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZByteList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZDict
-import tech.pegasys.teku.phase1.onotole.ssz.SSZImmutableList
-import tech.pegasys.teku.phase1.onotole.ssz.SSZImmutableVector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZList
-import tech.pegasys.teku.phase1.onotole.ssz.SSZObject
 import tech.pegasys.teku.phase1.onotole.ssz.SSZVector
+import tech.pegasys.teku.phase1.onotole.ssz.SSZObject
 import tech.pegasys.teku.phase1.onotole.ssz.Sequence
 import tech.pegasys.teku.phase1.onotole.ssz.bit
 import tech.pegasys.teku.phase1.onotole.ssz.boolean
@@ -508,7 +506,7 @@ fun initialize_beacon_state_from_eth1(eth1_block_hash: Bytes32, eth1_timestamp: 
       deposit_count = len(deposits)),
     latest_block_header = BeaconBlockHeader(
       body_root = hash_tree_root(BeaconBlockBody())),
-    randao_mixes = SSZVector<Bytes32>(BasicViewTypes.BYTES32_TYPE, EPOCHS_PER_HISTORICAL_VECTOR)
+    randao_mixes = SSZVector(BasicViewTypes.BYTES32_TYPE, EPOCHS_PER_HISTORICAL_VECTOR)
   )
   val leaves = list(map({ deposit -> deposit.data }, deposits))
   for ((index, deposit) in enumerate(deposits)) {
@@ -847,7 +845,7 @@ fun process_final_updates(state: BeaconState): Unit {
     val historical_batch = HistoricalBatch(block_roots = state.block_roots, state_roots = state.state_roots)
     state.historical_roots.append(hash_tree_root(historical_batch))
   }
-  state.previous_epoch_attestations = state.current_epoch_attestations
+  state.previous_epoch_attestations.replaceAll(state.current_epoch_attestations)
   state.current_epoch_attestations.clear()
 }
 
@@ -1561,7 +1559,7 @@ fun process_challenge_deadlines(state: BeaconState): Unit {
 }
 
 fun process_custody_final_updates(state: BeaconState): Unit {
-  state.exposed_derived_secrets[(get_current_epoch(state) % EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS)] = SSZImmutableList(BasicViewTypes.UINT64_TYPE, MAX_EARLY_DERIVED_SECRET_REVEALS * SLOTS_PER_EPOCH)
+  state.exposed_derived_secrets[(get_current_epoch(state) % EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS)] = SSZList(BasicViewTypes.UINT64_TYPE, MAX_EARLY_DERIVED_SECRET_REVEALS * SLOTS_PER_EPOCH)
   val records = state.custody_chunk_challenge_records
   val validator_indices_in_records = set(records.map { record -> record.responder_index }.toPyList())
   for ((index, v) in enumerate(state.validators)) {
@@ -2043,13 +2041,13 @@ fun upgrade_to_phase1(pre: tech.pegasys.teku.datastructures.state.BeaconState): 
       current_version = PHASE_1_FORK_VERSION,
       epoch = epoch),
     latest_block_header = pre.latest_block_header.toPhase1(),
-    block_roots = SSZImmutableVector(BasicViewTypes.BYTES32_TYPE, pre.block_roots.toList()),
-    state_roots = SSZImmutableVector(BasicViewTypes.BYTES32_TYPE, pre.state_roots.toList()),
-    historical_roots = SSZImmutableList(BasicViewTypes.BYTES32_TYPE, HISTORICAL_ROOTS_LIMIT, pre.historical_roots.toList()),
+    block_roots = SSZVector(BasicViewTypes.BYTES32_TYPE, pre.block_roots.toList()),
+    state_roots = SSZVector(BasicViewTypes.BYTES32_TYPE, pre.state_roots.toList()),
+    historical_roots = SSZList(BasicViewTypes.BYTES32_TYPE, HISTORICAL_ROOTS_LIMIT, pre.historical_roots.toList()),
     eth1_data = pre.eth1_data.toPhase1(),
-    eth1_data_votes = SSZImmutableList(Eth1Data.TYPE, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH, pre.eth1_data_votes.map {it.toPhase1()}.toPyList()),
+    eth1_data_votes = SSZList(Eth1Data.TYPE, EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH, pre.eth1_data_votes.map {it.toPhase1()}.toPyList()),
     eth1_deposit_index = pre.eth1_deposit_index.toUInt64(),
-    validators = SSZImmutableList(Validator.TYPE, VALIDATOR_REGISTRY_LIMIT, pre.validators.mapIndexed { i, phase0_validator ->
+    validators = SSZList(Validator.TYPE, VALIDATOR_REGISTRY_LIMIT, pre.validators.mapIndexed { i, phase0_validator ->
       Validator(
         pubkey = Bytes48.wrap(phase0_validator.pubkey.toBytesCompressed()),
         withdrawal_credentials = phase0_validator.withdrawal_credentials,
@@ -2062,21 +2060,21 @@ fun upgrade_to_phase1(pre: tech.pegasys.teku.datastructures.state.BeaconState): 
         next_custody_secret_to_reveal = get_custody_period_for_validator(ValidatorIndex(i), epoch).value.toLong().toULong(),
         all_custody_secrets_revealed_epoch = FAR_FUTURE_EPOCH)
     }.toPyList()),
-    balances = SSZImmutableList(BasicViewTypes.UINT64_TYPE, VALIDATOR_REGISTRY_LIMIT, pre.balances.map { it.toUInt64() }.toList()),
-    randao_mixes = SSZImmutableVector(BasicViewTypes.BYTES32_TYPE, pre.randao_mixes.toList()),
-    slashings = SSZImmutableVector(BasicViewTypes.UINT64_TYPE, pre.slashings.map { it.toUInt64() }.toList()),
-    previous_epoch_attestations = SSZImmutableList<PendingAttestation>(PendingAttestation.TYPE, MAX_ATTESTATIONS * SLOTS_PER_EPOCH),
-    current_epoch_attestations = SSZImmutableList<PendingAttestation>(PendingAttestation.TYPE, MAX_ATTESTATIONS * SLOTS_PER_EPOCH),
+    balances = SSZList(BasicViewTypes.UINT64_TYPE, VALIDATOR_REGISTRY_LIMIT, pre.balances.map { it.toUInt64() }.toList()),
+    randao_mixes = SSZVector(BasicViewTypes.BYTES32_TYPE, pre.randao_mixes.toList()),
+    slashings = SSZVector(BasicViewTypes.UINT64_TYPE, pre.slashings.map { it.toUInt64() }.toList()),
+    previous_epoch_attestations = SSZList<PendingAttestation>(PendingAttestation.TYPE, MAX_ATTESTATIONS * SLOTS_PER_EPOCH),
+    current_epoch_attestations = SSZList<PendingAttestation>(PendingAttestation.TYPE, MAX_ATTESTATIONS * SLOTS_PER_EPOCH),
     justification_bits = SSZBitvector(pre.justification_bits),
     previous_justified_checkpoint = pre.previous_justified_checkpoint.toPhase1(),
     current_justified_checkpoint = pre.current_justified_checkpoint.toPhase1(),
     finalized_checkpoint = pre.finalized_checkpoint.toPhase1(),
     current_epoch_start_shard = Shard(0uL),
-    shard_states = SSZImmutableList(ShardState.TYPE, MAX_SHARDS, range(INITIAL_ACTIVE_SHARDS).map { ShardState(slot = pre.slot.toUInt64(), gasprice = MIN_GASPRICE, latest_block_root = Root()) }.toPyList()),
-    online_countdown = SSZImmutableList(UInt8Type, VALIDATOR_REGISTRY_LIMIT, PyList(ONLINE_PERIOD) * pre.validators.size().toULong()),
+    shard_states = SSZList(ShardState.TYPE, MAX_SHARDS, range(INITIAL_ACTIVE_SHARDS).map { ShardState(slot = pre.slot.toUInt64(), gasprice = MIN_GASPRICE, latest_block_root = Root()) }.toPyList()),
+    online_countdown = SSZList(UInt8Type, VALIDATOR_REGISTRY_LIMIT, PyList(ONLINE_PERIOD) * pre.validators.size().toULong()),
     current_light_committee = CompactCommittee(),
     next_light_committee = CompactCommittee(),
-    exposed_derived_secrets = SSZImmutableVector(ListViewType<BasicViews.UInt64View>(BasicViewTypes.UINT64_TYPE, (MAX_EARLY_DERIVED_SECRET_REVEALS * SLOTS_PER_EPOCH).toLong()), EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS, unwrapper = { v -> SSZListImpl(v as ListViewRead<BasicViews.UInt64View>) { it.get().toUInt64() } })
+    exposed_derived_secrets = SSZVector(ListViewType<BasicViews.UInt64View>(BasicViewTypes.UINT64_TYPE, (MAX_EARLY_DERIVED_SECRET_REVEALS * SLOTS_PER_EPOCH).toLong()), EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS, unwrapper = { v -> SSZListImpl(v as ListViewRead<BasicViews.UInt64View>) { it.get().toUInt64() } })
   )
   val next_epoch = Epoch((epoch + 1uL))
   post.current_light_committee = committee_to_compact_committee(post, get_light_client_committee(post, epoch))

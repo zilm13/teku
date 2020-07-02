@@ -52,7 +52,6 @@ import tech.pegasys.teku.phase1.onotole.ssz.boolean
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
 import tech.pegasys.teku.ssz.backing.ContainerViewRead
 import tech.pegasys.teku.ssz.backing.ListViewRead
-import tech.pegasys.teku.ssz.backing.ListViewWriteRef
 import tech.pegasys.teku.ssz.backing.VectorViewRead
 import tech.pegasys.teku.ssz.backing.VectorViewWrite
 import tech.pegasys.teku.ssz.backing.tree.TreeNode
@@ -571,11 +570,8 @@ class BeaconState : AbstractMutableContainer {
     set(value) {
       set(8, value)
     }
-  var eth1_data_votes: SSZMutableList<Eth1Data>
+  val eth1_data_votes: SSZMutableList<Eth1Data>
     get() = SSZMutableListImpl<Eth1Data, Eth1Data>(getAnyByRef(9), { it }, { it })
-    set(value) {
-      set(9, (value as SSZAbstractCollection<*, *>).view)
-    }
   var eth1_deposit_index: uint64
     get() = getBasicValue(get(10))
     set(value) {
@@ -587,36 +583,26 @@ class BeaconState : AbstractMutableContainer {
     get() = SSZMutableListImpl<Gwei, UInt64View>(
       getAnyByRef(12),
       { getBasicValue(it) },
-      { wrapBasicValue(it) })
-  var randao_mixes: SSZMutableVector<Root>
+      { wrapBasicValue(it) }
+    )
+  val randao_mixes: SSZMutableVector<Root>
     get() = SSZMutableVectorImpl(getAnyByRef(13), Bytes32View::get, ::Bytes32View)
-    set(value) = set(13, (value as SSZAbstractCollection<*, *>).view)
   val slashings: SSZMutableVector<Gwei>
     get() = SSZMutableVectorImpl<Gwei, UInt64View>(
       getAnyByRef(14),
       { getBasicValue(it) },
       { wrapBasicValue(it) })
-  var previous_epoch_attestations: SSZMutableList<PendingAttestation>
+  val previous_epoch_attestations: SSZMutableList<PendingAttestation>
     get() = SSZMutableListImpl<PendingAttestation, PendingAttestation>(
       getAnyByRef(15),
       { it },
-      { it })
-    set(value) {
-      val thisView = getAnyByRef<ListViewWriteRef<PendingAttestation, *>>(15)
-      thisView.clear()
-      val givenView = (value as SSZAbstractCollection<PendingAttestation, PendingAttestation>).view
-      for (i in 0 until givenView.size()) {
-        thisView.append(givenView.get(i))
-      }
-    }
-  var current_epoch_attestations: SSZMutableList<PendingAttestation>
+      { it }
+    )
+  val current_epoch_attestations: SSZMutableList<PendingAttestation>
     get() = SSZMutableListImpl<PendingAttestation, PendingAttestation>(
       getAnyByRef(16),
       { it },
       { it })
-    set(value) {
-      set(16, (value as SSZAbstractCollection<*, *>).view)
-    }
   val justification_bits: SSZMutableBitvector
     get() = SSZMutableBitvectorImpl(getAnyByRef<VectorViewWrite<BitView>>(17))
   var previous_justified_checkpoint: Checkpoint
@@ -664,12 +650,9 @@ class BeaconState : AbstractMutableContainer {
       { v -> SSZListImpl(v) { getBasicValue<ValidatorIndex>(it) } },
       { (it as SSZListImpl<ValidatorIndex, UInt64View>).view }
     )
-  var custody_chunk_challenge_records: SSZMutableList<CustodyChunkChallengeRecord>
+  val custody_chunk_challenge_records: SSZMutableList<CustodyChunkChallengeRecord>
     get() = SSZMutableListImpl<CustodyChunkChallengeRecord, CustodyChunkChallengeRecord>(
       getAnyByRef(27), { it }, { it })
-    set(value) {
-      set(27, (value as SSZAbstractCollection<*, *>).view)
-    }
   var custody_chunk_challenge_index: uint64
     get() = getBasicValue(get(28))
     set(value) {
@@ -751,13 +734,13 @@ class BeaconState : AbstractMutableContainer {
     fork: Fork,
     latest_block_header: BeaconBlockHeader,
     eth1_data: Eth1Data,
-    randao_mixes: SSZMutableVector<Root>
+    randao_mixes: SSZVector<Root>
   ) : this() {
     this.genesis_time = genesis_time
     this.fork = fork
     this.latest_block_header = latest_block_header
     this.eth1_data = eth1_data
-    this.randao_mixes = randao_mixes
+    set(13, (randao_mixes as SSZAbstractCollection<*, *>).view)
   }
 
   constructor(type: ContainerViewType<out ContainerViewRead>?, backingNode: TreeNode?) : super(

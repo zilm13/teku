@@ -11,6 +11,7 @@ import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableBitvector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableVector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZVector
+import tech.pegasys.teku.phase1.onotole.ssz.Sequence
 import tech.pegasys.teku.phase1.onotole.ssz.getWrapper
 import tech.pegasys.teku.ssz.backing.CompositeViewRead
 import tech.pegasys.teku.ssz.backing.ListViewRead
@@ -202,6 +203,11 @@ class SSZMutableListImpl<U : Any, V : ViewRead>(
 
   override fun updated(mutator: (SSZMutableList<U>) -> Unit): SSZList<U> =
     throw UnsupportedOperationException()
+
+  override fun replaceAll(elements: Sequence<U>) {
+    this.clear()
+    elements.forEach { this.append(it) }
+  }
 }
 
 class SSZBitvectorImpl(override val view: VectorViewRead<BitView>) :
@@ -287,6 +293,10 @@ class SSZMutableBitlistImpl(override val view: ListViewWrite<BitView>) :
   }
 
   override fun clear() = view.clear()
+  override fun replaceAll(elements: Sequence<Boolean>) {
+    this.clear()
+    elements.forEach { this.append(it) }
+  }
 
   override fun set(index: ULong, item: Boolean): Boolean {
     val oldValue = get(index)
