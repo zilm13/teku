@@ -21,7 +21,7 @@ data class Store(
 
 data class ShardStore(
   var shard: Shard = Shard(),
-  var blocks: SSZDict<Root, ShardBlock> = SSZDict(),
+  var signed_blocks: SSZDict<Root, SignedShardBlock> = SSZDict(),
   var block_states: SSZDict<Root, ShardState> = SSZDict()
 )
 

@@ -1,10 +1,10 @@
 package tech.pegasys.teku.phase1.integration.datastructures
 
+import tech.pegasys.teku.phase1.integration.Bytes96Type
+import tech.pegasys.teku.phase1.integration.getBasicValue
 import tech.pegasys.teku.phase1.integration.ssz.SSZAbstractCollection
 import tech.pegasys.teku.phase1.integration.ssz.SSZByteListImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZListImpl
-import tech.pegasys.teku.phase1.integration.Bytes96Type
-import tech.pegasys.teku.phase1.integration.getBasicValue
 import tech.pegasys.teku.phase1.integration.toUInt64
 import tech.pegasys.teku.phase1.integration.toUnsignedLong
 import tech.pegasys.teku.phase1.integration.wrapValues
@@ -21,13 +21,11 @@ import tech.pegasys.teku.phase1.onotole.ssz.Bytes96
 import tech.pegasys.teku.phase1.onotole.ssz.SSZByteList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZList
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
-import tech.pegasys.teku.ssz.backing.ContainerViewRead
 import tech.pegasys.teku.ssz.backing.tree.TreeNode
 import tech.pegasys.teku.ssz.backing.type.BasicViewTypes
 import tech.pegasys.teku.ssz.backing.type.ContainerViewType
 import tech.pegasys.teku.ssz.backing.type.ListViewType
 import tech.pegasys.teku.ssz.backing.view.AbstractImmutableContainer
-import tech.pegasys.teku.ssz.backing.view.AbstractMutableContainer
 import tech.pegasys.teku.ssz.backing.view.BasicViews.ByteView
 import tech.pegasys.teku.ssz.backing.view.BasicViews.Bytes32View
 import tech.pegasys.teku.ssz.backing.view.BasicViews.UInt64View
@@ -87,6 +85,12 @@ class ShardTransition : AbstractImmutableContainer {
   }
 }
 
+data class MutableShardState(
+  var slot: Slot,
+  var gasprice: Gwei,
+  var latest_block_root: Root
+)
+
 class ShardState : AbstractImmutableContainer {
   val slot: Slot
     get() = getBasicValue(get(0))
@@ -107,6 +111,12 @@ class ShardState : AbstractImmutableContainer {
   ) : super(type, backingNode)
 
   constructor() : super(TYPE)
+
+  fun updated(mutator: (MutableShardState) -> Unit): ShardState {
+    val mutableCopy = MutableShardState(slot, gasprice, latest_block_root)
+    mutator(mutableCopy)
+    return ShardState(mutableCopy.slot, mutableCopy.gasprice, mutableCopy.latest_block_root)
+  }
 
   fun copy(
     slot: Slot = this.slot,

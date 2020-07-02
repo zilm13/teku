@@ -25,6 +25,7 @@ import tech.pegasys.teku.phase1.onotole.phase1.Gwei
 import tech.pegasys.teku.phase1.onotole.phase1.MAX_SHARD_BLOCK_SIZE
 import tech.pegasys.teku.phase1.onotole.phase1.MAX_VALIDATORS_PER_COMMITTEE
 import tech.pegasys.teku.phase1.onotole.phase1.Root
+import tech.pegasys.teku.phase1.onotole.phase1.Shard
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
 import tech.pegasys.teku.phase1.onotole.phase1.ValidatorIndex
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
@@ -62,10 +63,12 @@ class AttestationData : AbstractImmutableContainer {
     get() = getAny(3)
   val target: Checkpoint
     get() = getAny(4)
-  val shard_head_root: Root
+  val shard: Shard
     get() = getBasicValue(get(5))
-  val shard_transition_root: Root
+  val shard_head_root: Root
     get() = getBasicValue(get(6))
+  val shard_transition_root: Root
+    get() = getBasicValue(get(7))
 
   constructor() : super(TYPE)
 
@@ -80,7 +83,8 @@ class AttestationData : AbstractImmutableContainer {
     beacon_block_root: Root,
     source: Checkpoint,
     target: Checkpoint,
-    head_shard_root: Root,
+    shard: Shard,
+    shard_head_root: Root,
     shard_transition_root: Root
   ) : super(
     TYPE,
@@ -90,7 +94,8 @@ class AttestationData : AbstractImmutableContainer {
       beacon_block_root,
       source,
       target,
-      head_shard_root,
+      shard,
+      shard_head_root,
       shard_transition_root
     )
   )
@@ -103,6 +108,7 @@ class AttestationData : AbstractImmutableContainer {
         BasicViewTypes.BYTES32_TYPE,
         Checkpoint.TYPE,
         Checkpoint.TYPE,
+        BasicViewTypes.UINT64_TYPE,
         BasicViewTypes.BYTES32_TYPE,
         BasicViewTypes.BYTES32_TYPE
       ), ::AttestationData
