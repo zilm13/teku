@@ -28,6 +28,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.tuweni.bytes.Bytes32;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import tech.pegasys.teku.core.ForkChoiceUtil;
+import tech.pegasys.teku.core.lookup.BlockProvider;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlockAndState;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
@@ -41,7 +42,7 @@ import tech.pegasys.teku.protoarray.ProtoArrayForkChoiceStrategy;
 import tech.pegasys.teku.storage.api.FinalizedCheckpointChannel;
 import tech.pegasys.teku.storage.api.ReorgEventChannel;
 import tech.pegasys.teku.storage.api.StorageUpdateChannel;
-import tech.pegasys.teku.storage.store.StoreFactory;
+import tech.pegasys.teku.storage.store.StoreBuilder;
 import tech.pegasys.teku.storage.store.UpdatableStore;
 import tech.pegasys.teku.storage.store.UpdatableStore.StoreTransaction;
 import tech.pegasys.teku.storage.store.UpdatableStore.StoreUpdateHandler;
@@ -52,6 +53,7 @@ public abstract class RecentChainData implements StoreUpdateHandler {
 
   private static final Logger LOG = LogManager.getLogger();
 
+  private final BlockProvider blockProvider;
   protected final EventBus eventBus;
   protected final FinalizedCheckpointChannel finalizedCheckpointChannel;
   protected final StorageUpdateChannel storageUpdateChannel;
@@ -64,16 +66,18 @@ public abstract class RecentChainData implements StoreUpdateHandler {
 
   private volatile UpdatableStore store;
   private volatile Optional<ProtoArrayForkChoiceStrategy> forkChoiceStrategy;
-  private volatile Optional<SignedBlockAndState> chainHead = Optional.empty();
+  private volatile Optional<SignedBlockAndStateAndSlot> chainHead = Optional.empty();
   private volatile UnsignedLong genesisTime;
 
   RecentChainData(
       final MetricsSystem metricsSystem,
+      final BlockProvider blockProvider,
       final StorageUpdateChannel storageUpdateChannel,
       final FinalizedCheckpointChannel finalizedCheckpointChannel,
       final ReorgEventChannel reorgEventChannel,
       final EventBus eventBus) {
     this.metricsSystem = metricsSystem;
+    this.blockProvider = blockProvider;
     this.reorgEventChannel = reorgEventChannel;
     this.eventBus = eventBus;
     this.storageUpdateChannel = storageUpdateChannel;
@@ -89,7 +93,8 @@ public abstract class RecentChainData implements StoreUpdateHandler {
   }
 
   public void initializeFromGenesis(final BeaconState genesisState) {
-    final UpdatableStore store = StoreFactory.getForkChoiceStore(metricsSystem, genesisState);
+    final UpdatableStore store =
+        StoreBuilder.buildForkChoiceStore(metricsSystem, blockProvider, genesisState);
     final boolean result = setStore(store);
     if (!result) {
       throw new IllegalStateException(
@@ -176,11 +181,12 @@ public abstract class RecentChainData implements StoreUpdateHandler {
             newBestBlock == null ? "block" : "state");
         return;
       }
-      final SignedBlockAndState newChainHead = new SignedBlockAndState(newBestBlock, newBestState);
+      final SignedBlockAndStateAndSlot newChainHead =
+          new SignedBlockAndStateAndSlot(newBestBlock, newBestState, slot);
 
       final Optional<Bytes32> originalBestRoot = chainHead.map(SignedBlockAndState::getRoot);
       final UnsignedLong originalBestSlot =
-          chainHead.map(SignedBlockAndState::getSlot).orElse(UnsignedLong.ZERO);
+          chainHead.map(SignedBlockAndStateAndSlot::getHeadSlot).orElse(UnsignedLong.ZERO);
 
       this.chainHead = Optional.of(newChainHead);
       if (originalBestRoot
@@ -350,5 +356,19 @@ public abstract class RecentChainData implements StoreUpdateHandler {
   public void onNewFinalizedCheckpoint(Checkpoint finalizedCheckpoint) {
     finalizedCheckpointChannel.onNewFinalizedCheckpoint(finalizedCheckpoint);
     forkChoiceStrategy.ifPresent(strategy -> strategy.maybePrune(finalizedCheckpoint.getRoot()));
+  }
+
+  private static class SignedBlockAndStateAndSlot extends SignedBlockAndState {
+    private final UnsignedLong headSlot;
+
+    public SignedBlockAndStateAndSlot(
+        SignedBeaconBlock block, BeaconState state, UnsignedLong headSlot) {
+      super(block, state);
+      this.headSlot = headSlot;
+    }
+
+    public UnsignedLong getHeadSlot() {
+      return headSlot;
+    }
   }
 }

@@ -27,6 +27,7 @@ import tech.pegasys.teku.storage.client.StorageBackedRecentChainData;
 import tech.pegasys.teku.storage.server.ChainStorage;
 import tech.pegasys.teku.storage.server.Database;
 import tech.pegasys.teku.storage.server.DepositStorage;
+import tech.pegasys.teku.storage.server.ProtoArrayStorage;
 import tech.pegasys.teku.storage.server.rocksdb.RocksDbConfiguration;
 import tech.pegasys.teku.storage.server.rocksdb.RocksDbDatabase;
 import tech.pegasys.teku.util.config.StateStorageMode;
@@ -37,6 +38,7 @@ public class FileBackedStorageSystem extends AbstractStorageSystem {
   private final TrackingReorgEventChannel reorgEventChannel;
   private final TrackingEth1EventsChannel eth1EventsChannel = new TrackingEth1EventsChannel();
 
+  private final StateStorageMode storageMode;
   private final CombinedChainDataClient combinedChainDataClient;
   private final Database database;
   private final RestartedStorageSupplier restartedSupplier;
@@ -44,6 +46,7 @@ public class FileBackedStorageSystem extends AbstractStorageSystem {
   public FileBackedStorageSystem(
       final EventBus eventBus,
       final TrackingReorgEventChannel reorgEventChannel,
+      final StateStorageMode storageMode,
       final Database database,
       final RecentChainData recentChainData,
       final CombinedChainDataClient combinedChainDataClient,
@@ -52,9 +55,16 @@ public class FileBackedStorageSystem extends AbstractStorageSystem {
 
     this.eventBus = eventBus;
     this.reorgEventChannel = reorgEventChannel;
+    this.storageMode = storageMode;
     this.database = database;
     this.combinedChainDataClient = combinedChainDataClient;
     this.restartedSupplier = restartedSupplier;
+  }
+
+  public static StorageSystem createV5StorageSystem(
+      final Path dataDir, final StateStorageMode storageMode, final long stateStorageFrequency) {
+    return createV5StorageSystem(
+        dataDir.resolve("hot"), dataDir.resolve("archive"), storageMode, stateStorageFrequency);
   }
 
   public static StorageSystem createV5StorageSystem(
@@ -70,7 +80,15 @@ public class FileBackedStorageSystem extends AbstractStorageSystem {
             storageMode,
             stateStorageFrequency);
     return create(
-        database, (mode) -> createV5StorageSystem(hotDir, archiveDir, mode, stateStorageFrequency));
+        database,
+        (mode) -> createV5StorageSystem(hotDir, archiveDir, mode, stateStorageFrequency),
+        storageMode);
+  }
+
+  public static StorageSystem createV4StorageSystem(
+      final Path dataDir, final StateStorageMode storageMode, final long stateStorageFrequency) {
+    return createV4StorageSystem(
+        dataDir.resolve("hot"), dataDir.resolve("archive"), storageMode, stateStorageFrequency);
   }
 
   public static StorageSystem createV4StorageSystem(
@@ -86,7 +104,9 @@ public class FileBackedStorageSystem extends AbstractStorageSystem {
             storageMode,
             stateStorageFrequency);
     return create(
-        database, (mode) -> createV4StorageSystem(hotDir, archiveDir, mode, stateStorageFrequency));
+        database,
+        (mode) -> createV4StorageSystem(hotDir, archiveDir, mode, stateStorageFrequency),
+        storageMode);
   }
 
   public static StorageSystem createV3StorageSystem(
@@ -94,11 +114,13 @@ public class FileBackedStorageSystem extends AbstractStorageSystem {
     final RocksDbConfiguration rocksDbConfiguration = RocksDbConfiguration.v3And4Settings(dataPath);
     final Database database =
         RocksDbDatabase.createV3(new StubMetricsSystem(), rocksDbConfiguration, storageMode);
-    return create(database, (mode) -> createV3StorageSystem(dataPath, mode));
+    return create(database, (mode) -> createV3StorageSystem(dataPath, mode), storageMode);
   }
 
   private static StorageSystem create(
-      final Database database, final RestartedStorageSupplier restartedSupplier) {
+      final Database database,
+      final RestartedStorageSupplier restartedSupplier,
+      final StateStorageMode storageMode) {
     final EventBus eventBus = new EventBus();
 
     // Create and start storage server
@@ -113,6 +135,7 @@ public class FileBackedStorageSystem extends AbstractStorageSystem {
         StorageBackedRecentChainData.createImmediately(
             new NoOpMetricsSystem(),
             chainStorageServer,
+            chainStorageServer,
             finalizedCheckpointChannel,
             reorgEventChannel,
             eventBus);
@@ -125,6 +148,7 @@ public class FileBackedStorageSystem extends AbstractStorageSystem {
     return new FileBackedStorageSystem(
         eventBus,
         reorgEventChannel,
+        storageMode,
         database,
         recentChainData,
         combinedChainDataClient,
@@ -137,8 +161,18 @@ public class FileBackedStorageSystem extends AbstractStorageSystem {
   }
 
   @Override
+  public ProtoArrayStorage createProtoArrayStorage() {
+    return new ProtoArrayStorage(database);
+  }
+
+  @Override
   public Database getDatabase() {
     return database;
+  }
+
+  @Override
+  public StorageSystem restarted() {
+    return restarted(storageMode);
   }
 
   @Override

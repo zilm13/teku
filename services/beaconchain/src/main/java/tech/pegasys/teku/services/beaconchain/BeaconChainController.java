@@ -117,7 +117,7 @@ public class BeaconChainController extends Service implements TimeTickChannel {
   private volatile BlockImporter blockImporter;
   private volatile RecentChainData recentChainData;
   private volatile Eth2Network p2pNetwork;
-  private volatile BeaconRestApi beaconRestAPI;
+  private volatile Optional<BeaconRestApi> beaconRestAPI = Optional.empty();
   private volatile AggregatingAttestationPool attestationPool;
   private volatile DepositProvider depositProvider;
   private volatile SyncService syncService;
@@ -130,6 +130,7 @@ public class BeaconChainController extends Service implements TimeTickChannel {
   private volatile OperationPool<SignedVoluntaryExit> voluntaryExitPool;
 
   private SyncStateTracker syncStateTracker;
+  private UnsignedLong genesisTimeTracker = ZERO;
 
   public BeaconChainController(final ServiceConfig serviceConfig) {
     this.asyncRunner = serviceConfig.createAsyncRunner("beaconchain");
@@ -147,7 +148,9 @@ public class BeaconChainController extends Service implements TimeTickChannel {
   protected SafeFuture<?> doStart() {
     this.eventBus.register(this);
     LOG.debug("Starting {}", this.getClass().getSimpleName());
-    return initialize().thenCompose((__) -> SafeFuture.fromRunnable(beaconRestAPI::start));
+    return initialize()
+        .thenCompose(
+            (__) -> SafeFuture.fromRunnable(() -> beaconRestAPI.ifPresent(BeaconRestApi::start)));
   }
 
   private void startServices() {
@@ -164,7 +167,7 @@ public class BeaconChainController extends Service implements TimeTickChannel {
     LOG.debug("Stopping {}", this.getClass().getSimpleName());
     return SafeFuture.allOf(
         SafeFuture.fromRunnable(() -> eventBus.unregister(this)),
-        SafeFuture.fromRunnable(beaconRestAPI::stop),
+        SafeFuture.fromRunnable(() -> beaconRestAPI.ifPresent(BeaconRestApi::stop)),
         syncStateTracker.stop(),
         syncService.stop(),
         attestationManager.stop(),
@@ -175,6 +178,7 @@ public class BeaconChainController extends Service implements TimeTickChannel {
     return StorageBackedRecentChainData.create(
             metricsSystem,
             asyncRunner,
+            eventChannels.getPublisher(StorageQueryChannel.class),
             eventChannels.getPublisher(StorageUpdateChannel.class),
             eventChannels.getPublisher(FinalizedCheckpointChannel.class),
             eventChannels.getPublisher(ReorgEventChannel.class),
@@ -266,7 +270,8 @@ public class BeaconChainController extends Service implements TimeTickChannel {
     LOG.debug("BeaconChainController.initMetrics()");
     eventChannels.subscribe(
         SlotEventsChannel.class,
-        new BeaconChainMetrics(recentChainData, slotProcessor.getNodeSlot(), metricsSystem));
+        new BeaconChainMetrics(
+            recentChainData, slotProcessor.getNodeSlot(), metricsSystem, p2pNetwork));
   }
 
   public void initDepositProvider() {
@@ -449,7 +454,11 @@ public class BeaconChainController extends Service implements TimeTickChannel {
             syncService,
             eventChannels.getPublisher(ValidatorApiChannel.class),
             blockImporter);
-    beaconRestAPI = new BeaconRestApi(dataProvider, config);
+    if (config.isRestApiEnabled()) {
+      beaconRestAPI = Optional.of(new BeaconRestApi(dataProvider, config));
+    } else {
+      LOG.info("rest-api-enabled is false, not starting rest api.");
+    }
   }
 
   public void initBlockImporter() {
@@ -496,12 +505,13 @@ public class BeaconChainController extends Service implements TimeTickChannel {
     UnsignedLong genesisTime = recentChainData.getGenesisTime();
     UnsignedLong currentTime = UnsignedLong.valueOf(System.currentTimeMillis() / 1000);
     UnsignedLong currentSlot = ZERO;
-    if (currentTime.compareTo(genesisTime) > 0) {
+    if (currentTime.compareTo(genesisTime) >= 0) {
       UnsignedLong deltaTime = currentTime.minus(genesisTime);
       currentSlot = deltaTime.dividedBy(UnsignedLong.valueOf(SECONDS_PER_SLOT));
     } else {
       UnsignedLong timeUntilGenesis = genesisTime.minus(currentTime);
-      LOG.info("{} seconds until genesis.", timeUntilGenesis);
+      genesisTimeTracker = currentTime;
+      STATUS_LOG.timeUntilGenesis(timeUntilGenesis.longValue());
     }
     slotProcessor.setCurrentSlot(currentSlot);
   }
@@ -516,6 +526,15 @@ public class BeaconChainController extends Service implements TimeTickChannel {
     final StoreTransaction transaction = recentChainData.startStoreTransaction();
     on_tick(transaction, currentTime);
     transaction.commit().join();
+
+    final UnsignedLong genesisTime = recentChainData.getGenesisTime();
+    if (genesisTime.compareTo(currentTime) > 0) {
+      // notify every 10 minutes
+      if (genesisTimeTracker.plus(UnsignedLong.valueOf(600L)).compareTo(currentTime) <= 0) {
+        genesisTimeTracker = currentTime;
+        STATUS_LOG.timeUntilGenesis(genesisTime.minus(currentTime).longValue());
+      }
+    }
 
     slotProcessor.onTick(currentTime);
   }

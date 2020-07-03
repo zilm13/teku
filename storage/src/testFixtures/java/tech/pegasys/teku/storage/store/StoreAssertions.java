@@ -25,10 +25,16 @@ public class StoreAssertions {
             "time",
             "lock",
             "readLock",
+            "blockProvider",
             "block_states",
+            "checkpoint_states",
+            "blocks",
             "stateRequestCachedCounter",
             "stateRequestRegenerateCounter",
             "stateRequestMissCounter",
+            "checkpointStateRequestCachedCounter",
+            "checkpointStateRequestRegenerateCounter",
+            "checkpointStateRequestMissCounter",
             "metricsSystem");
   }
 }
