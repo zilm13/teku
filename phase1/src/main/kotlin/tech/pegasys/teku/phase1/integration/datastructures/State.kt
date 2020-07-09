@@ -50,6 +50,7 @@ import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableVector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZVector
 import tech.pegasys.teku.phase1.onotole.ssz.boolean
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
+import tech.pegasys.teku.phase1.util.printRoot
 import tech.pegasys.teku.ssz.backing.ContainerViewRead
 import tech.pegasys.teku.ssz.backing.ListViewRead
 import tech.pegasys.teku.ssz.backing.VectorViewRead
@@ -823,6 +824,6 @@ class BeaconState : AbstractMutableContainer {
   fun copy(): BeaconState = applyChanges()
 
   override fun toString(): String {
-    return "BeaconState(root='${hashTreeRoot()}', slot='$slot', eth1_data='$eth1_data', eth1_data_votes='$eth1_data_votes')"
+    return "BeaconState(root='${printRoot(hashTreeRoot())}', slot='$slot', eth1_data='$eth1_data')"
   }
 }

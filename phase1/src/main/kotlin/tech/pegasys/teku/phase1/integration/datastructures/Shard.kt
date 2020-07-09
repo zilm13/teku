@@ -2,9 +2,9 @@ package tech.pegasys.teku.phase1.integration.datastructures
 
 import tech.pegasys.teku.phase1.integration.Bytes96Type
 import tech.pegasys.teku.phase1.integration.getBasicValue
-import tech.pegasys.teku.phase1.integration.ssz.SSZAbstractCollection
 import tech.pegasys.teku.phase1.integration.ssz.SSZByteListImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZListImpl
+import tech.pegasys.teku.phase1.integration.ssz.getListView
 import tech.pegasys.teku.phase1.integration.toUInt64
 import tech.pegasys.teku.phase1.integration.toUnsignedLong
 import tech.pegasys.teku.phase1.integration.wrapValues
@@ -12,6 +12,7 @@ import tech.pegasys.teku.phase1.onotole.phase1.BLSSignature
 import tech.pegasys.teku.phase1.onotole.phase1.Gwei
 import tech.pegasys.teku.phase1.onotole.phase1.MAX_SHARD_BLOCKS_PER_ATTESTATION
 import tech.pegasys.teku.phase1.onotole.phase1.MAX_SHARD_BLOCK_SIZE
+import tech.pegasys.teku.phase1.onotole.phase1.NO_SIGNATURE
 import tech.pegasys.teku.phase1.onotole.phase1.Root
 import tech.pegasys.teku.phase1.onotole.phase1.Shard
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
@@ -21,6 +22,7 @@ import tech.pegasys.teku.phase1.onotole.ssz.Bytes96
 import tech.pegasys.teku.phase1.onotole.ssz.SSZByteList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZList
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
+import tech.pegasys.teku.phase1.util.printRoot
 import tech.pegasys.teku.ssz.backing.tree.TreeNode
 import tech.pegasys.teku.ssz.backing.type.BasicViewTypes
 import tech.pegasys.teku.ssz.backing.type.ContainerViewType
@@ -35,11 +37,11 @@ class ShardTransition : AbstractImmutableContainer {
   val start_slot: Slot
     get() = (get(0) as UInt64View).get().toUInt64()
   val shard_block_lengths: SSZList<uint64>
-    get() = SSZListImpl<uint64, UInt64View>(getAny(1)) { v -> v.get().toUInt64() }
+    get() = SSZListImpl<uint64, UInt64View>(getAny(1)) { it.get().toUInt64() }
   val shard_data_roots: SSZList<Root>
     get() = SSZListImpl(getAny(2), Bytes32View::get)
   val shard_states: SSZList<ShardState>
-    get() = SSZListImpl<ShardState, ShardState>(getAny(3)) { v -> v }
+    get() = SSZListImpl<ShardState, ShardState>(getAny(3)) { it }
   val proposer_signature_aggregate: BLSSignature
     get() = Bytes96(ViewUtils.getAllBytes(getAny(4)))
 
@@ -51,11 +53,42 @@ class ShardTransition : AbstractImmutableContainer {
     proposer_signature_aggregate: BLSSignature
   ) : super(
     TYPE,
-    UInt64View(start_slot.toUnsignedLong()),
-    (shard_block_lengths as SSZAbstractCollection<*, *>).view,
-    (shard_data_roots as SSZAbstractCollection<*, *>).view,
-    (shard_states as SSZAbstractCollection<*, *>).view,
-    ViewUtils.createVectorFromBytes(proposer_signature_aggregate.wrappedBytes)
+    *wrapValues(
+      start_slot,
+      shard_block_lengths,
+      shard_data_roots,
+      shard_states,
+      proposer_signature_aggregate
+    )
+  )
+
+  constructor(
+    start_slot: Slot,
+    shard_block_lengths: List<uint64> = listOf(),
+    shard_data_roots: List<Bytes32> = listOf(),
+    shard_states: List<ShardState> = listOf(),
+    proposer_signature_aggregate: BLSSignature = NO_SIGNATURE
+  ) : super(
+    TYPE,
+    *wrapValues(
+      start_slot,
+      getListView(
+        BasicViewTypes.UINT64_TYPE,
+        MAX_SHARD_BLOCKS_PER_ATTESTATION,
+        shard_block_lengths
+      ) { UInt64View(it.toUnsignedLong()) },
+      getListView(
+        BasicViewTypes.BYTES32_TYPE,
+        MAX_SHARD_BLOCKS_PER_ATTESTATION,
+        shard_data_roots
+      ) { Bytes32View(it) },
+      getListView(
+        ShardState.TYPE,
+        MAX_SHARD_BLOCKS_PER_ATTESTATION,
+        shard_states
+      ) { it },
+      proposer_signature_aggregate
+    )
   )
 
   constructor(
@@ -123,6 +156,11 @@ class ShardState : AbstractImmutableContainer {
     gasprice: Gwei = this.gasprice,
     latest_block_root: Root = this.latest_block_root
   ): ShardState = ShardState(slot, gasprice, latest_block_root)
+
+  override fun toString(): String {
+    return "ShardState(slot=$slot, gasprice=$gasprice, latest_block_root=$latest_block_root)"
+  }
+
 
   companion object {
     val TYPE = ContainerViewType<ShardState>(
@@ -230,6 +268,22 @@ class ShardBlock : AbstractImmutableContainer {
   )
 
   constructor(
+    shard_parent_root: Root,
+    beacon_parent_root: Root,
+    slot: Slot,
+    shard: Shard,
+    proposer_index: ValidatorIndex,
+    body: List<Byte>
+  ) : this(
+    shard_parent_root,
+    beacon_parent_root,
+    slot,
+    shard,
+    proposer_index,
+    SSZByteListImpl(MAX_SHARD_BLOCK_SIZE, body)
+  )
+
+  constructor(
     type: ContainerViewType<out AbstractImmutableContainer>?,
     backingNode: TreeNode?
   ) : super(type, backingNode)
@@ -248,6 +302,17 @@ class ShardBlock : AbstractImmutableContainer {
       ),
       ::ShardBlock
     )
+  }
+
+  override fun toString(): String {
+    return "ShardBlock(" +
+        "root=${printRoot(hashTreeRoot())}, " +
+        "slot=$slot, " +
+        "shard=$shard, " +
+        "proposer_index=$proposer_index, " +
+        "beacon_parent_root=${printRoot(beacon_parent_root)}, " +
+        "shard_parent_root=${printRoot(shard_parent_root)}, " +
+        "body_root=${printRoot(body.hashTreeRoot())})"
   }
 }
 

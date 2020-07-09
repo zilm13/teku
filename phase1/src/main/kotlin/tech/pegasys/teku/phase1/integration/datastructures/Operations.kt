@@ -1,15 +1,15 @@
 package tech.pegasys.teku.phase1.integration.datastructures
 
 import org.apache.tuweni.bytes.Bytes48
+import tech.pegasys.teku.phase1.integration.Bytes48Type
+import tech.pegasys.teku.phase1.integration.Bytes96Type
+import tech.pegasys.teku.phase1.integration.getBasicValue
 import tech.pegasys.teku.phase1.integration.ssz.SSZAbstractCollection
 import tech.pegasys.teku.phase1.integration.ssz.SSZBitlistImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZByteListImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZByteVectorImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZListImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZVectorImpl
-import tech.pegasys.teku.phase1.integration.Bytes48Type
-import tech.pegasys.teku.phase1.integration.Bytes96Type
-import tech.pegasys.teku.phase1.integration.getBasicValue
 import tech.pegasys.teku.phase1.integration.toUInt64
 import tech.pegasys.teku.phase1.integration.toUnsignedLong
 import tech.pegasys.teku.phase1.integration.wrapBasicValue
@@ -34,7 +34,6 @@ import tech.pegasys.teku.phase1.onotole.ssz.SSZBitlist
 import tech.pegasys.teku.phase1.onotole.ssz.SSZByteList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZByteVector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZList
-import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZVector
 import tech.pegasys.teku.phase1.onotole.ssz.boolean
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
@@ -202,13 +201,30 @@ class Attestation : AbstractImmutableContainer {
   constructor(
     aggregation_bits: SSZBitlist,
     data: AttestationData,
-    custody_bits_blocks: SSZMutableList<SSZBitlist>,
+    custody_bits_blocks: SSZList<SSZBitlist>,
     signature: BLSSignature
   ) : super(
     TYPE,
     (aggregation_bits as SSZAbstractCollection<*, *>).view,
     data,
     (custody_bits_blocks as SSZAbstractCollection<*, *>).view,
+    ViewUtils.createVectorFromBytes(signature.wrappedBytes)
+  )
+
+  constructor(
+    aggregation_bits: SSZBitlist,
+    data: AttestationData,
+    signature: BLSSignature
+  ) : super(
+    TYPE,
+    (aggregation_bits as SSZAbstractCollection<*, *>).view,
+    data,
+    ListViewType<ListViewRead<BitView>>(
+      ListViewType<BitView>(
+        BasicViewTypes.BIT_TYPE,
+        MAX_VALIDATORS_PER_COMMITTEE.toLong()
+      ), MAX_VALIDATORS_PER_COMMITTEE.toLong()
+    ).default,
     ViewUtils.createVectorFromBytes(signature.wrappedBytes)
   )
 
@@ -395,7 +411,8 @@ class SignedVoluntaryExit : AbstractImmutableContainer {
 
   companion object {
     val TYPE = ContainerViewType<SignedVoluntaryExit>(
-      listOf(VoluntaryExit.TYPE,
+      listOf(
+        VoluntaryExit.TYPE,
         Bytes96Type
       ), ::SignedVoluntaryExit
     )
@@ -447,7 +464,8 @@ class CustodyKeyReveal : AbstractImmutableContainer {
 
   companion object {
     val TYPE = ContainerViewType<CustodyKeyReveal>(
-      listOf(BasicViewTypes.UINT64_TYPE,
+      listOf(
+        BasicViewTypes.UINT64_TYPE,
         Bytes96Type
       ), ::CustodyKeyReveal
     )
@@ -576,7 +594,8 @@ class SignedCustodySlashing : AbstractImmutableContainer {
 
   companion object {
     val TYPE = ContainerViewType<SignedCustodySlashing>(
-      listOf(CustodySlashing.TYPE,
+      listOf(
+        CustodySlashing.TYPE,
         Bytes96Type
       ),
       ::SignedCustodySlashing

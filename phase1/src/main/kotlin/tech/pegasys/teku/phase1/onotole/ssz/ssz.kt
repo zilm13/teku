@@ -7,6 +7,7 @@ import tech.pegasys.teku.phase1.integration.ssz.SSZByteListImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZListImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZVectorImpl
 import tech.pegasys.teku.phase1.integration.toUnsignedLong
+import tech.pegasys.teku.phase1.onotole.phase1.Root
 import tech.pegasys.teku.phase1.onotole.pylib.pybytes
 import tech.pegasys.teku.phase1.onotole.pylib.pyint
 import tech.pegasys.teku.ssz.SSZTypes.Bitvector
@@ -56,6 +57,7 @@ fun <K, V> SSZDict() = mutableMapOf<K, V>()
 interface SSZCollection<T : Any> : Sequence<T> {
   operator fun get(index: ULong): T
   override operator fun get(index: Int): T = get(index.toULong())
+  fun hashTreeRoot(): Root
 }
 
 interface SSZMutableCollection<T : Any> : SSZCollection<T> {
@@ -74,8 +76,11 @@ interface SSZMutableList<T : Any> : SSZList<T>, SSZMutableCollection<T> {
   fun replaceAll(elements: Sequence<T>)
 }
 
-interface SSZBitlist : SSZList<Boolean>
-interface SSZMutableBitlist : SSZMutableList<Boolean>, SSZBitlist
+interface SSZBitlist : SSZList<Boolean> {
+  infix fun or(other: SSZBitlist): SSZBitlist
+  fun set(index: uint64): SSZBitlist
+}
+
 interface SSZByteList : SSZList<Byte>
 interface SSZVector<T : Any> : SSZCollection<T> {
   fun updated(mutator: (SSZMutableVector<T>) -> Unit): SSZVector<T>
@@ -139,6 +144,9 @@ fun <T : Any> SSZList(
     unwrapper,
     wrapper
   )
+
+fun SSZByteList(maxSize: ULong, elements: List<Byte> = listOf()): SSZByteList =
+  SSZByteListImpl(maxSize, elements)
 
 fun SSZBitlist(maxSize: ULong, elements: List<Boolean> = listOf()): SSZBitlist =
   SSZBitlistImpl(maxSize, elements)

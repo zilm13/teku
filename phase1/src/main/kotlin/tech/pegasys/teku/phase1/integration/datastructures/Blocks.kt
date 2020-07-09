@@ -6,6 +6,8 @@ import tech.pegasys.teku.phase1.integration.ssz.SSZAbstractCollection
 import tech.pegasys.teku.phase1.integration.ssz.SSZBitvectorImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZListImpl
 import tech.pegasys.teku.phase1.integration.ssz.SSZVectorImpl
+import tech.pegasys.teku.phase1.integration.ssz.getListView
+import tech.pegasys.teku.phase1.integration.ssz.getVectorView
 import tech.pegasys.teku.phase1.integration.toUInt64
 import tech.pegasys.teku.phase1.integration.toUnsignedLong
 import tech.pegasys.teku.phase1.integration.wrapValues
@@ -21,6 +23,7 @@ import tech.pegasys.teku.phase1.onotole.phase1.MAX_CUSTODY_SLASHINGS
 import tech.pegasys.teku.phase1.onotole.phase1.MAX_DEPOSITS
 import tech.pegasys.teku.phase1.onotole.phase1.MAX_EARLY_DERIVED_SECRET_REVEALS
 import tech.pegasys.teku.phase1.onotole.phase1.MAX_PROPOSER_SLASHINGS
+import tech.pegasys.teku.phase1.onotole.phase1.MAX_SHARDS
 import tech.pegasys.teku.phase1.onotole.phase1.MAX_VOLUNTARY_EXITS
 import tech.pegasys.teku.phase1.onotole.phase1.Root
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
@@ -31,6 +34,8 @@ import tech.pegasys.teku.phase1.onotole.ssz.SSZBitvector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZVector
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
+import tech.pegasys.teku.phase1.util.printRoot
+import tech.pegasys.teku.phase1.util.printSignature
 import tech.pegasys.teku.ssz.backing.VectorViewRead
 import tech.pegasys.teku.ssz.backing.tree.TreeNode
 import tech.pegasys.teku.ssz.backing.type.BasicViewTypes
@@ -81,7 +86,7 @@ class Eth1Data : AbstractImmutableContainer {
   }
 
   override fun toString(): String {
-    return "Eth1Data(deposit_root='$deposit_root', deposit_count='$deposit_count', block_hash='$block_hash')"
+    return "Eth1Data(deposit_root='${printRoot(deposit_root)}', deposit_count='$deposit_count', block_hash='${printRoot(block_hash)}')"
   }
 }
 
@@ -179,27 +184,27 @@ class BeaconBlockBody : AbstractImmutableContainer {
   val graffiti: Bytes32
     get() = (get(2) as Bytes32View).get()
   val proposer_slashings: SSZList<ProposerSlashing>
-    get() = SSZListImpl<ProposerSlashing, ProposerSlashing>(getAny(3)) { v -> v }
+    get() = SSZListImpl<ProposerSlashing, ProposerSlashing>(getAny(3)) { it }
   val attester_slashings: SSZList<AttesterSlashing>
-    get() = SSZListImpl<AttesterSlashing, AttesterSlashing>(getAny(4)) { v -> v }
+    get() = SSZListImpl<AttesterSlashing, AttesterSlashing>(getAny(4)) { it }
   val attestations: SSZList<Attestation>
-    get() = SSZListImpl<Attestation, Attestation>(getAny(5)) { v -> v }
+    get() = SSZListImpl<Attestation, Attestation>(getAny(5)) { it }
   val deposits: SSZList<Deposit>
-    get() = SSZListImpl<Deposit, Deposit>(getAny(6)) { v -> v }
+    get() = SSZListImpl<Deposit, Deposit>(getAny(6)) { it }
   val voluntary_exits: SSZList<SignedVoluntaryExit>
-    get() = SSZListImpl<SignedVoluntaryExit, SignedVoluntaryExit>(getAny(7)) { v -> v }
+    get() = SSZListImpl<SignedVoluntaryExit, SignedVoluntaryExit>(getAny(7)) { it }
   val chunk_challenges: SSZList<CustodyChunkChallenge>
-    get() = SSZListImpl<CustodyChunkChallenge, CustodyChunkChallenge>(getAny(8)) { v -> v }
+    get() = SSZListImpl<CustodyChunkChallenge, CustodyChunkChallenge>(getAny(8)) { it }
   val chunk_challenge_responses: SSZList<CustodyChunkResponse>
-    get() = SSZListImpl<CustodyChunkResponse, CustodyChunkResponse>(getAny(9)) { v -> v }
+    get() = SSZListImpl<CustodyChunkResponse, CustodyChunkResponse>(getAny(9)) { it }
   val custody_key_reveals: SSZList<CustodyKeyReveal>
-    get() = SSZListImpl<CustodyKeyReveal, CustodyKeyReveal>(getAny(10)) { v -> v }
+    get() = SSZListImpl<CustodyKeyReveal, CustodyKeyReveal>(getAny(10)) { it }
   val early_derived_secret_reveals: SSZList<EarlyDerivedSecretReveal>
-    get() = SSZListImpl<EarlyDerivedSecretReveal, EarlyDerivedSecretReveal>(getAny(11)) { v -> v }
+    get() = SSZListImpl<EarlyDerivedSecretReveal, EarlyDerivedSecretReveal>(getAny(11)) { it }
   val custody_slashings: SSZList<SignedCustodySlashing>
-    get() = SSZListImpl<SignedCustodySlashing, SignedCustodySlashing>(getAny(12)) { v -> v }
+    get() = SSZListImpl<SignedCustodySlashing, SignedCustodySlashing>(getAny(12)) { it }
   val shard_transitions: SSZVector<ShardTransition>
-    get() = SSZVectorImpl<ShardTransition, ShardTransition>(getAny(13)) { v -> v }
+    get() = SSZVectorImpl<ShardTransition, ShardTransition>(getAny(13)) { it }
   val light_client_bits: SSZBitvector
     get() = SSZBitvectorImpl(getAny<VectorViewRead<BitView>>(14))
   val light_client_signature: BLSSignature
@@ -241,7 +246,9 @@ class BeaconBlockBody : AbstractImmutableContainer {
   constructor(
     randao_reveal: BLSSignature,
     eth1_data: Eth1Data,
-    graffiti: Bytes32
+    graffiti: Bytes32,
+    attestations: List<Attestation>,
+    shard_transitions: List<ShardTransition>
   ) : super(
     TYPE,
     ViewUtils.createVectorFromBytes(randao_reveal.wrappedBytes),
@@ -249,7 +256,7 @@ class BeaconBlockBody : AbstractImmutableContainer {
     Bytes32View(graffiti),
     ListViewType<ProposerSlashing>(ProposerSlashing.TYPE, MAX_PROPOSER_SLASHINGS.toLong()).default,
     ListViewType<AttesterSlashing>(AttesterSlashing.TYPE, MAX_ATTESTER_SLASHINGS.toLong()).default,
-    ListViewType<Attestation>(Attestation.TYPE, MAX_ATTESTATIONS.toLong()).default,
+    getListView(Attestation.TYPE, MAX_ATTESTATIONS, attestations) { it },
     ListViewType<Deposit>(Deposit.TYPE, MAX_DEPOSITS.toLong()).default,
     ListViewType<SignedVoluntaryExit>(
       SignedVoluntaryExit.TYPE,
@@ -272,7 +279,7 @@ class BeaconBlockBody : AbstractImmutableContainer {
       SignedCustodySlashing.TYPE,
       MAX_CUSTODY_SLASHINGS.toLong()
     ).default,
-    VectorViewType<ShardTransition>(ShardTransition.TYPE, MAX_PROPOSER_SLASHINGS.toLong()).default,
+    getVectorView(ShardTransition.TYPE, MAX_SHARDS, shard_transitions) { it },
     VectorViewType<BitView>(BasicViewTypes.BIT_TYPE, LIGHT_CLIENT_COMMITTEE_SIZE.toLong()).default,
     Bytes96Type.default
   )
@@ -315,7 +322,7 @@ class BeaconBlockBody : AbstractImmutableContainer {
           SignedCustodySlashing.TYPE,
           MAX_CUSTODY_SLASHINGS.toLong()
         ),
-        VectorViewType<ShardTransition>(ShardTransition.TYPE, MAX_PROPOSER_SLASHINGS.toLong()),
+        VectorViewType<ShardTransition>(ShardTransition.TYPE, MAX_SHARDS.toLong()),
         VectorViewType<BitView>(BasicViewTypes.BIT_TYPE, LIGHT_CLIENT_COMMITTEE_SIZE.toLong()),
         Bytes96Type
       ), ::BeaconBlockBody
@@ -392,7 +399,7 @@ class BeaconBlock : AbstractImmutableContainer {
   ): BeaconBlock = BeaconBlock(slot, proposer_index, parent_root, state_root, body)
 
   override fun toString(): String {
-    return "BeaconBlock(root='${hashTreeRoot()}', slot='$slot', body='$body')"
+    return "BeaconBlock(root='${printRoot(hashTreeRoot())}', slot='$slot', body='$body')"
   }
 }
 
@@ -426,7 +433,7 @@ class SignedBeaconBlock : AbstractImmutableContainer {
   }
 
   override fun toString(): String {
-    return "SignedBeaconBlock(message='$message', signature='$signature')"
+    return "SignedBeaconBlock(message='$message', signature='${printSignature(signature)}')"
   }
 }
 

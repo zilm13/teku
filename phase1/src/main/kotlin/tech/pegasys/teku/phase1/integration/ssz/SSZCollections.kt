@@ -1,18 +1,20 @@
 package tech.pegasys.teku.phase1.integration.ssz
 
+import com.google.common.base.Preconditions
+import tech.pegasys.teku.phase1.onotole.phase1.Root
 import tech.pegasys.teku.phase1.onotole.ssz.SSZBitlist
 import tech.pegasys.teku.phase1.onotole.ssz.SSZBitvector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZByteList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZByteVector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZCollection
 import tech.pegasys.teku.phase1.onotole.ssz.SSZList
-import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableBitlist
 import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableBitvector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZMutableVector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZVector
 import tech.pegasys.teku.phase1.onotole.ssz.Sequence
 import tech.pegasys.teku.phase1.onotole.ssz.getWrapper
+import tech.pegasys.teku.phase1.onotole.ssz.uint64
 import tech.pegasys.teku.ssz.backing.CompositeViewRead
 import tech.pegasys.teku.ssz.backing.ListViewRead
 import tech.pegasys.teku.ssz.backing.ListViewWrite
@@ -67,6 +69,35 @@ abstract class SSZAbstractCollection<U : Any, V : ViewRead> : SSZCollection<U> {
 
   override fun toString(): String {
     return "[${this.joinToString { it.toString() }}]"
+  }
+
+
+  override fun equals(other: Any?): Boolean {
+    if (this === other) return true
+    if (other is SSZListImpl<*, *>) {
+      return view == other.view
+    }
+
+    if (other is Sequence<*>) {
+      if (!this.isEmpty() && !other.isEmpty()) {
+        for (i in 0 until this.size) {
+          if (this[i] != other[i]) {
+            return false
+          }
+        }
+        return true
+      } else if (this.isEmpty() && other.isEmpty()) {
+        return true
+      }
+
+      return false
+    }
+
+    return false
+  }
+
+  override fun hashTreeRoot(): Root {
+    return view.hashTreeRoot()
   }
 
   override fun lastIndexOf(element: U): Int = throw UnsupportedOperationException()
@@ -260,52 +291,43 @@ class SSZMutableBitvectorImpl(override val view: VectorViewWrite<BitView>) :
 class SSZBitlistImpl(override val view: ListViewRead<BitView>) :
   SSZAbstractCollection<Boolean, BitView>(), SSZBitlist {
   override val unwrapper: (BitView) -> Boolean = BitView::get
+  override fun or(other: SSZBitlist): SSZBitlist {
+    assert((other as SSZBitlistImpl).view.type.maxLength == this.view.type.maxLength)
+
+    val resultBits = (0 until view.size().coerceAtLeast(other.view.size())).map {
+      val a = if (it < view.size()) view.get(it).get() else false
+      val b = if (it < other.view.size()) other.view.get(it).get() else false
+      a or b
+    }
+    return SSZBitlistImpl(view.type.maxLength.toULong(), resultBits)
+  }
+
+  override fun set(index: uint64): SSZBitlist {
+    if (index > maxSize) {
+      throw IndexOutOfBoundsException()
+    }
+
+    val mutableCopy = view.createWritableCopy()
+    for (i in view.size()..index.toInt()) {
+      mutableCopy.append(BitView(false))
+    }
+    mutableCopy.set(index.toInt(), BitView(true))
+    return SSZBitlistImpl(mutableCopy.commitChanges())
+  }
+
   override val maxSize: ULong
     get() = view.type.maxLength.toULong()
 
   override fun updated(mutator: (SSZMutableList<Boolean>) -> Unit): SSZList<Boolean> =
     throw UnsupportedOperationException()
 
-  constructor(maxSize: ULong, elements: List<Boolean>) : this(
+  constructor(maxSize: ULong, elements: List<Boolean> = listOf()) : this(
     initializeListView<Boolean, BitView>(
       BasicViewTypes.BIT_TYPE,
       maxSize,
       elements,
       ::BitView
     ).commitChanges()
-  )
-}
-
-class SSZMutableBitlistImpl(override val view: ListViewWrite<BitView>) :
-  SSZAbstractCollection<Boolean, BitView>(), SSZMutableBitlist {
-  override val unwrapper: (BitView) -> Boolean = BitView::get
-  override val maxSize: ULong
-    get() = view.type.maxLength.toULong()
-
-  override fun updated(mutator: (SSZMutableList<Boolean>) -> Unit): SSZList<Boolean> =
-    throw UnsupportedOperationException()
-
-  override fun append(item: Boolean) {
-    if (size.toULong() >= maxSize) {
-      throw IndexOutOfBoundsException()
-    }
-    view.append(BitView(item))
-  }
-
-  override fun clear() = view.clear()
-  override fun replaceAll(elements: Sequence<Boolean>) {
-    this.clear()
-    elements.forEach { this.append(it) }
-  }
-
-  override fun set(index: ULong, item: Boolean): Boolean {
-    val oldValue = get(index)
-    view.set(index.toInt(), BitView(item))
-    return oldValue
-  }
-
-  constructor(maxSize: ULong, elements: List<Boolean>) : this(
-    initializeListView<Boolean, BitView>(BasicViewTypes.BIT_TYPE, maxSize, elements, ::BitView)
   )
 }
 
@@ -369,3 +391,31 @@ private fun <U : Any, V : ViewRead> initializeListView(
   elements.forEachIndexed { index, item -> view.set(index, wrapper(item)) }
   return view
 }
+
+internal fun <U : Any, V : ViewRead> getListView(
+  elementType: ViewType,
+  maxSize: ULong,
+  elements: List<U>,
+  wrapper: (U) -> V
+): ListViewRead<V> {
+  Preconditions.checkArgument(
+    elements.size.toULong() < maxSize,
+    "Number of elements given ${elements.size} is greater than the max size of the list $maxSize"
+  )
+  return initializeListView(elementType, maxSize, elements, wrapper).commitChanges()
+}
+
+internal fun <U : Any, V : ViewRead> getVectorView(
+  elementType: ViewType,
+  vectorLength: ULong,
+  elements: List<U>,
+  wrapper: (U) -> V
+): VectorViewRead<V> {
+  Preconditions.checkArgument(
+    vectorLength == elements.size.toULong(),
+    "Vector length $vectorLength is not equal to the number of elements given ${elements.size}"
+  )
+  return initializeVectorView(elementType, elements, wrapper).commitChanges()
+}
+
+

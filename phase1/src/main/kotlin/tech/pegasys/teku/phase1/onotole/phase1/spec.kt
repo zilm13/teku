@@ -1270,6 +1270,12 @@ fun get_block_signature(state: BeaconState, block: BeaconBlock, privkey: pyint):
   return bls.Sign(privkey, signing_root)
 }
 
+fun get_shard_block_signature(state: BeaconState, block: ShardBlock, privkey: pyint): BLSSignature {
+  val domain = get_domain(state, DOMAIN_SHARD_PROPOSAL, compute_epoch_at_slot(block.slot))
+  val signing_root = compute_signing_root(block, domain)
+  return bls.Sign(privkey, signing_root)
+}
+
 fun get_attestation_signature(state: BeaconState, attestation_data: AttestationData, privkey: pyint): BLSSignature {
   val domain = get_domain(state, DOMAIN_BEACON_ATTESTER, attestation_data.target.epoch)
   val signing_root = compute_signing_root(attestation_data, domain)
@@ -1790,7 +1796,7 @@ fun validate_attestation(state: BeaconState, attestation: Attestation): Unit {
     assert((data.beacon_block_root == get_block_root_at_slot(state, compute_previous_slot(state.slot))))
     val shard = compute_shard_from_committee_index(state, attestation.data.index, attestation.data.slot)
     assert((attestation.data.shard == shard))
-    assert((attestation.data.shard_transition_root != hash_tree_root(ShardTransition())))
+    assert(attestation.data.slot == GENESIS_SLOT || (attestation.data.shard_transition_root != hash_tree_root(ShardTransition())))
   } else {
     assert((data.slot < compute_previous_slot(state.slot)))
     assert((data.shard_transition_root == Root()))
@@ -1806,7 +1812,7 @@ fun apply_shard_transition(state: BeaconState, shard: Shard, transition: ShardTr
   val headers: PyList<ShardBlockHeader> = PyList()
   val proposers: PyList<ValidatorIndex> = PyList()
   var prev_gasprice = state.shard_states[shard].gasprice
-  val shard_parent_root = state.shard_states[shard].latest_block_root
+  var shard_parent_root = state.shard_states[shard].latest_block_root
   for ((i, offset_slot) in enumerate(offset_slots)) {
     val shard_block_length = transition.shard_block_lengths[i]
     val shard_state = transition.shard_states[i]
@@ -1816,7 +1822,7 @@ fun apply_shard_transition(state: BeaconState, shard: Shard, transition: ShardTr
     if (!(is_empty_proposal)) {
       val proposal_index = get_shard_proposer_index(state, offset_slot, shard)
       val header = ShardBlockHeader(shard_parent_root = shard_parent_root, beacon_parent_root = get_block_root_at_slot(state, offset_slot), slot = offset_slot, shard = shard, proposer_index = proposal_index, body_root = transition.shard_data_roots[i])
-      val shard_parent_root = hash_tree_root(header)
+      shard_parent_root = hash_tree_root(header)
       headers.append(header)
       proposers.append(proposal_index)
     } else {
@@ -1902,7 +1908,9 @@ fun verify_empty_shard_transition(state: BeaconState, shard_transitions: Sequenc
 }
 
 fun process_shard_transitions(state: BeaconState, shard_transitions: Sequence<ShardTransition>, attestations: Sequence<Attestation>): Unit {
-  process_crosslinks(state, shard_transitions, attestations)
+  if (compute_previous_slot(state.slot) > GENESIS_SLOT) {
+    process_crosslinks(state, shard_transitions, attestations)
+  }
   assert(verify_empty_shard_transition(state, shard_transitions))
 }
 
@@ -2218,6 +2226,10 @@ fun get_shard_transition_fields(beacon_state: BeaconState, shard: Shard, shard_b
 }
 
 fun get_shard_transition(beacon_state: BeaconState, shard: Shard, shard_blocks: Sequence<SignedShardBlock>): ShardTransition {
+  if (beacon_state.slot == GENESIS_SLOT) {
+    return ShardTransition()
+  }
+
   val offset_slots = compute_offset_slots(get_latest_slot_for_shard(beacon_state, shard), Slot((beacon_state.slot + 1uL)))
   val (shard_block_lengths, shard_data_roots, shard_states) = get_shard_transition_fields(beacon_state, shard, shard_blocks)
   val proposer_signature_aggregate: BLSSignature

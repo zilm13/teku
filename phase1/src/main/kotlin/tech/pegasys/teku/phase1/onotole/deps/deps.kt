@@ -5,6 +5,7 @@ import org.apache.milagro.amcl.BLS381.BIG
 import org.apache.milagro.amcl.BLS381.FP2
 import org.apache.tuweni.crypto.Hash
 import tech.pegasys.teku.phase1.integration.bls.G2Points
+import tech.pegasys.teku.phase1.integration.ssz.SSZAbstractCollection
 import tech.pegasys.teku.phase1.onotole.phase1.BLSPubkey
 import tech.pegasys.teku.phase1.onotole.phase1.BLSSignature
 import tech.pegasys.teku.phase1.onotole.pylib.pyint
@@ -12,6 +13,7 @@ import tech.pegasys.teku.phase1.onotole.ssz.Bytes
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes48
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes96
+import tech.pegasys.teku.phase1.onotole.ssz.SSZCollection
 import tech.pegasys.teku.phase1.onotole.ssz.boolean
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
 import tech.pegasys.teku.phase1.onotole.ssz.uint8
@@ -37,6 +39,7 @@ fun hash_tree_root(v: Any): Bytes32 {
     is BLSSignature -> ViewUtils.createVectorFromBytes(v.wrappedBytes).hashTreeRoot()
     is BLSPubkey -> ViewUtils.createVectorFromBytes(v).hashTreeRoot()
     is Bytes32 -> BasicViews.Bytes32View(v).hashTreeRoot()
+    is SSZCollection<*> -> v.hashTreeRoot()
     else -> throw UnsupportedOperationException("Unsupported type ${v::class.qualifiedName}")
   }
 }
