@@ -2162,8 +2162,7 @@ fun on_shard_block(store: Store, shard_store: ShardStore, signed_shard_block: Si
   assert((shard_block.slot > finalized_shard_state.slot))
   val finalized_slot = compute_start_slot_at_epoch(store.finalized_checkpoint.epoch)
   assert((get_ancestor(store, shard_block.beacon_parent_root, finalized_slot) == store.finalized_checkpoint.root))
-  val shard_state = shard_parent_state.copy()
-  shard_state_transition(shard_state, signed_shard_block, beacon_parent_state, validate_result = true)
+  val shard_state = shard_state_transition(shard_parent_state, signed_shard_block, beacon_parent_state, validate_result = true)
   shard_store.signed_blocks[hash_tree_root(shard_block)] = signed_shard_block
   shard_store.block_states[hash_tree_root(shard_block)] = shard_state
 }
