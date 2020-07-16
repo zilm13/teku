@@ -1,4 +1,4 @@
-package tech.pegasys.teku.phase1.simulator
+package tech.pegasys.teku.phase1.simulation
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.SendChannel

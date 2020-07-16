@@ -1,4 +1,4 @@
-package tech.pegasys.teku.phase1.simulator
+package tech.pegasys.teku.phase1.simulation.actors
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -18,6 +18,17 @@ import tech.pegasys.teku.phase1.onotole.phase1.compute_shard_from_committee_inde
 import tech.pegasys.teku.phase1.onotole.phase1.get_active_validator_indices
 import tech.pegasys.teku.phase1.onotole.phase1.get_committee_count_per_slot
 import tech.pegasys.teku.phase1.onotole.phase1.get_seed
+import tech.pegasys.teku.phase1.simulation.BeaconHead
+import tech.pegasys.teku.phase1.simulation.Eth2Actor
+import tech.pegasys.teku.phase1.simulation.Eth2Event
+import tech.pegasys.teku.phase1.simulation.HeadAfterNewBeaconBlock
+import tech.pegasys.teku.phase1.simulation.NewAttestations
+import tech.pegasys.teku.phase1.simulation.NewShardHeads
+import tech.pegasys.teku.phase1.simulation.NewSlot
+import tech.pegasys.teku.phase1.simulation.NotCrosslinkedBlocksPublished
+import tech.pegasys.teku.phase1.simulation.SlotTerminal
+import tech.pegasys.teku.phase1.simulation.util.SecretKeyRegistry
+import tech.pegasys.teku.phase1.simulation.util.computeAggregateAttestationByCommittee
 
 class BeaconAttester(
   eventBus: SendChannel<Eth2Event>,

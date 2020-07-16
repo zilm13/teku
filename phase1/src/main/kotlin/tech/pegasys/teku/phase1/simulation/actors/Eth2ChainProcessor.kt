@@ -1,6 +1,5 @@
-package tech.pegasys.teku.phase1.simulator
+package tech.pegasys.teku.phase1.simulation.actors
 
-import com.google.common.collect.ImmutableMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -8,14 +7,12 @@ import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import tech.pegasys.teku.phase1.integration.datastructures.Attestation
-import tech.pegasys.teku.phase1.integration.datastructures.BeaconState
 import tech.pegasys.teku.phase1.integration.datastructures.FullAttestation
 import tech.pegasys.teku.phase1.integration.datastructures.ShardStore
 import tech.pegasys.teku.phase1.integration.datastructures.SignedBeaconBlock
 import tech.pegasys.teku.phase1.integration.datastructures.SignedShardBlock
 import tech.pegasys.teku.phase1.integration.datastructures.Store
 import tech.pegasys.teku.phase1.onotole.phase1.INITIAL_ACTIVE_SHARDS
-import tech.pegasys.teku.phase1.onotole.phase1.Root
 import tech.pegasys.teku.phase1.onotole.phase1.SECONDS_PER_SLOT
 import tech.pegasys.teku.phase1.onotole.phase1.Shard
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
@@ -26,11 +23,22 @@ import tech.pegasys.teku.phase1.onotole.phase1.on_attestation
 import tech.pegasys.teku.phase1.onotole.phase1.on_block
 import tech.pegasys.teku.phase1.onotole.phase1.on_shard_block
 import tech.pegasys.teku.phase1.onotole.phase1.on_tick
+import tech.pegasys.teku.phase1.simulation.BeaconHead
+import tech.pegasys.teku.phase1.simulation.Eth2Actor
+import tech.pegasys.teku.phase1.simulation.Eth2Event
+import tech.pegasys.teku.phase1.simulation.HeadAfterAttestationsApplied
+import tech.pegasys.teku.phase1.simulation.HeadAfterNewBeaconBlock
+import tech.pegasys.teku.phase1.simulation.NewBeaconBlock
+import tech.pegasys.teku.phase1.simulation.NewShardBlocks
+import tech.pegasys.teku.phase1.simulation.NewShardHeads
+import tech.pegasys.teku.phase1.simulation.NewSlot
+import tech.pegasys.teku.phase1.simulation.NotCrosslinkedBlocksPublished
+import tech.pegasys.teku.phase1.simulation.PrevSlotAttestationsPublished
 
 class Eth2ChainProcessor(
   eventBus: SendChannel<Eth2Event>,
   private val store: Store,
-  private val shardStores: ImmutableMap<Shard, ShardStore>
+  private val shardStores: Map<Shard, ShardStore>
 ) : Eth2Actor(eventBus) {
 
   override suspend fun dispatchImpl(event: Eth2Event, scope: CoroutineScope) {
@@ -59,7 +67,14 @@ class Eth2ChainProcessor(
   private suspend fun publishBeaconHead(eventCtor: (BeaconHead) -> Eth2Event) {
     val headRoot = get_head(store)
     val headState = store.block_states[headRoot]!!
-    publish(eventCtor(BeaconHead(headRoot, headState)))
+    publish(
+      eventCtor(
+        BeaconHead(
+          headRoot,
+          headState
+        )
+      )
+    )
   }
 
   private suspend fun onNewShardBlocks(blocks: List<SignedShardBlock>) {

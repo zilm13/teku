@@ -1,4 +1,4 @@
-package tech.pegasys.teku.phase1.simulator
+package tech.pegasys.teku.phase1.simulation.util
 
 import tech.pegasys.teku.bls.BLSSecretKey
 import tech.pegasys.teku.phase1.onotole.pylib.pyint

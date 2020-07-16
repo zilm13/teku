@@ -1,4 +1,4 @@
-package tech.pegasys.teku.phase1.simulator
+package tech.pegasys.teku.phase1.simulation.util
 
 import tech.pegasys.teku.phase1.onotole.phase1.GENESIS_SLOT
 import tech.pegasys.teku.phase1.onotole.phase1.Slot

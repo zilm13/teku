@@ -1,4 +1,4 @@
-package tech.pegasys.teku.phase1.simulator
+package tech.pegasys.teku.phase1.simulation.util
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -31,13 +31,14 @@ suspend fun computeAggregateAttestationByCommittee(
   shardBlocksToCrosslink: List<SignedShardBlock>,
   secretKeys: SecretKeyRegistry
 ): FullAttestation {
-  val attestationData = computeAttestationData(
-    committeeIndex,
-    headRoot,
-    headState,
-    shardHeadRoot,
-    shardBlocksToCrosslink
-  )
+  val attestationData =
+    computeAttestationData(
+      committeeIndex,
+      headRoot,
+      headState,
+      shardHeadRoot,
+      shardBlocksToCrosslink
+    )
 
   val res: Pair<SSZBitlistImpl, List<BLSSignature>>
   coroutineScope {

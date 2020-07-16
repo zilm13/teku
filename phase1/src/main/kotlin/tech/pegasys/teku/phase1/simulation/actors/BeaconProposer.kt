@@ -1,4 +1,4 @@
-package tech.pegasys.teku.phase1.simulator
+package tech.pegasys.teku.phase1.simulation.actors
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.SendChannel
@@ -8,6 +8,16 @@ import tech.pegasys.teku.phase1.integration.datastructures.FullAttestation
 import tech.pegasys.teku.phase1.onotole.phase1.GENESIS_SLOT
 import tech.pegasys.teku.phase1.onotole.phase1.Root
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
+import tech.pegasys.teku.phase1.simulation.BeaconHead
+import tech.pegasys.teku.phase1.simulation.Eth2Actor
+import tech.pegasys.teku.phase1.simulation.Eth2Event
+import tech.pegasys.teku.phase1.simulation.HeadAfterAttestationsApplied
+import tech.pegasys.teku.phase1.simulation.NewBeaconBlock
+import tech.pegasys.teku.phase1.simulation.NewSlot
+import tech.pegasys.teku.phase1.simulation.PrevSlotAttestationsPublished
+import tech.pegasys.teku.phase1.simulation.SlotTerminal
+import tech.pegasys.teku.phase1.simulation.util.SecretKeyRegistry
+import tech.pegasys.teku.phase1.simulation.util.produceBeaconBlock
 
 class BeaconProposer(
   eventBus: SendChannel<Eth2Event>,
@@ -40,7 +50,14 @@ class BeaconProposer(
     val attestations = recentAttestations.map { Attestation(it) }
     val shardTransitions = recentAttestations.map { it.data.shard_transition }
     val newBlock =
-      produceBlock(headState, recentSlot, headRoot, attestations, shardTransitions, secretKeys)
+      produceBeaconBlock(
+        headState,
+        recentSlot,
+        headRoot,
+        attestations,
+        shardTransitions,
+        secretKeys
+      )
     publish(NewBeaconBlock(newBlock))
   }
 

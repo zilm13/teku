@@ -1,4 +1,4 @@
-package tech.pegasys.teku.phase1.simulator
+package tech.pegasys.teku.phase1.simulation.util
 
 import org.apache.tuweni.bytes.Bytes
 import org.apache.tuweni.bytes.Bytes32
@@ -18,7 +18,7 @@ import tech.pegasys.teku.phase1.onotole.phase1.get_shard_winning_roots
 import tech.pegasys.teku.phase1.onotole.phase1.process_slots
 import tech.pegasys.teku.phase1.onotole.phase1.state_transition
 
-fun produceBlock(
+fun produceBeaconBlock(
   state: BeaconState,
   slot: Slot,
   parentRoot: Root,

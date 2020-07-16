@@ -1,4 +1,4 @@
-package tech.pegasys.teku.phase1.simulator
+package tech.pegasys.teku.phase1.simulation
 
 import tech.pegasys.teku.phase1.integration.datastructures.FullAttestation
 import tech.pegasys.teku.phase1.integration.datastructures.SignedBeaconBlock
