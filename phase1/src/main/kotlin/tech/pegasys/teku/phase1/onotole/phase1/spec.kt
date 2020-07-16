@@ -24,6 +24,7 @@ import tech.pegasys.teku.phase1.integration.datastructures.Eth1Block
 import tech.pegasys.teku.phase1.integration.datastructures.Eth1Data
 import tech.pegasys.teku.phase1.integration.datastructures.Fork
 import tech.pegasys.teku.phase1.integration.datastructures.ForkData
+import tech.pegasys.teku.phase1.integration.datastructures.FullAttestationData
 import tech.pegasys.teku.phase1.integration.datastructures.HistoricalBatch
 import tech.pegasys.teku.phase1.integration.datastructures.IndexedAttestation
 import tech.pegasys.teku.phase1.integration.datastructures.LatestMessage
@@ -1277,6 +1278,12 @@ fun get_shard_block_signature(state: BeaconState, block: ShardBlock, privkey: py
 }
 
 fun get_attestation_signature(state: BeaconState, attestation_data: AttestationData, privkey: pyint): BLSSignature {
+  val domain = get_domain(state, DOMAIN_BEACON_ATTESTER, attestation_data.target.epoch)
+  val signing_root = compute_signing_root(attestation_data, domain)
+  return bls.Sign(privkey, signing_root)
+}
+
+fun get_attestation_signature(state: BeaconState, attestation_data: FullAttestationData, privkey: pyint): BLSSignature {
   val domain = get_domain(state, DOMAIN_BEACON_ATTESTER, attestation_data.target.epoch)
   val signing_root = compute_signing_root(attestation_data, domain)
   return bls.Sign(privkey, signing_root)

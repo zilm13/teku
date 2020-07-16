@@ -1,6 +1,5 @@
 package tech.pegasys.teku.phase1.integration.ssz
 
-import com.google.common.base.Preconditions
 import tech.pegasys.teku.phase1.onotole.phase1.Root
 import tech.pegasys.teku.phase1.onotole.ssz.SSZBitlist
 import tech.pegasys.teku.phase1.onotole.ssz.SSZBitvector
@@ -398,10 +397,9 @@ internal fun <U : Any, V : ViewRead> getListView(
   elements: List<U>,
   wrapper: (U) -> V
 ): ListViewRead<V> {
-  Preconditions.checkArgument(
-    elements.size.toULong() < maxSize,
-    "Number of elements given ${elements.size} is greater than the max size of the list $maxSize"
-  )
+  require(
+    elements.size.toULong() < maxSize
+  ) { "Number of elements given ${elements.size} is greater than the max size of the list $maxSize" }
   return initializeListView(elementType, maxSize, elements, wrapper).commitChanges()
 }
 
@@ -411,10 +409,9 @@ internal fun <U : Any, V : ViewRead> getVectorView(
   elements: List<U>,
   wrapper: (U) -> V
 ): VectorViewRead<V> {
-  Preconditions.checkArgument(
-    vectorLength == elements.size.toULong(),
-    "Vector length $vectorLength is not equal to the number of elements given ${elements.size}"
-  )
+  require(
+    vectorLength == elements.size.toULong()
+  ) { "Vector length $vectorLength is not equal to the number of elements given ${elements.size}" }
   return initializeVectorView(elementType, elements, wrapper).commitChanges()
 }
 

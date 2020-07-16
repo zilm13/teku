@@ -99,6 +99,17 @@ class AttestationData : AbstractImmutableContainer {
     )
   )
 
+  constructor(fullAttestationData: FullAttestationData) : this(
+    fullAttestationData.slot,
+    fullAttestationData.index,
+    fullAttestationData.beacon_block_root,
+    fullAttestationData.source,
+    fullAttestationData.target,
+    fullAttestationData.shard,
+    fullAttestationData.shard_head_root,
+    fullAttestationData.shard_transition.hashTreeRoot()
+  )
+
   companion object {
     val TYPE = ContainerViewType<AttestationData>(
       listOf(
@@ -111,6 +122,70 @@ class AttestationData : AbstractImmutableContainer {
         BasicViewTypes.BYTES32_TYPE,
         BasicViewTypes.BYTES32_TYPE
       ), ::AttestationData
+    )
+  }
+}
+
+class FullAttestationData : AbstractImmutableContainer {
+  val slot: Slot
+    get() = getBasicValue(get(0))
+  val index: CommitteeIndex
+    get() = getBasicValue(get(1))
+  val beacon_block_root: Root
+    get() = getBasicValue(get(2))
+  val source: Checkpoint
+    get() = getAny(3)
+  val target: Checkpoint
+    get() = getAny(4)
+  val shard: Shard
+    get() = getBasicValue(get(5))
+  val shard_head_root: Root
+    get() = getBasicValue(get(6))
+  val shard_transition: ShardTransition
+    get() = getBasicValue(get(7))
+
+  constructor() : super(TYPE)
+
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
+
+  constructor(
+    slot: Slot,
+    index: CommitteeIndex,
+    beacon_block_root: Root,
+    source: Checkpoint,
+    target: Checkpoint,
+    shard: Shard,
+    shard_head_root: Root,
+    shard_transition: ShardTransition
+  ) : super(
+    TYPE,
+    *wrapValues(
+      slot,
+      index,
+      beacon_block_root,
+      source,
+      target,
+      shard,
+      shard_head_root,
+      shard_transition
+    )
+  )
+
+  companion object {
+    val TYPE = ContainerViewType<FullAttestationData>(
+      listOf(
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.BYTES32_TYPE,
+        Checkpoint.TYPE,
+        Checkpoint.TYPE,
+        BasicViewTypes.UINT64_TYPE,
+        BasicViewTypes.BYTES32_TYPE,
+        ShardTransition.TYPE
+      ), ::FullAttestationData
     )
   }
 }
@@ -205,10 +280,12 @@ class Attestation : AbstractImmutableContainer {
     signature: BLSSignature
   ) : super(
     TYPE,
-    (aggregation_bits as SSZAbstractCollection<*, *>).view,
-    data,
-    (custody_bits_blocks as SSZAbstractCollection<*, *>).view,
-    ViewUtils.createVectorFromBytes(signature.wrappedBytes)
+    *wrapValues(
+      aggregation_bits,
+      data,
+      custody_bits_blocks,
+      signature
+    )
   )
 
   constructor(
@@ -217,15 +294,24 @@ class Attestation : AbstractImmutableContainer {
     signature: BLSSignature
   ) : super(
     TYPE,
-    (aggregation_bits as SSZAbstractCollection<*, *>).view,
-    data,
-    ListViewType<ListViewRead<BitView>>(
-      ListViewType<BitView>(
-        BasicViewTypes.BIT_TYPE,
-        MAX_VALIDATORS_PER_COMMITTEE.toLong()
-      ), MAX_VALIDATORS_PER_COMMITTEE.toLong()
-    ).default,
-    ViewUtils.createVectorFromBytes(signature.wrappedBytes)
+    *wrapValues(
+      aggregation_bits,
+      data,
+      ListViewType<ListViewRead<BitView>>(
+        ListViewType<BitView>(
+          BasicViewTypes.BIT_TYPE,
+          MAX_VALIDATORS_PER_COMMITTEE.toLong()
+        ), MAX_VALIDATORS_PER_COMMITTEE.toLong()
+      ).default,
+      signature
+    )
+  )
+
+  constructor(fullAttestation: FullAttestation) : this(
+    fullAttestation.aggregation_bits,
+    AttestationData(fullAttestation.data),
+    fullAttestation.custody_bits_blocks,
+    fullAttestation.signature
   )
 
   constructor(
@@ -249,6 +335,77 @@ class Attestation : AbstractImmutableContainer {
         Bytes96Type
       ),
       ::Attestation
+    )
+  }
+}
+
+class FullAttestation : AbstractImmutableContainer {
+  val aggregation_bits: SSZBitlist
+    get() = SSZBitlistImpl(getAny(0))
+  val data: FullAttestationData
+    get() = getAny(1)
+  val custody_bits_blocks: SSZList<SSZBitlist>
+    get() = SSZListImpl<SSZBitlist, ListViewRead<BitView>>(getAny(2)) { v ->
+      SSZBitlistImpl(v)
+    }
+  val signature: BLSSignature
+    get() = Bytes96(ViewUtils.getAllBytes(getAny(3)))
+
+  constructor(
+    aggregation_bits: SSZBitlist,
+    data: FullAttestationData,
+    custody_bits_blocks: SSZList<SSZBitlist>,
+    signature: BLSSignature
+  ) : super(
+    TYPE,
+    *wrapValues(
+      aggregation_bits,
+      data,
+      custody_bits_blocks,
+      signature
+    )
+  )
+
+  constructor(
+    aggregation_bits: SSZBitlist,
+    data: FullAttestationData,
+    signature: BLSSignature
+  ) : super(
+    TYPE,
+    *wrapValues(
+      aggregation_bits,
+      data,
+      ListViewType<ListViewRead<BitView>>(
+        ListViewType<BitView>(
+          BasicViewTypes.BIT_TYPE,
+          MAX_VALIDATORS_PER_COMMITTEE.toLong()
+        ), MAX_VALIDATORS_PER_COMMITTEE.toLong()
+      ).default,
+      signature
+    )
+  )
+
+  constructor(
+    type: ContainerViewType<out AbstractImmutableContainer>?,
+    backingNode: TreeNode?
+  ) : super(type, backingNode)
+
+  constructor() : super(TYPE)
+
+  companion object {
+    val TYPE = ContainerViewType<FullAttestation>(
+      listOf(
+        ListViewType<BitView>(BasicViewTypes.BIT_TYPE, MAX_VALIDATORS_PER_COMMITTEE.toLong()),
+        FullAttestationData.TYPE,
+        ListViewType<ListViewRead<BitView>>(
+          ListViewType<BitView>(
+            BasicViewTypes.BIT_TYPE,
+            MAX_VALIDATORS_PER_COMMITTEE.toLong()
+          ), MAX_VALIDATORS_PER_COMMITTEE.toLong()
+        ),
+        Bytes96Type
+      ),
+      ::FullAttestation
     )
   }
 }

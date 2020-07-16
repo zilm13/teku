@@ -7,7 +7,6 @@ dependencies {
   implementation project(':ethereum:datastructures')
   implementation project(':ssz')
 
-  api 'com.google.guava:guava'
   implementation 'org.miracl.milagro.amcl:milagro-crypto-java'
   implementation 'org.apache.tuweni:tuweni-crypto'
   implementation 'org.apache.tuweni:tuweni-ssz'
@@ -16,6 +15,7 @@ dependencies {
   implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
   implementation "org.jetbrains.kotlin:kotlin-reflect"
   implementation "org.jetbrains.kotlin:kotlin-test"
+  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core"
 
   testImplementation "org.jetbrains.kotlin:kotlin-test-junit"
 
