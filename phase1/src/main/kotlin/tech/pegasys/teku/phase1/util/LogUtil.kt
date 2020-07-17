@@ -7,16 +7,22 @@ import java.time.LocalDateTime
 fun printRoot(root: Root): String = root.toString().substring(0..10)
 fun printSignature(signature: BLSSignature): String = signature.toString().substring(0..18)
 fun log(msg: String, color: Color = Color.NONE) {
-  val output = if (System.getProperty("kotlinx.coroutines.debug") != null) {
-    "[${Thread.currentThread().name}]: ${LocalDateTime.now()} - $msg"
-  } else {
-    "${LocalDateTime.now()} - $msg"
-  }
-
+  val output = "${LocalDateTime.now()} - $msg"
   if (color != Color.NONE) {
     println("${color.code}$output${RESET_CODE}")
   } else {
     println(output)
+  }
+}
+
+private var isDebugEnabled = false
+fun logSetDebugMode(debug: Boolean) {
+  isDebugEnabled = debug
+}
+
+fun logDebug(msg: String) {
+  if (isDebugEnabled) {
+    log("[${Thread.currentThread().name}]: $msg", Color.WHITE)
   }
 }
 

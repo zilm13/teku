@@ -5,7 +5,6 @@ import org.apache.milagro.amcl.BLS381.BIG
 import org.apache.milagro.amcl.BLS381.FP2
 import org.apache.tuweni.crypto.Hash
 import tech.pegasys.teku.phase1.integration.bls.G2Points
-import tech.pegasys.teku.phase1.integration.ssz.SSZAbstractCollection
 import tech.pegasys.teku.phase1.onotole.phase1.BLSPubkey
 import tech.pegasys.teku.phase1.onotole.phase1.BLSSignature
 import tech.pegasys.teku.phase1.onotole.pylib.pyint
@@ -60,8 +59,10 @@ fun FP2.toFQ2(): FQ2 = FQ2(Pair(this.a.toPyInt(), this.b.toPyInt()))
 object bls {
   fun Sign(privkey: pyint, message: Bytes): BLSSignature {
     return BLSSignature(
-      TekuBLS.sign(TekuBLSSecretKey.fromBytes(Bytes.wrap(privkey.value.toByteArray())), message)
-        .toBytes()
+      TekuBLS.sign(
+        TekuBLSSecretKey.fromBytes(Bytes32.leftPad(Bytes.wrap(privkey.value.toByteArray()))),
+        message
+      ).toBytes()
     )
   }
 

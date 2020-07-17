@@ -739,8 +739,9 @@ fun get_head_deltas(state: BeaconState): Pair<Sequence<Gwei>, Sequence<Gwei>> {
 fun get_inclusion_delay_deltas(state: BeaconState): Pair<Sequence<Gwei>, Sequence<Gwei>> {
   val rewards = range(len(state.validators)).map { _ -> Gwei(0uL) }.toPyList()
   val matching_source_attestations = get_matching_source_attestations(state, get_previous_epoch(state))
+  val attestations_by_validator_index = group_attestations_by_validator_index(state, matching_source_attestations)
   for (index in get_unslashed_attesting_indices(state, matching_source_attestations)) {
-    val attestation = min(matching_source_attestations.filter { a -> (index in get_attesting_indices(state, a.data, a.aggregation_bits)) }.map { a -> a }.toPyList(), key = { a -> a.inclusion_delay })
+    val attestation = min(attestations_by_validator_index[index]!!, key = { a -> a.inclusion_delay })
     rewards[attestation.proposer_index] += get_proposer_reward(state, index)
     val max_attester_reward = (get_base_reward(state, index) - get_proposer_reward(state, index))
     rewards[index] += Gwei((max_attester_reward / attestation.inclusion_delay))

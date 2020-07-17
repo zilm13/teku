@@ -17,6 +17,7 @@ import tech.pegasys.teku.phase1.onotole.phase1.get_epoch_signature
 import tech.pegasys.teku.phase1.onotole.phase1.get_shard_winning_roots
 import tech.pegasys.teku.phase1.onotole.phase1.process_slots
 import tech.pegasys.teku.phase1.onotole.phase1.state_transition
+import tech.pegasys.teku.phase1.util.logDebug
 
 fun produceBeaconBlock(
   state: BeaconState,
@@ -28,6 +29,8 @@ fun produceBeaconBlock(
 ): SignedBeaconBlock {
   val stateWithAdvancedSlot = state.copy()
   process_slots(stateWithAdvancedSlot, slot)
+
+  logDebug("ProposerUtil: state slot is advanced to ${stateWithAdvancedSlot.slot}")
 
   val proposerIndex = get_beacon_proposer_index(stateWithAdvancedSlot)
   val proposerSecretKey = secretKeys[proposerIndex]
@@ -63,6 +66,8 @@ fun produceBeaconBlock(
       shardTransitionVector
     )
   )
+  logDebug("ProposerUtil: new block created $block")
+
   val endState = state_transition(state.copy(), SignedBeaconBlock(block), false)
   val blockWithStateRoot = block.copy(state_root = endState.applyChanges().hashTreeRoot())
   val signature = get_block_signature(state, blockWithStateRoot, proposerSecretKey)

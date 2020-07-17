@@ -19,6 +19,8 @@ import tech.pegasys.teku.phase1.simulation.SlotTerminal
 import tech.pegasys.teku.phase1.simulation.util.SecretKeyRegistry
 import tech.pegasys.teku.phase1.simulation.util.produceBeaconBlock
 import tech.pegasys.teku.phase1.util.log
+import tech.pegasys.teku.phase1.util.logDebug
+import tech.pegasys.teku.phase1.util.printRoot
 
 class BeaconProposer(
   eventBus: SendChannel<Eth2Event>,
@@ -43,6 +45,7 @@ class BeaconProposer(
 
   private suspend fun onHeadAfterAttestationsApplied(head: BeaconHead) {
     if (recentSlot > GENESIS_SLOT) {
+      logDebug("Proposing a block atop of head(root=${printRoot(head.root)})...")
       proposeBlock(head.root, head.state)
     }
   }
@@ -59,6 +62,7 @@ class BeaconProposer(
         shardTransitions,
         secretKeys
       )
+    logDebug("Publishing ${NewBeaconBlock(newBlock)}...")
     publish(NewBeaconBlock(newBlock))
 
     log("BeaconProposer: New block proposed\n${newBlock.message.toStringFull()}\n")

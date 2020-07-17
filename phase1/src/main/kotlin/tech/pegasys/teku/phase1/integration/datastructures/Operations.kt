@@ -370,11 +370,11 @@ class Attestation : AbstractImmutableContainer {
   }
 
   override fun toString(): String {
-    return "Attestation(signed_vals=${aggregation_bits.bitsSet()}, data=$data)"
+    return "Attestation(signed_vals=${aggregation_bits.bitsSet().size}, data=$data)"
   }
 
   fun toStringShort(): String {
-    return "(signed_vals=${aggregation_bits.bitsSet()}, data=${data.toStringShort()})"
+    return "(signed_vals=${aggregation_bits.bitsSet().size}, data=${data.toStringShort()})"
   }
 }
 
@@ -449,11 +449,11 @@ class FullAttestation : AbstractImmutableContainer {
   }
 
   override fun toString(): String {
-    return "FullAttestation(signed_vals=${aggregation_bits.bitsSet()}, data=$data)"
+    return "FullAttestation(signed_vals=${aggregation_bits.bitsSet().size}, data=$data)"
   }
 
   fun toStringShort(): String {
-    return "(signed_vals=${aggregation_bits.bitsSet()}, data=${data.toStringShort()})"
+    return "(signed_vals=${aggregation_bits.bitsSet().size}, data=${data.toStringShort()})"
   }
 }
 
