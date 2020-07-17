@@ -339,9 +339,9 @@ class BeaconBlockBody : AbstractImmutableContainer {
   fun toStringFull(): String {
     return "(\n" +
         "  eth1_data=$eth1_data\n" +
-        "  attestations=[\n    ${attestations.joinToString("\n    ") { it.toString() }}]\n" +
-        "  shard_transitions=[\n    ${(0uL until INITIAL_ACTIVE_SHARDS).map { shard_transitions[it] }
-          .joinToString("\n    ") { it.toString() }}]\n)"
+        "  attestations:\n    ${attestations.joinToString("\n    ") { it.toString() }}\n" +
+        "  shard_transitions:\n    ${(0uL until INITIAL_ACTIVE_SHARDS).map { shard_transitions[it] }
+          .joinToString("\n    ") { it.toString() }}\n)"
   }
 }
 
