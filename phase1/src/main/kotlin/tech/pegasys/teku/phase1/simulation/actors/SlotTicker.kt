@@ -21,8 +21,6 @@ class SlotTicker(
   }
 
   private suspend fun onSlotTerminal(slot: Slot) {
-    println("[${Thread.currentThread().name}] Publish NewSlot(${slot + 1uL})")
-
     if (!runsOutOfSlots(slot, slotsToRun)) {
       publish(NewSlot(slot + 1uL))
     }

@@ -12,10 +12,12 @@ import tech.pegasys.teku.phase1.integration.datastructures.ShardStore
 import tech.pegasys.teku.phase1.integration.datastructures.SignedBeaconBlock
 import tech.pegasys.teku.phase1.integration.datastructures.SignedShardBlock
 import tech.pegasys.teku.phase1.integration.datastructures.Store
+import tech.pegasys.teku.phase1.onotole.phase1.GENESIS_SLOT
 import tech.pegasys.teku.phase1.onotole.phase1.INITIAL_ACTIVE_SHARDS
 import tech.pegasys.teku.phase1.onotole.phase1.SECONDS_PER_SLOT
 import tech.pegasys.teku.phase1.onotole.phase1.Shard
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
+import tech.pegasys.teku.phase1.onotole.phase1.get_current_slot
 import tech.pegasys.teku.phase1.onotole.phase1.get_head
 import tech.pegasys.teku.phase1.onotole.phase1.get_pending_shard_blocks
 import tech.pegasys.teku.phase1.onotole.phase1.get_shard_head
@@ -34,6 +36,9 @@ import tech.pegasys.teku.phase1.simulation.NewShardHeads
 import tech.pegasys.teku.phase1.simulation.NewSlot
 import tech.pegasys.teku.phase1.simulation.NotCrosslinkedBlocksPublished
 import tech.pegasys.teku.phase1.simulation.PrevSlotAttestationsPublished
+import tech.pegasys.teku.phase1.util.Color
+import tech.pegasys.teku.phase1.util.log
+import tech.pegasys.teku.phase1.util.printRoot
 
 class Eth2ChainProcessor(
   eventBus: SendChannel<Eth2Event>,
@@ -53,15 +58,25 @@ class Eth2ChainProcessor(
   private suspend fun onNewBeaconBlock(block: SignedBeaconBlock) {
     on_block(store, block)
     publishBeaconHead(::HeadAfterNewBeaconBlock)
+
+    log("Eth2ChainProcessor: beacon block processed (root=${printRoot(block.message.hashTreeRoot())})")
   }
 
   private fun onNewSlot(slot: Slot) {
     on_tick(store, store.genesis_time + slot * SECONDS_PER_SLOT)
+    log("Eth2ChainProcessor: New slot ($slot)", Color.BLUE)
   }
 
   private suspend fun onPrevSlotAttestationsPublished(attestations: List<FullAttestation>) {
     attestations.map { Attestation(it) }.forEach { on_attestation(store, it) }
     publishBeaconHead(::HeadAfterAttestationsApplied)
+
+    if (get_current_slot(store) == GENESIS_SLOT) {
+      collectAndPublishShardHeads()
+      collectAndPublishNotCrosslinkedBlocks()
+    }
+
+    log("Eth2ChainProcessor: attestations processed [${attestations.joinToString { it.toStringShort() }}]")
   }
 
   private suspend fun publishBeaconHead(eventCtor: (BeaconHead) -> Eth2Event) {
@@ -81,6 +96,9 @@ class Eth2ChainProcessor(
     processNewShardBlocks(blocks)
     collectAndPublishShardHeads()
     collectAndPublishNotCrosslinkedBlocks()
+
+    log("Eth2ChainProcessor: shard blocks processed: [${blocks.map { it.message.hashTreeRoot() }
+      .joinToString { "(root=${printRoot(it)})" }}]")
   }
 
   /**

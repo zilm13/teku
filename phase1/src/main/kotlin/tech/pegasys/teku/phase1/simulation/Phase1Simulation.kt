@@ -2,6 +2,7 @@ package tech.pegasys.teku.phase1.simulation
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import tech.pegasys.teku.datastructures.util.MockStartValidatorKeyPairFactory
@@ -16,6 +17,7 @@ import tech.pegasys.teku.phase1.simulation.util.getGenesisState
 import tech.pegasys.teku.phase1.simulation.util.getGenesisStore
 import tech.pegasys.teku.phase1.simulation.util.getShardGenesisStores
 import tech.pegasys.teku.phase1.simulation.util.runsOutOfSlots
+import tech.pegasys.teku.phase1.util.log
 
 class Phase1Simulation(
   slotsToRun: ULong,
@@ -57,20 +59,22 @@ class Phase1Simulation(
   }
 
   suspend fun start() {
+    log("Starting simulation...")
     eventLoop(actors, scope)
     eventBus.send(GenesisSlotEvent)
   }
 
   fun stop() {
     eventBus.close()
+    log("Simulation stopped")
   }
 
   /**
    * A concurrent event loop
    */
-  private suspend fun eventLoop(actors: List<Eth2Actor>, scope: CoroutineScope) = scope.launch {
+  private fun eventLoop(actors: List<Eth2Actor>, scope: CoroutineScope) = scope.launch {
     for (event in eventBus) {
-      supervisorScope {
+      coroutineScope {
         actors.forEach {
           launch { it.dispatchImpl(event, scope) }
         }

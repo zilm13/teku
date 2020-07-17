@@ -155,6 +155,10 @@ class Checkpoint : AbstractImmutableContainer {
       listOf(BasicViewTypes.UINT64_TYPE, BasicViewTypes.BYTES32_TYPE), ::Checkpoint
     )
   }
+
+  override fun toString(): String {
+    return "($epoch, ${printRoot(root)})"
+  }
 }
 
 data class MutableValidator(

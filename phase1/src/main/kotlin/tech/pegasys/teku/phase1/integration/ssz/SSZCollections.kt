@@ -314,6 +314,10 @@ class SSZBitlistImpl(override val view: ListViewRead<BitView>) :
     return SSZBitlistImpl(mutableCopy.commitChanges())
   }
 
+  override fun bitsSet(): uint64 {
+    return (0 until size).map { get(it) }.filter { it }.size.toULong()
+  }
+
   override val maxSize: ULong
     get() = view.type.maxLength.toULong()
 

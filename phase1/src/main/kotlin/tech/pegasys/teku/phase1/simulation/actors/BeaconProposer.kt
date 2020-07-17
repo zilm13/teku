@@ -18,6 +18,7 @@ import tech.pegasys.teku.phase1.simulation.PrevSlotAttestationsPublished
 import tech.pegasys.teku.phase1.simulation.SlotTerminal
 import tech.pegasys.teku.phase1.simulation.util.SecretKeyRegistry
 import tech.pegasys.teku.phase1.simulation.util.produceBeaconBlock
+import tech.pegasys.teku.phase1.util.log
 
 class BeaconProposer(
   eventBus: SendChannel<Eth2Event>,
@@ -59,6 +60,8 @@ class BeaconProposer(
         secretKeys
       )
     publish(NewBeaconBlock(newBlock))
+
+    log("BeaconProposer: New block proposed\n${newBlock.message.toStringFull()}\n")
   }
 
   private fun onSlotTerminal() {

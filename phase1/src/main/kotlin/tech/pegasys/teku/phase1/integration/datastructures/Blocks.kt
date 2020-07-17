@@ -13,6 +13,7 @@ import tech.pegasys.teku.phase1.integration.toUnsignedLong
 import tech.pegasys.teku.phase1.integration.wrapValues
 import tech.pegasys.teku.phase1.onotole.phase1.BLSSignature
 import tech.pegasys.teku.phase1.onotole.phase1.Domain
+import tech.pegasys.teku.phase1.onotole.phase1.INITIAL_ACTIVE_SHARDS
 import tech.pegasys.teku.phase1.onotole.phase1.LIGHT_CLIENT_COMMITTEE_SIZE
 import tech.pegasys.teku.phase1.onotole.phase1.MAX_ATTESTATIONS
 import tech.pegasys.teku.phase1.onotole.phase1.MAX_ATTESTER_SLASHINGS
@@ -86,7 +87,9 @@ class Eth1Data : AbstractImmutableContainer {
   }
 
   override fun toString(): String {
-    return "Eth1Data(deposit_root='${printRoot(deposit_root)}', deposit_count='$deposit_count', block_hash='${printRoot(block_hash)}')"
+    return "(deposit_root='${printRoot(deposit_root)}', deposit_count='$deposit_count', block_hash='${printRoot(
+      block_hash
+    )}')"
   }
 }
 
@@ -330,10 +333,16 @@ class BeaconBlockBody : AbstractImmutableContainer {
   }
 
   override fun toString(): String {
-    return "BeaconBlockBody(eth1_data='$eth1_data')"
+    return "(eth1_data=$eth1_data, attestations=[${attestations.joinToString { it.toStringShort() }}])"
   }
 
-
+  fun toStringFull(): String {
+    return "(\n" +
+        "  eth1_data=$eth1_data\n" +
+        "  attestations=[\n    ${attestations.joinToString("\n    ") { it.toString() }}]\n" +
+        "  shard_transitions=[\n    ${(0uL until INITIAL_ACTIVE_SHARDS).map { shard_transitions[it] }
+          .joinToString("\n    ") { it.toString() }}]\n)"
+  }
 }
 
 class BeaconBlock : AbstractImmutableContainer {
@@ -399,7 +408,22 @@ class BeaconBlock : AbstractImmutableContainer {
   ): BeaconBlock = BeaconBlock(slot, proposer_index, parent_root, state_root, body)
 
   override fun toString(): String {
-    return "BeaconBlock(root='${printRoot(hashTreeRoot())}', slot='$slot', body='$body')"
+    return "BeaconBlock(" +
+        "slot=$slot, " +
+        "root=${printRoot(hashTreeRoot())}, " +
+        "parent_root=${printRoot(parent_root)}, " +
+        "state_root=${printRoot(state_root)}, " +
+        "body=$body)"
+  }
+
+  fun toStringFull(): String {
+    return "BeaconBlock(" +
+        "slot=$slot, " +
+        "root=${printRoot(hashTreeRoot())}, " +
+        "parent_root=${printRoot(parent_root)}, " +
+        "state_root=${printRoot(state_root)}, " +
+        "proposer_index=$proposer_index, " +
+        "body=${body.toStringFull()})"
   }
 }
 

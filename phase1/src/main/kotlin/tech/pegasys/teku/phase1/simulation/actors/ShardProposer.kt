@@ -19,6 +19,7 @@ import tech.pegasys.teku.phase1.simulation.NewSlot
 import tech.pegasys.teku.phase1.simulation.util.SecretKeyRegistry
 import tech.pegasys.teku.phase1.simulation.util.getRandomShardBlockBody
 import tech.pegasys.teku.phase1.simulation.util.produceShardBlock
+import tech.pegasys.teku.phase1.util.log
 
 class ShardProposer(
   eventBus: SendChannel<Eth2Event>,
@@ -61,5 +62,8 @@ class ShardProposer(
     }.awaitAll()
 
     publish(NewShardBlocks(newShardBlocks))
+
+    log("ShardProposer: New shard blocks proposed:\n${newShardBlocks.map { it.message }
+      .joinToString("\n") { it.toString() }}\n")
   }
 }

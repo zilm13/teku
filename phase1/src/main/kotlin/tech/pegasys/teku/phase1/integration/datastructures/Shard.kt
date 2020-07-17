@@ -116,6 +116,14 @@ class ShardTransition : AbstractImmutableContainer {
       ::ShardTransition
     )
   }
+
+  override fun toString(): String {
+    return "ShardTransition(" +
+        "start_slot=$start_slot, " +
+        "shard_block_lengths=[${shard_block_lengths.joinToString { it.toString() }}], " +
+        "shard_data_roots=[${shard_data_roots.joinToString { printRoot(it) }}], " +
+        "shard_states=[${shard_states.joinToString { it.toString() }}])"
+  }
 }
 
 data class MutableShardState(
@@ -158,7 +166,7 @@ class ShardState : AbstractImmutableContainer {
   ): ShardState = ShardState(slot, gasprice, latest_block_root)
 
   override fun toString(): String {
-    return "ShardState(slot=$slot, gasprice=$gasprice, latest_block_root=$latest_block_root)"
+    return "(slot=$slot, gasprice=$gasprice, latest_block_root=${printRoot(latest_block_root)})"
   }
 
 
@@ -306,9 +314,9 @@ class ShardBlock : AbstractImmutableContainer {
 
   override fun toString(): String {
     return "ShardBlock(" +
-        "root=${printRoot(hashTreeRoot())}, " +
         "slot=$slot, " +
         "shard=$shard, " +
+        "root=${printRoot(hashTreeRoot())}, " +
         "proposer_index=$proposer_index, " +
         "beacon_parent_root=${printRoot(beacon_parent_root)}, " +
         "shard_parent_root=${printRoot(shard_parent_root)}, " +

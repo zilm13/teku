@@ -21,14 +21,15 @@ import tech.pegasys.teku.phase1.onotole.phase1.get_seed
 import tech.pegasys.teku.phase1.simulation.BeaconHead
 import tech.pegasys.teku.phase1.simulation.Eth2Actor
 import tech.pegasys.teku.phase1.simulation.Eth2Event
-import tech.pegasys.teku.phase1.simulation.HeadAfterNewBeaconBlock
 import tech.pegasys.teku.phase1.simulation.NewAttestations
+import tech.pegasys.teku.phase1.simulation.NewHead
 import tech.pegasys.teku.phase1.simulation.NewShardHeads
 import tech.pegasys.teku.phase1.simulation.NewSlot
 import tech.pegasys.teku.phase1.simulation.NotCrosslinkedBlocksPublished
 import tech.pegasys.teku.phase1.simulation.SlotTerminal
 import tech.pegasys.teku.phase1.simulation.util.SecretKeyRegistry
 import tech.pegasys.teku.phase1.simulation.util.computeAggregateAttestationByCommittee
+import tech.pegasys.teku.phase1.util.log
 
 class BeaconAttester(
   eventBus: SendChannel<Eth2Event>,
@@ -43,7 +44,7 @@ class BeaconAttester(
   override suspend fun dispatchImpl(event: Eth2Event, scope: CoroutineScope) {
     when (event) {
       is NewSlot -> onNewSlot(event.slot)
-      is HeadAfterNewBeaconBlock -> onHeadAfterNewBeaconBlock(event.head)
+      is NewHead -> onNewHead(event.head)
       is NewShardHeads -> onNewShardHeads(event.shardHeadRoots)
       is NotCrosslinkedBlocksPublished -> onNotCrosslinkedBlocksPublished(event.blocks)
       is SlotTerminal -> onSlotTerminal()
@@ -54,7 +55,7 @@ class BeaconAttester(
     this.recentSlot = slot
   }
 
-  private suspend fun onHeadAfterNewBeaconBlock(head: BeaconHead) {
+  private suspend fun onNewHead(head: BeaconHead) {
     this.recentHead = head
     attestIfReady()
   }
@@ -73,6 +74,11 @@ class BeaconAttester(
     if (readyToAttest()) {
       val attestations = computeAttestations()
       publish(NewAttestations(attestations))
+
+      log(
+        "BeaconAttester: New attestations produced:" +
+            "\n${attestations.joinToString("\n") { it.toString() }}\n"
+      )
     }
   }
 

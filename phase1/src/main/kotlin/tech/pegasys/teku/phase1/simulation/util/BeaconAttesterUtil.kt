@@ -21,6 +21,7 @@ import tech.pegasys.teku.phase1.onotole.phase1.get_attestation_signature
 import tech.pegasys.teku.phase1.onotole.phase1.get_block_root
 import tech.pegasys.teku.phase1.onotole.phase1.get_current_epoch
 import tech.pegasys.teku.phase1.onotole.phase1.get_shard_transition
+import tech.pegasys.teku.phase1.onotole.ssz.SSZBitlist
 
 suspend fun computeAggregateAttestationByCommittee(
   committeeIndex: CommitteeIndex,
@@ -40,17 +41,19 @@ suspend fun computeAggregateAttestationByCommittee(
       shardBlocksToCrosslink
     )
 
-  val res: Pair<SSZBitlistImpl, List<BLSSignature>>
+  val res: Pair<SSZBitlist, List<BLSSignature>>
   coroutineScope {
     res = committee.map {
       async { it to get_attestation_signature(headState, attestationData, secretKeys[it]) }
-    }.awaitAll().fold(
-      SSZBitlistImpl(MAX_VALIDATORS_PER_COMMITTEE) to mutableListOf<BLSSignature>()
-    ) { acc, pair ->
-      acc.first.set(pair.first)
-      acc.second.add(pair.second)
-      acc.first to acc.second
-    }
+    }.awaitAll()
+      .fold<Pair<ValidatorIndex, BLSSignature>, Pair<SSZBitlist, MutableList<BLSSignature>>>(
+        SSZBitlistImpl(MAX_VALIDATORS_PER_COMMITTEE) to mutableListOf<BLSSignature>()
+      ) { acc, pair ->
+        val indexWithinCommittee = committee.indexOf(pair.first).toULong()
+        val updatedBitList = acc.first.set(indexWithinCommittee)
+        acc.second.add(pair.second)
+        updatedBitList to acc.second
+      }
   }
 
   val (aggregationBits, signatureAggregate) = res.first to bls.Aggregate(res.second)

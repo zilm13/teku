@@ -37,6 +37,7 @@ import tech.pegasys.teku.phase1.onotole.ssz.SSZList
 import tech.pegasys.teku.phase1.onotole.ssz.SSZVector
 import tech.pegasys.teku.phase1.onotole.ssz.boolean
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
+import tech.pegasys.teku.phase1.util.printRoot
 import tech.pegasys.teku.ssz.backing.ListViewRead
 import tech.pegasys.teku.ssz.backing.VectorViewRead
 import tech.pegasys.teku.ssz.backing.tree.TreeNode
@@ -124,6 +125,21 @@ class AttestationData : AbstractImmutableContainer {
       ), ::AttestationData
     )
   }
+
+  override fun toString(): String {
+    return "(" +
+        "slot=$slot, " +
+        "shard=$shard, " +
+        "beacon_block_root=${printRoot(beacon_block_root)}, " +
+        "shard_head_root=${printRoot(shard_head_root)}, " +
+        "shard_transition_root=${printRoot(shard_transition_root)}, " +
+        "source=$source, " +
+        "target=$target)"
+  }
+
+  fun toStringShort(): String {
+    return "(slot=$slot, shard=$shard)"
+  }
 }
 
 class FullAttestationData : AbstractImmutableContainer {
@@ -142,7 +158,7 @@ class FullAttestationData : AbstractImmutableContainer {
   val shard_head_root: Root
     get() = getBasicValue(get(6))
   val shard_transition: ShardTransition
-    get() = getBasicValue(get(7))
+    get() = getAny(7)
 
   constructor() : super(TYPE)
 
@@ -187,6 +203,21 @@ class FullAttestationData : AbstractImmutableContainer {
         ShardTransition.TYPE
       ), ::FullAttestationData
     )
+  }
+
+  override fun toString(): String {
+    return "(" +
+        "slot=$slot, " +
+        "shard=$shard, " +
+        "beacon_block_root=${printRoot(beacon_block_root)}, " +
+        "shard_head_root=${printRoot(shard_head_root)}, " +
+        "shard_transition_root=${printRoot(shard_transition.hashTreeRoot())}, " +
+        "source=$source, " +
+        "target=$target)"
+  }
+
+  fun toStringShort(): String {
+    return "(slot=$slot, shard=$shard, beacon_block_root=${printRoot(beacon_block_root)}"
   }
 }
 
@@ -337,6 +368,14 @@ class Attestation : AbstractImmutableContainer {
       ::Attestation
     )
   }
+
+  override fun toString(): String {
+    return "Attestation(signed_vals=${aggregation_bits.bitsSet()}, data=$data)"
+  }
+
+  fun toStringShort(): String {
+    return "(signed_vals=${aggregation_bits.bitsSet()}, data=${data.toStringShort()})"
+  }
 }
 
 class FullAttestation : AbstractImmutableContainer {
@@ -407,6 +446,14 @@ class FullAttestation : AbstractImmutableContainer {
       ),
       ::FullAttestation
     )
+  }
+
+  override fun toString(): String {
+    return "FullAttestation(signed_vals=${aggregation_bits.bitsSet()}, data=$data)"
+  }
+
+  fun toStringShort(): String {
+    return "(signed_vals=${aggregation_bits.bitsSet()}, data=${data.toStringShort()})"
   }
 }
 

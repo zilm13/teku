@@ -79,6 +79,7 @@ interface SSZMutableList<T : Any> : SSZList<T>, SSZMutableCollection<T> {
 interface SSZBitlist : SSZList<Boolean> {
   infix fun or(other: SSZBitlist): SSZBitlist
   fun set(index: uint64): SSZBitlist
+  fun bitsSet(): uint64
 }
 
 interface SSZByteList : SSZList<Byte>
