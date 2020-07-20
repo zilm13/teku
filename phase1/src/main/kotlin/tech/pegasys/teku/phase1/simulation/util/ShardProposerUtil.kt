@@ -9,10 +9,8 @@ import tech.pegasys.teku.phase1.onotole.phase1.Shard
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
 import tech.pegasys.teku.phase1.onotole.phase1.get_shard_block_signature
 import tech.pegasys.teku.phase1.onotole.phase1.get_shard_proposer_index
-import java.util.*
 
 private const val SHARD_BLOCK_SIZE = 1024
-private val rnd = Random(1)
 
 fun produceShardBlock(
   slot: Slot,
@@ -39,4 +37,4 @@ fun produceShardBlock(
   )
 }
 
-fun getRandomShardBlockBody(): Bytes = Bytes.random(SHARD_BLOCK_SIZE, rnd)
+fun getRandomShardBlockBody(): Bytes = Bytes.random(SHARD_BLOCK_SIZE, SimulationRandomness)

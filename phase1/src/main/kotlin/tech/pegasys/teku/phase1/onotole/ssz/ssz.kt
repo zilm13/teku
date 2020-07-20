@@ -82,7 +82,10 @@ interface SSZBitlist : SSZList<Boolean> {
   fun bitsSet(): List<uint64>
 }
 
-interface SSZByteList : SSZList<Byte>
+interface SSZByteList : SSZList<Byte> {
+  fun toBytes(): Bytes
+}
+
 interface SSZVector<T : Any> : SSZCollection<T> {
   fun updated(mutator: (SSZMutableVector<T>) -> Unit): SSZVector<T>
 }

@@ -45,7 +45,7 @@ class BeaconAttester(
     when (event) {
       is NewSlot -> onNewSlot(event.slot)
       is NewHead -> onNewHead(event.head)
-      is NewShardHeads -> onNewShardHeads(event.shardHeadRoots)
+      is NewShardHeads -> onNewShardHeads(event.shardHeads)
       is NotCrosslinkedBlocksPublished -> onNotCrosslinkedBlocksPublished(event.blocks)
       is SlotTerminal -> onSlotTerminal()
     }
@@ -60,8 +60,8 @@ class BeaconAttester(
     attestIfReady()
   }
 
-  private suspend fun onNewShardHeads(shardHeadRoots: List<Root>) {
-    this.recentShardHeadRoots = shardHeadRoots
+  private suspend fun onNewShardHeads(shardHeads: List<Pair<Root, SignedShardBlock>>) {
+    this.recentShardHeadRoots = shardHeads.map { it.first }
     attestIfReady()
   }
 

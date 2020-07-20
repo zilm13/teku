@@ -5,12 +5,14 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import tech.pegasys.teku.datastructures.util.MockStartValidatorKeyPairFactory
+import tech.pegasys.teku.phase1.eth1client.Eth1EngineClientStub
 import tech.pegasys.teku.phase1.simulation.actors.BeaconAttester
 import tech.pegasys.teku.phase1.simulation.actors.BeaconProposer
 import tech.pegasys.teku.phase1.simulation.actors.DelayedAttestationsPark
 import tech.pegasys.teku.phase1.simulation.actors.Eth2ChainProcessor
 import tech.pegasys.teku.phase1.simulation.actors.ShardProposer
 import tech.pegasys.teku.phase1.simulation.actors.SlotTicker
+import tech.pegasys.teku.phase1.simulation.util.SimulationRandomness
 import tech.pegasys.teku.phase1.simulation.util.SecretKeyRegistry
 import tech.pegasys.teku.phase1.simulation.util.getGenesisState
 import tech.pegasys.teku.phase1.simulation.util.getGenesisStore
@@ -53,12 +55,14 @@ class Phase1Simulation(
     val store = getGenesisStore(genesisState)
     val shardStores = getShardGenesisStores(genesisState)
     val secretKeys = SecretKeyRegistry(blsKeyPairs)
+    val proposerEth1Engine = Eth1EngineClientStub(SimulationRandomness)
+    val processorEth1Engine = Eth1EngineClientStub(SimulationRandomness)
 
     actors = listOf(
       SlotTicker(eventBus, slotsToRun),
-      Eth2ChainProcessor(eventBus, store, shardStores),
+      Eth2ChainProcessor(eventBus, store, shardStores, processorEth1Engine),
       BeaconProposer(eventBus, secretKeys),
-      ShardProposer(eventBus, secretKeys),
+      ShardProposer(eventBus, secretKeys, proposerEth1Engine),
       BeaconAttester(eventBus, secretKeys),
       DelayedAttestationsPark(eventBus),
       terminator

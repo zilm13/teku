@@ -65,9 +65,9 @@ class NewAttestations(val attestations: List<FullAttestation>) : Eth2Event() {
   }
 }
 
-class NewShardHeads(val shardHeadRoots: List<Root>) : Eth2Event() {
+class NewShardHeads(val shardHeads: List<Pair<Root, SignedShardBlock>>) : Eth2Event() {
   override fun toString(): String {
-    return "NewShardHeads(shardHeadRoots=${shardHeadRoots.size})"
+    return "NewShardHeads(heads=${shardHeads.size})"
   }
 }
 

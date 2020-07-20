@@ -1,6 +1,7 @@
 package tech.pegasys.teku.phase1.integration.ssz
 
 import tech.pegasys.teku.phase1.onotole.phase1.Root
+import tech.pegasys.teku.phase1.onotole.ssz.Bytes
 import tech.pegasys.teku.phase1.onotole.ssz.SSZBitlist
 import tech.pegasys.teku.phase1.onotole.ssz.SSZBitvector
 import tech.pegasys.teku.phase1.onotole.ssz.SSZByteList
@@ -337,6 +338,7 @@ class SSZBitlistImpl(override val view: ListViewRead<BitView>) :
 class SSZByteListImpl(override val view: ListViewRead<ByteView>) :
   SSZAbstractCollection<Byte, ByteView>(), SSZByteList {
   override val unwrapper: (ByteView) -> Byte = ByteView::get
+
   override val maxSize: ULong
     get() = view.type.maxLength.toULong()
 
@@ -354,6 +356,12 @@ class SSZByteListImpl(override val view: ListViewRead<ByteView>) :
       ::ByteView
     ).commitChanges()
   )
+
+  override fun toBytes(): Bytes {
+    val bytes = ByteArray(size)
+    this.forEachIndexed { i, value -> bytes[i] = value }
+    return Bytes.wrap(bytes)
+  }
 }
 
 class SSZByteVectorImpl(override val view: VectorViewRead<ByteView>) :

@@ -5,6 +5,11 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.coroutineScope
+import tech.pegasys.teku.phase1.eth1client.Eth1BlockData
+import tech.pegasys.teku.phase1.eth1client.Eth1EngineClient
+import tech.pegasys.teku.phase1.eth1shard.ETH1_SHARD_NUMBER
+import tech.pegasys.teku.phase1.integration.datastructures.ShardBlock
+import tech.pegasys.teku.phase1.integration.datastructures.SignedShardBlock
 import tech.pegasys.teku.phase1.onotole.phase1.GENESIS_SLOT
 import tech.pegasys.teku.phase1.onotole.phase1.INITIAL_ACTIVE_SHARDS
 import tech.pegasys.teku.phase1.onotole.phase1.Root
@@ -16,23 +21,24 @@ import tech.pegasys.teku.phase1.simulation.HeadAfterNewBeaconBlock
 import tech.pegasys.teku.phase1.simulation.NewShardBlocks
 import tech.pegasys.teku.phase1.simulation.NewShardHeads
 import tech.pegasys.teku.phase1.simulation.NewSlot
+import tech.pegasys.teku.phase1.simulation.ShardBlockProducer
 import tech.pegasys.teku.phase1.simulation.util.SecretKeyRegistry
-import tech.pegasys.teku.phase1.simulation.util.getRandomShardBlockBody
-import tech.pegasys.teku.phase1.simulation.util.produceShardBlock
 import tech.pegasys.teku.phase1.util.log
 
 class ShardProposer(
   eventBus: SendChannel<Eth2Event>,
-  private val secretKeys: SecretKeyRegistry
+  private val secretKeys: SecretKeyRegistry,
+  private val eth1Engine: Eth1EngineClient
 ) : Eth2Actor(eventBus) {
 
   private var recentSlot = GENESIS_SLOT
-  private var recentShardHeads = List(INITIAL_ACTIVE_SHARDS.toInt()) { Root() }
+  private var recentShardHeads =
+    List(INITIAL_ACTIVE_SHARDS.toInt()) { Root() to SignedShardBlock() }
 
   override suspend fun dispatchImpl(event: Eth2Event, scope: CoroutineScope) {
     when (event) {
       is NewSlot -> onNewSlot(event.slot)
-      is NewShardHeads -> onNewShardHeads(event.shardHeadRoots)
+      is NewShardHeads -> onNewShardHeads(event.shardHeads)
       is HeadAfterNewBeaconBlock -> onHeadAfterNewBeaconBlock(event.head)
     }
   }
@@ -41,25 +47,28 @@ class ShardProposer(
     this.recentSlot = slot
   }
 
-  private fun onNewShardHeads(headRoots: List<Root>) {
-    this.recentShardHeads = headRoots
+  private fun onNewShardHeads(heads: List<Pair<Root, SignedShardBlock>>) {
+    this.recentShardHeads = heads
+
+    // Update eth1-engine with new Eth1 heads
+    updateEth1ShardHead(heads[ETH1_SHARD_NUMBER.toInt()].second.message)
+  }
+
+  private fun updateEth1ShardHead(head: ShardBlock) {
+    // Skip PHASE_1_GENESIS case
+    if (head.body.size > 0) {
+      val eth1BlockData = Eth1BlockData(head.body.toBytes())
+      eth1Engine.eth2_setHead(eth1BlockData.blockHash)
+    }
   }
 
   private suspend fun onHeadAfterNewBeaconBlock(head: BeaconHead) = coroutineScope {
-    val newShardBlocks = (0uL until INITIAL_ACTIVE_SHARDS).map {
-      async {
-        val randomBody = getRandomShardBlockBody()
-        produceShardBlock(
-          recentSlot,
-          it,
-          recentShardHeads[it.toInt()],
-          head.root,
-          head.state,
-          randomBody,
-          secretKeys
-        )
-      }
-    }.awaitAll()
+    val newShardBlocks = (0uL until INITIAL_ACTIVE_SHARDS)
+      .map { it to ShardBlockProducer(it, secretKeys, eth1Engine) }
+      .map {
+        val (shardHeadRoot, shardHead) = recentShardHeads[it.first.toInt()]!!
+        async { it.second.produce(recentSlot, head, shardHeadRoot, shardHead.message) }
+      }.awaitAll()
 
     publish(NewShardBlocks(newShardBlocks))
 

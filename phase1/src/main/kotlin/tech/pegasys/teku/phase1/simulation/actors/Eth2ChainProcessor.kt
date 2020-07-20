@@ -6,6 +6,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import tech.pegasys.teku.phase1.eth1client.Eth1EngineClient
 import tech.pegasys.teku.phase1.integration.datastructures.Attestation
 import tech.pegasys.teku.phase1.integration.datastructures.FullAttestation
 import tech.pegasys.teku.phase1.integration.datastructures.ShardStore
@@ -23,7 +24,6 @@ import tech.pegasys.teku.phase1.onotole.phase1.get_pending_shard_blocks
 import tech.pegasys.teku.phase1.onotole.phase1.get_shard_head
 import tech.pegasys.teku.phase1.onotole.phase1.on_attestation
 import tech.pegasys.teku.phase1.onotole.phase1.on_block
-import tech.pegasys.teku.phase1.onotole.phase1.on_shard_block
 import tech.pegasys.teku.phase1.onotole.phase1.on_tick
 import tech.pegasys.teku.phase1.simulation.BeaconHead
 import tech.pegasys.teku.phase1.simulation.Eth2Actor
@@ -36,6 +36,7 @@ import tech.pegasys.teku.phase1.simulation.NewShardHeads
 import tech.pegasys.teku.phase1.simulation.NewSlot
 import tech.pegasys.teku.phase1.simulation.NotCrosslinkedBlocksPublished
 import tech.pegasys.teku.phase1.simulation.PrevSlotAttestationsPublished
+import tech.pegasys.teku.phase1.simulation.ShardBlockProcessor
 import tech.pegasys.teku.phase1.util.Color
 import tech.pegasys.teku.phase1.util.log
 import tech.pegasys.teku.phase1.util.printRoot
@@ -43,7 +44,8 @@ import tech.pegasys.teku.phase1.util.printRoot
 class Eth2ChainProcessor(
   eventBus: SendChannel<Eth2Event>,
   private val store: Store,
-  private val shardStores: Map<Shard, ShardStore>
+  private val shardStores: Map<Shard, ShardStore>,
+  private val eth1Engine: Eth1EngineClient
 ) : Eth2Actor(eventBus) {
 
   override suspend fun dispatchImpl(event: Eth2Event, scope: CoroutineScope) {
@@ -107,8 +109,8 @@ class Eth2ChainProcessor(
   private suspend fun processNewShardBlocks(blocks: List<SignedShardBlock>) = coroutineScope {
     blocks.groupBy { it.message.shard }.entries.forEach {
       launch {
-        it.value.sortedBy { it.message.slot }
-          .forEach { on_shard_block(store, shardStores[it.message.shard]!!, it) }
+        val processor = ShardBlockProcessor(it.key, store, shardStores[it.key]!!, eth1Engine)
+        it.value.sortedBy { it.message.slot }.forEach { processor.process(it) }
       }
     }
   }
@@ -118,7 +120,10 @@ class Eth2ChainProcessor(
    */
   private suspend fun collectAndPublishShardHeads() = coroutineScope {
     val res = (0uL until INITIAL_ACTIVE_SHARDS).map {
-      async { get_shard_head(store, shardStores[it]!!) }
+      async {
+        val root = get_shard_head(store, shardStores[it]!!)
+        root to shardStores[it]!!.signed_blocks[root]!!
+      }
     }.awaitAll()
 
     publish(NewShardHeads(res))
