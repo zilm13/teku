@@ -1,5 +1,7 @@
-package tech.pegasys.teku.phase1.eth1client
+package tech.pegasys.teku.phase1.eth1client.stub
 
+import tech.pegasys.teku.phase1.eth1client.Eth1BlockData
+import tech.pegasys.teku.phase1.eth1client.Eth1EngineClient
 import tech.pegasys.teku.phase1.onotole.deps.hash_tree_root
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
@@ -9,7 +11,8 @@ import kotlin.collections.HashMap
 
 const val ETH1_BLOCK_BODY_SIZE = 1 shl 17
 
-class Eth1EngineClientStub(private val rnd: Random) : Eth1EngineClient {
+class Eth1EngineClientStub(private val rnd: Random) :
+  Eth1EngineClient {
 
   private val blocks = HashMap<Bytes32, Bytes>()
   private var headBlockHash: Bytes32
@@ -17,7 +20,13 @@ class Eth1EngineClientStub(private val rnd: Random) : Eth1EngineClient {
   init {
     val genesisBody = Bytes.EMPTY
     val genesisRLP =
-      encodeBlockDataWithRLP(0uL, Bytes32(), hash_tree_root(genesisBody), Bytes32(), genesisBody)
+      encodeBlockDataWithRLP(
+        0uL,
+        Bytes32(),
+        hash_tree_root(genesisBody),
+        Bytes32(),
+        genesisBody
+      )
     headBlockHash = hash(genesisRLP)
     blocks[headBlockHash] = genesisRLP
   }
@@ -37,9 +46,17 @@ class Eth1EngineClientStub(private val rnd: Random) : Eth1EngineClient {
     val stateRoot = hash_tree_root(body)
 
     val parentBlockRLP = blocks[parentHash]!!
-    val number = parseBlockNumberFromRLP(parentBlockRLP) + 1uL
+    val number = parseBlockNumberFromRLP(
+      parentBlockRLP
+    ) + 1uL
     val blockRLP =
-      encodeBlockDataWithRLP(number, parentHash, stateRoot, receiptsRoot, body)
+      encodeBlockDataWithRLP(
+        number,
+        parentHash,
+        stateRoot,
+        receiptsRoot,
+        body
+      )
     val blockData = Eth1BlockData(
       number = number,
       blockHash = hash(blockRLP),
@@ -49,7 +66,9 @@ class Eth1EngineClientStub(private val rnd: Random) : Eth1EngineClient {
       blockRLP = blockRLP
     )
 
-    return Eth1EngineClient.Response(blockData)
+    return Eth1EngineClient.Response(
+      blockData
+    )
   }
 
   override fun eth2_validateBlock(blockRLP: Bytes): Eth1EngineClient.Response<Boolean> {
@@ -57,12 +76,15 @@ class Eth1EngineClientStub(private val rnd: Random) : Eth1EngineClient {
   }
 
   override fun eth2_insertBlock(blockRLP: Bytes): Eth1EngineClient.Response<Boolean> {
-    val parentHash = parseParentHashFromRLP(blockRLP)
-    val number = parseBlockNumberFromRLP(blockRLP)
+    val parentHash =
+      parseParentHashFromRLP(blockRLP)
+    val number =
+      parseBlockNumberFromRLP(blockRLP)
     if (!exist(parentHash)) {
       throw IllegalStateException("Parent block for block(number=$number) does not exist, parentHash=${parentHash}")
     }
-    val parentNumber = parseBlockNumberFromRLP(blocks[parentHash]!!)
+    val parentNumber =
+      parseBlockNumberFromRLP(blocks[parentHash]!!)
     if (number != parentNumber + 1uL) {
       throw IllegalArgumentException("Block number != parentNumber + 1: [$number != ${parentNumber + 1uL}]")
     }

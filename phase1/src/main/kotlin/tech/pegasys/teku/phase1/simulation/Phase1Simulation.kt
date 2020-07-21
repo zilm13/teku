@@ -5,7 +5,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import tech.pegasys.teku.datastructures.util.MockStartValidatorKeyPairFactory
-import tech.pegasys.teku.phase1.eth1client.Eth1EngineClientStub
+import tech.pegasys.teku.phase1.eth1client.stub.Eth1EngineClientStub
 import tech.pegasys.teku.phase1.simulation.actors.BeaconAttester
 import tech.pegasys.teku.phase1.simulation.actors.BeaconProposer
 import tech.pegasys.teku.phase1.simulation.actors.DelayedAttestationsPark
@@ -55,8 +55,14 @@ class Phase1Simulation(
     val store = getGenesisStore(genesisState)
     val shardStores = getShardGenesisStores(genesisState)
     val secretKeys = SecretKeyRegistry(blsKeyPairs)
-    val proposerEth1Engine = Eth1EngineClientStub(SimulationRandomness)
-    val processorEth1Engine = Eth1EngineClientStub(SimulationRandomness)
+    val proposerEth1Engine =
+      Eth1EngineClientStub(
+        SimulationRandomness
+      )
+    val processorEth1Engine =
+      Eth1EngineClientStub(
+        SimulationRandomness
+      )
 
     actors = listOf(
       SlotTicker(eventBus, slotsToRun),
