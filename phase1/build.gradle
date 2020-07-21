@@ -11,6 +11,7 @@ dependencies {
   implementation 'org.apache.tuweni:tuweni-crypto'
   implementation 'org.apache.tuweni:tuweni-ssz'
   implementation 'org.apache.tuweni:tuweni-bytes'
+  implementation 'org.apache.tuweni:tuweni-rlp:0.10.0'
 
   implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
   implementation "org.jetbrains.kotlin:kotlin-reflect"
