@@ -7,7 +7,7 @@ import tech.pegasys.teku.phase1.util.printRoot
 import java.util.*
 import kotlin.collections.HashMap
 
-const val ETH1_BLOCK_SIZE = 1 shl 17
+const val ETH1_BLOCK_BODY_SIZE = 1 shl 17
 
 class Eth1EngineClientStub(private val rnd: Random) : Eth1EngineClient {
 
@@ -32,7 +32,7 @@ class Eth1EngineClientStub(private val rnd: Random) : Eth1EngineClient {
       )
     }
 
-    val body = Bytes.random(ETH1_BLOCK_SIZE, rnd)
+    val body = Bytes.random(ETH1_BLOCK_BODY_SIZE, rnd)
     val receiptsRoot = Bytes32.random(rnd)
     val stateRoot = hash_tree_root(body)
 

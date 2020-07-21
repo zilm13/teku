@@ -3,6 +3,7 @@ package tech.pegasys.teku.phase1.simulation
 import tech.pegasys.teku.phase1.eth1client.Eth1BlockData
 import tech.pegasys.teku.phase1.eth1client.Eth1EngineClient
 import tech.pegasys.teku.phase1.eth1shard.ETH1_SHARD_NUMBER
+import tech.pegasys.teku.phase1.eth1shard.on_eth1_shard_block
 import tech.pegasys.teku.phase1.integration.datastructures.ShardStore
 import tech.pegasys.teku.phase1.integration.datastructures.SignedShardBlock
 import tech.pegasys.teku.phase1.integration.datastructures.Store
@@ -30,14 +31,8 @@ class Eth1ShardProcessor(
   private val eth1Engine: Eth1EngineClient
 ) : ShardBlockProcessor {
   override fun process(block: SignedShardBlock) {
+    on_eth1_shard_block(store, shardStore, block, eth1Engine)
     val eth1BlockData = Eth1BlockData(block.message.body.toBytes())
-    val ret = eth1Engine.eth2_insertBlock(eth1BlockData.blockRLP)
-    if (ret.result != true) {
-      throw IllegalStateException("Failed to import $eth1BlockData, reason: ${ret.reason}")
-    }
-
-    on_shard_block(store, shardStore, block)
-
     log("Eth1ShardProcessor: eth1 shard block inserted:\n$eth1BlockData\n", Color.YELLOW)
   }
 }
