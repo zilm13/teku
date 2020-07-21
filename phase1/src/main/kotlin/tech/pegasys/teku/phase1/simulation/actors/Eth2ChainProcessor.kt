@@ -28,8 +28,8 @@ import tech.pegasys.teku.phase1.onotole.phase1.on_tick
 import tech.pegasys.teku.phase1.simulation.BeaconHead
 import tech.pegasys.teku.phase1.simulation.Eth2Actor
 import tech.pegasys.teku.phase1.simulation.Eth2Event
-import tech.pegasys.teku.phase1.simulation.HeadAfterAttestationsApplied
 import tech.pegasys.teku.phase1.simulation.HeadAfterNewBeaconBlock
+import tech.pegasys.teku.phase1.simulation.HeadAtTheBeginningOfNewSlot
 import tech.pegasys.teku.phase1.simulation.NewBeaconBlock
 import tech.pegasys.teku.phase1.simulation.NewShardBlocks
 import tech.pegasys.teku.phase1.simulation.NewShardHeads
@@ -64,34 +64,32 @@ class Eth2ChainProcessor(
     log("Eth2ChainProcessor: beacon block processed (root=${printRoot(block.message.hashTreeRoot())})")
   }
 
-  private fun onNewSlot(slot: Slot) {
+  private suspend fun onNewSlot(slot: Slot) {
     on_tick(store, store.genesis_time + slot * SECONDS_PER_SLOT)
-    log("Eth2ChainProcessor: New slot ($slot)", Color.BLUE)
-  }
 
-  private suspend fun onPrevSlotAttestationsPublished(attestations: List<FullAttestation>) {
-    attestations.map { Attestation(it) }.forEach { on_attestation(store, it) }
-    publishBeaconHead(::HeadAfterAttestationsApplied)
+    // To propose, the validator selects the BeaconBlock, parent,
+    // that in their view of the fork choice is the head of the chain during slot - 1
+    publishBeaconHead(::HeadAtTheBeginningOfNewSlot)
 
+    // Bootstrap BeaconAttester state for GENESIS_SLOT
+    // and ShardProposer state for GENESIS_SLOT + 1
     if (get_current_slot(store) == GENESIS_SLOT) {
       collectAndPublishShardHeads()
       collectAndPublishNotCrosslinkedBlocks()
     }
 
+    log("Eth2ChainProcessor: New slot ($slot)", Color.BLUE)
+  }
+
+  private fun onPrevSlotAttestationsPublished(attestations: List<FullAttestation>) {
+    attestations.map { Attestation(it) }.forEach { on_attestation(store, it) }
     log("Eth2ChainProcessor: attestations processed [${attestations.joinToString { it.toStringShort() }}]")
   }
 
   private suspend fun publishBeaconHead(eventCtor: (BeaconHead) -> Eth2Event) {
     val headRoot = get_head(store)
     val headState = store.block_states[headRoot]!!
-    publish(
-      eventCtor(
-        BeaconHead(
-          headRoot,
-          headState
-        )
-      )
-    )
+    publish(eventCtor(BeaconHead(headRoot, headState)))
   }
 
   private suspend fun onNewShardBlocks(blocks: List<SignedShardBlock>) {

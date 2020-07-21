@@ -35,11 +35,19 @@ class HeadAfterAttestationsApplied(head: BeaconHead) : NewHead(head) {
   }
 }
 
+class HeadAtTheBeginningOfNewSlot(head: BeaconHead) : NewHead(head) {
+  override fun toString(): String {
+    return "HeadAtTheBeginningOfNewSlot(root=${printRoot(head.root)})"
+  }
+}
+
 class HeadAfterNewBeaconBlock(head: BeaconHead) : NewHead(head) {
   override fun toString(): String {
     return "HeadAfterNewBeaconBlock(root=${printRoot(head.root)})"
   }
 }
+
+class HeadOnNewSlot
 
 class NewBeaconBlock(val block: SignedBeaconBlock) : Eth2Event() {
   override fun toString(): String {
