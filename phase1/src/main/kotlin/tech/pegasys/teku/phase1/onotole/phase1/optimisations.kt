@@ -4,7 +4,7 @@ import tech.pegasys.teku.phase1.integration.datastructures.BeaconState
 import tech.pegasys.teku.phase1.integration.datastructures.PendingAttestation
 import tech.pegasys.teku.phase1.onotole.ssz.Sequence
 
-fun group_attestations_by_validator_index(
+fun Phase1Spec.group_attestations_by_validator_index(
   state: BeaconState,
   attestations: Sequence<PendingAttestation>
 ): Map<ValidatorIndex, Sequence<PendingAttestation>> {

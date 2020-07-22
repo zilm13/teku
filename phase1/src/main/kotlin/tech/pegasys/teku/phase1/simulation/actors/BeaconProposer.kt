@@ -6,6 +6,7 @@ import tech.pegasys.teku.phase1.integration.datastructures.Attestation
 import tech.pegasys.teku.phase1.integration.datastructures.BeaconState
 import tech.pegasys.teku.phase1.integration.datastructures.FullAttestation
 import tech.pegasys.teku.phase1.onotole.phase1.GENESIS_SLOT
+import tech.pegasys.teku.phase1.onotole.phase1.Phase1Spec
 import tech.pegasys.teku.phase1.onotole.phase1.Root
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
 import tech.pegasys.teku.phase1.simulation.BeaconHead
@@ -24,7 +25,8 @@ import tech.pegasys.teku.phase1.util.printRoot
 
 class BeaconProposer(
   eventBus: SendChannel<Eth2Event>,
-  private val secretKeys: SecretKeyRegistry
+  private val secretKeys: SecretKeyRegistry,
+  private val spec: Phase1Spec
 ) : Eth2Actor(eventBus) {
 
   private var recentSlot = GENESIS_SLOT
@@ -83,7 +85,8 @@ class BeaconProposer(
         headRoot,
         attestations,
         shardTransitions,
-        secretKeys
+        secretKeys,
+        spec
       )
     logDebug("Publishing ${NewBeaconBlock(newBlock)}...")
     publish(NewBeaconBlock(newBlock))

@@ -9,15 +9,10 @@ import tech.pegasys.teku.phase1.integration.datastructures.FullAttestation
 import tech.pegasys.teku.phase1.integration.datastructures.SignedShardBlock
 import tech.pegasys.teku.phase1.onotole.phase1.DOMAIN_BEACON_ATTESTER
 import tech.pegasys.teku.phase1.onotole.phase1.GENESIS_SLOT
+import tech.pegasys.teku.phase1.onotole.phase1.Phase1Spec
 import tech.pegasys.teku.phase1.onotole.phase1.Root
 import tech.pegasys.teku.phase1.onotole.phase1.SLOTS_PER_EPOCH
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
-import tech.pegasys.teku.phase1.onotole.phase1.compute_committee
-import tech.pegasys.teku.phase1.onotole.phase1.compute_epoch_at_slot
-import tech.pegasys.teku.phase1.onotole.phase1.compute_shard_from_committee_index
-import tech.pegasys.teku.phase1.onotole.phase1.get_active_validator_indices
-import tech.pegasys.teku.phase1.onotole.phase1.get_committee_count_per_slot
-import tech.pegasys.teku.phase1.onotole.phase1.get_seed
 import tech.pegasys.teku.phase1.simulation.BeaconHead
 import tech.pegasys.teku.phase1.simulation.Eth2Actor
 import tech.pegasys.teku.phase1.simulation.Eth2Event
@@ -33,7 +28,8 @@ import tech.pegasys.teku.phase1.util.log
 
 class BeaconAttester(
   eventBus: SendChannel<Eth2Event>,
-  private val secretKeys: SecretKeyRegistry
+  private val secretKeys: SecretKeyRegistry,
+  private val spec: Phase1Spec
 ) : Eth2Actor(eventBus) {
 
   private var recentSlot = GENESIS_SLOT
@@ -98,18 +94,18 @@ class BeaconAttester(
     val (headRoot, state) = recentHead!!
     val slot = recentSlot
 
-    val epoch = compute_epoch_at_slot(slot)
-    val committeesPerSlot = get_committee_count_per_slot(state, epoch)
-    val activeValidatorIndices = get_active_validator_indices(state, epoch)
-    val seed = get_seed(state, epoch, DOMAIN_BEACON_ATTESTER)
+    val epoch = spec.compute_epoch_at_slot(slot)
+    val committeesPerSlot = spec.get_committee_count_per_slot(state, epoch)
+    val activeValidatorIndices = spec.get_active_validator_indices(state, epoch)
+    val seed = spec.get_seed(state, epoch, DOMAIN_BEACON_ATTESTER)
     val shardBlocks = recentShardBlocksToCrosslink!!.groupBy { it.message.shard }
       .map { e -> e.key to e.value.sortedBy { it.message.slot } }.toMap()
 
     (0uL until committeesPerSlot).map {
       async {
         val index = it
-        val shard = compute_shard_from_committee_index(state, index, slot)
-        val committee = compute_committee(
+        val shard = spec.compute_shard_from_committee_index(state, index, slot)
+        val committee = spec.compute_committee(
           indices = activeValidatorIndices,
           seed = seed,
           index = (((slot % SLOTS_PER_EPOCH) * committeesPerSlot) + index),
@@ -123,7 +119,8 @@ class BeaconAttester(
           state,
           recentShardHeadRoots!![shard.toInt()],
           shardBlocks[shard] ?: listOf(),
-          secretKeys
+          secretKeys,
+          spec
         )
       }
     }.awaitAll()

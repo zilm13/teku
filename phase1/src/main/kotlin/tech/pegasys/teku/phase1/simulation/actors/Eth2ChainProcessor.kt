@@ -15,16 +15,10 @@ import tech.pegasys.teku.phase1.integration.datastructures.SignedShardBlock
 import tech.pegasys.teku.phase1.integration.datastructures.Store
 import tech.pegasys.teku.phase1.onotole.phase1.GENESIS_SLOT
 import tech.pegasys.teku.phase1.onotole.phase1.INITIAL_ACTIVE_SHARDS
+import tech.pegasys.teku.phase1.onotole.phase1.Phase1Spec
 import tech.pegasys.teku.phase1.onotole.phase1.SECONDS_PER_SLOT
 import tech.pegasys.teku.phase1.onotole.phase1.Shard
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
-import tech.pegasys.teku.phase1.onotole.phase1.get_current_slot
-import tech.pegasys.teku.phase1.onotole.phase1.get_head
-import tech.pegasys.teku.phase1.onotole.phase1.get_pending_shard_blocks
-import tech.pegasys.teku.phase1.onotole.phase1.get_shard_head
-import tech.pegasys.teku.phase1.onotole.phase1.on_attestation
-import tech.pegasys.teku.phase1.onotole.phase1.on_block
-import tech.pegasys.teku.phase1.onotole.phase1.on_tick
 import tech.pegasys.teku.phase1.simulation.BeaconHead
 import tech.pegasys.teku.phase1.simulation.Eth2Actor
 import tech.pegasys.teku.phase1.simulation.Eth2Event
@@ -45,7 +39,8 @@ class Eth2ChainProcessor(
   eventBus: SendChannel<Eth2Event>,
   private val store: Store,
   private val shardStores: Map<Shard, ShardStore>,
-  private val eth1Engine: Eth1EngineClient
+  private val eth1Engine: Eth1EngineClient,
+  private val spec: Phase1Spec
 ) : Eth2Actor(eventBus) {
 
   override suspend fun dispatchImpl(event: Eth2Event, scope: CoroutineScope) {
@@ -58,14 +53,14 @@ class Eth2ChainProcessor(
   }
 
   private suspend fun onNewBeaconBlock(block: SignedBeaconBlock) {
-    on_block(store, block)
+    spec.on_block(store, block)
     publishBeaconHead(::HeadAfterNewBeaconBlock)
 
     log("Eth2ChainProcessor: beacon block processed (root=${printRoot(block.message.hashTreeRoot())})")
   }
 
   private suspend fun onNewSlot(slot: Slot) {
-    on_tick(store, store.genesis_time + slot * SECONDS_PER_SLOT)
+    spec.on_tick(store, store.genesis_time + slot * SECONDS_PER_SLOT)
 
     // To propose, the validator selects the BeaconBlock, parent,
     // that in their view of the fork choice is the head of the chain during slot - 1
@@ -73,7 +68,7 @@ class Eth2ChainProcessor(
 
     // Bootstrap BeaconAttester state for GENESIS_SLOT
     // and ShardProposer state for GENESIS_SLOT + 1
-    if (get_current_slot(store) == GENESIS_SLOT) {
+    if (spec.get_current_slot(store) == GENESIS_SLOT) {
       collectAndPublishShardHeads()
       collectAndPublishNotCrosslinkedBlocks()
     }
@@ -82,12 +77,12 @@ class Eth2ChainProcessor(
   }
 
   private fun onPrevSlotAttestationsPublished(attestations: List<FullAttestation>) {
-    attestations.map { Attestation(it) }.forEach { on_attestation(store, it) }
+    attestations.map { Attestation(it) }.forEach { spec.on_attestation(store, it) }
     log("Eth2ChainProcessor: attestations processed [${attestations.joinToString { it.toStringShort() }}]")
   }
 
   private suspend fun publishBeaconHead(eventCtor: (BeaconHead) -> Eth2Event) {
-    val headRoot = get_head(store)
+    val headRoot = spec.get_head(store)
     val headState = store.block_states[headRoot]!!
     publish(eventCtor(BeaconHead(headRoot, headState)))
   }
@@ -107,7 +102,7 @@ class Eth2ChainProcessor(
   private suspend fun processNewShardBlocks(blocks: List<SignedShardBlock>) = coroutineScope {
     blocks.groupBy { it.message.shard }.entries.forEach {
       launch {
-        val processor = ShardBlockProcessor(it.key, store, shardStores[it.key]!!, eth1Engine)
+        val processor = ShardBlockProcessor(it.key, store, shardStores[it.key]!!, eth1Engine, spec)
         it.value.sortedBy { it.message.slot }.forEach { processor.process(it) }
       }
     }
@@ -119,7 +114,7 @@ class Eth2ChainProcessor(
   private suspend fun collectAndPublishShardHeads() = coroutineScope {
     val res = (0uL until INITIAL_ACTIVE_SHARDS).map {
       async {
-        val root = get_shard_head(store, shardStores[it]!!)
+        val root = spec.get_shard_head(store, shardStores[it]!!)
         root to shardStores[it]!!.signed_blocks[root]!!
       }
     }.awaitAll()
@@ -132,7 +127,7 @@ class Eth2ChainProcessor(
    */
   private suspend fun collectAndPublishNotCrosslinkedBlocks() = coroutineScope {
     val res = (0uL until INITIAL_ACTIVE_SHARDS).map {
-      async { get_pending_shard_blocks(store, shardStores[it]!!) }
+      async { spec.get_pending_shard_blocks(store, shardStores[it]!!) }
     }.awaitAll().flatten()
 
     publish(NotCrosslinkedBlocksPublished(res))

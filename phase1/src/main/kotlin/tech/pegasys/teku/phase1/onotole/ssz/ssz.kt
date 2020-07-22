@@ -39,6 +39,17 @@ data class Bytes96(val wrappedBytes: Bytes) {
   override fun toString(): String {
     return wrappedBytes.toString()
   }
+
+  companion object {
+    fun leftPad(bytes: Bytes): Bytes96 {
+      require(bytes.size() <= 96)
+      if (bytes.size() == 96) {
+        return Bytes96(bytes)
+      }
+      val zeros = Bytes.wrap(ByteArray(96 - bytes.size()))
+      return Bytes96(Bytes.concatenate(zeros, bytes))
+    }
+  }
 }
 
 typealias SSZDict<K, V> = MutableMap<K, V>

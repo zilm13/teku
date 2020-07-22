@@ -18,42 +18,18 @@ import tech.pegasys.teku.phase1.integration.datastructures.SignedBeaconBlock
 import tech.pegasys.teku.phase1.integration.datastructures.SignedShardBlock
 import tech.pegasys.teku.phase1.integration.ssz.SSZBitlistImpl
 import tech.pegasys.teku.phase1.integration.toUnsignedLong
+import tech.pegasys.teku.phase1.onotole.deps.BLS12381
 import tech.pegasys.teku.phase1.onotole.phase1.CommitteeIndex
 import tech.pegasys.teku.phase1.onotole.phase1.GENESIS_SLOT
 import tech.pegasys.teku.phase1.onotole.phase1.MAX_SHARDS
 import tech.pegasys.teku.phase1.onotole.phase1.MAX_VALIDATORS_PER_COMMITTEE
+import tech.pegasys.teku.phase1.onotole.phase1.Phase1Spec
 import tech.pegasys.teku.phase1.onotole.phase1.Root
 import tech.pegasys.teku.phase1.onotole.phase1.SECONDS_PER_SLOT
 import tech.pegasys.teku.phase1.onotole.phase1.SLOTS_PER_EPOCH
 import tech.pegasys.teku.phase1.onotole.phase1.Shard
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
 import tech.pegasys.teku.phase1.onotole.phase1.ValidatorIndex
-import tech.pegasys.teku.phase1.onotole.phase1.compute_shard_from_committee_index
-import tech.pegasys.teku.phase1.onotole.phase1.compute_start_slot_at_epoch
-import tech.pegasys.teku.phase1.onotole.phase1.get_aggregate_signature
-import tech.pegasys.teku.phase1.onotole.phase1.get_attestation_signature
-import tech.pegasys.teku.phase1.onotole.phase1.get_beacon_proposer_index
-import tech.pegasys.teku.phase1.onotole.phase1.get_block_root
-import tech.pegasys.teku.phase1.onotole.phase1.get_block_signature
-import tech.pegasys.teku.phase1.onotole.phase1.get_committee_assignment
-import tech.pegasys.teku.phase1.onotole.phase1.get_current_epoch
-import tech.pegasys.teku.phase1.onotole.phase1.get_epoch_signature
-import tech.pegasys.teku.phase1.onotole.phase1.get_forkchoice_shard_store
-import tech.pegasys.teku.phase1.onotole.phase1.get_forkchoice_store
-import tech.pegasys.teku.phase1.onotole.phase1.get_head
-import tech.pegasys.teku.phase1.onotole.phase1.get_pending_shard_blocks
-import tech.pegasys.teku.phase1.onotole.phase1.get_shard_block_signature
-import tech.pegasys.teku.phase1.onotole.phase1.get_shard_head
-import tech.pegasys.teku.phase1.onotole.phase1.get_shard_proposer_index
-import tech.pegasys.teku.phase1.onotole.phase1.get_shard_transition
-import tech.pegasys.teku.phase1.onotole.phase1.get_shard_winning_roots
-import tech.pegasys.teku.phase1.onotole.phase1.on_attestation
-import tech.pegasys.teku.phase1.onotole.phase1.on_block
-import tech.pegasys.teku.phase1.onotole.phase1.on_shard_block
-import tech.pegasys.teku.phase1.onotole.phase1.on_tick
-import tech.pegasys.teku.phase1.onotole.phase1.process_slots
-import tech.pegasys.teku.phase1.onotole.phase1.state_transition
-import tech.pegasys.teku.phase1.onotole.phase1.upgrade_to_phase1
 import tech.pegasys.teku.phase1.onotole.pylib.pyint
 import tech.pegasys.teku.phase1.onotole.ssz.Sequence
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
@@ -64,15 +40,16 @@ import tech.pegasys.teku.datastructures.blocks.BeaconBlock as Phase0Block
 private val SLOTS = 128uL * SLOTS_PER_EPOCH
 private val blsKeyPairs = MockStartValidatorKeyPairFactory().generateKeyPairs(0, 16)
 private val rnd = Random(1)
+private val spec = Phase1Spec(BLS12381)
 
 fun main() {
   var state = getGenesisState()
   val genesis = Phase0Block(state.hashTreeRoot())
   var parentRoot = genesis.hash_tree_root()
-  val store = get_forkchoice_store(state)
+  val store = spec.get_forkchoice_store(state)
   val shardStores =
     (0 until state.shard_states.size).map {
-      it.toULong() to get_forkchoice_shard_store(
+      it.toULong() to spec.get_forkchoice_shard_store(
         state,
         it.toULong()
       )
@@ -86,27 +63,27 @@ fun main() {
       shardBlocks.forEach {
         val shard = it.message.shard
         val shardStore = shardStores[shard]!!
-        on_shard_block(store, shardStore, it)
+        spec.on_shard_block(store, shardStore, it)
 
-        val pendingShardBlocks = get_pending_shard_blocks(store, shardStore)
-        assert(shardBlocksDict[shard]!!.message.hashTreeRoot() == get_shard_head(store, shardStore))
+        val pendingShardBlocks = spec.get_pending_shard_blocks(store, shardStore)
+        assert(shardBlocksDict[shard]!!.message.hashTreeRoot() == spec.get_shard_head(store, shardStore))
         assert(pendingShardBlocks.size == 1)
         assert(pendingShardBlocks[0] == shardBlocksDict[shard]!!)
       }
     }
 
     // feed the fork choice with attestations a slot after
-    on_tick(store, state.genesis_time + slot * SECONDS_PER_SLOT)
-    attestations.forEach { on_attestation(store, it) }
+    spec.on_tick(store, state.genesis_time + slot * SECONDS_PER_SLOT)
+    attestations.forEach { spec.on_attestation(store, it) }
 
     val signedBlock = produceBlock(state.copy(), slot, parentRoot, attestations, shardTransitions)
     parentRoot = signedBlock.message.hashTreeRoot()
-    state = state_transition(state, signedBlock)
+    state = spec.state_transition(state, signedBlock)
     state = state.applyChanges()
 
-    on_block(store, signedBlock)
+    spec.on_block(store, signedBlock)
 
-    assert(signedBlock.message.hashTreeRoot() == get_head(store))
+    assert(signedBlock.message.hashTreeRoot() == spec.get_head(store))
 
     println("Slot $slot: block = $signedBlock, state = $state")
     if (slot % SLOTS_PER_EPOCH == 0uL) {
@@ -122,7 +99,7 @@ fun computeAttestations(
 ): Triple<List<Attestation>, List<ShardTransition>, List<SignedShardBlock>> {
   val attestationsWithTransitionAndBlock = (0 until state.validators.size)
     .mapNotNull {
-      val assignment = get_committee_assignment(state, get_current_epoch(state), it.toULong())
+      val assignment = spec.get_committee_assignment(state, spec.get_current_epoch(state), it.toULong())
       if (assignment != null && state.slot == assignment.third) Pair(
         assignment,
         ValidatorIndex(it.toULong())
@@ -136,7 +113,7 @@ fun computeAttestations(
       Attestation(
         acc.aggregation_bits or att.aggregation_bits,
         acc.data,
-        get_aggregate_signature(listOf(acc, att))
+        spec.get_aggregate_signature(listOf(acc, att))
       )
     })
   val shardTransitions = attestationsWithTransitionAndBlock.map { it.second }.distinct()
@@ -154,9 +131,9 @@ fun produceBlock(
 ): SignedBeaconBlock {
   val stateWithAdvancedSlot = state.copy()
   if (stateWithAdvancedSlot.slot < slot) {
-    process_slots(stateWithAdvancedSlot, slot)
+    spec.process_slots(stateWithAdvancedSlot, slot)
   }
-  val proposerIndex = get_beacon_proposer_index(stateWithAdvancedSlot)
+  val proposerIndex = spec.get_beacon_proposer_index(stateWithAdvancedSlot)
   val proposerSecretKey = blsKeyPairs[proposerIndex.toInt()].secretKey.toPyint()
   val blockHeader = BeaconBlock(
     slot,
@@ -165,8 +142,8 @@ fun produceBlock(
     Bytes32.ZERO,
     BeaconBlockBody()
   )
-  val randaoReveal = get_epoch_signature(stateWithAdvancedSlot, blockHeader, proposerSecretKey)
-  val (shards, winningRoots) = get_shard_winning_roots(stateWithAdvancedSlot, attestations)
+  val randaoReveal = spec.get_epoch_signature(stateWithAdvancedSlot, blockHeader, proposerSecretKey)
+  val (shards, winningRoots) = spec.get_shard_winning_roots(stateWithAdvancedSlot, attestations)
   val shardTransitionDict = shardTransitions.map { it.hashTreeRoot() to it }.toMap()
   val shardTransitionVector = List(MAX_SHARDS.toInt()) {
     val indexOfWinningRoot = shards.indexOf(it.toULong())
@@ -190,9 +167,9 @@ fun produceBlock(
       shardTransitionVector
     )
   )
-  val endState = state_transition(state.copy(), SignedBeaconBlock(block), false)
+  val endState = spec.state_transition(state.copy(), SignedBeaconBlock(block), false)
   val blockWithStateRoot = block.copy(state_root = endState.applyChanges().hashTreeRoot())
-  val signature = get_block_signature(state, blockWithStateRoot, proposerSecretKey)
+  val signature = spec.get_block_signature(state, blockWithStateRoot, proposerSecretKey)
 
   return SignedBeaconBlock(blockWithStateRoot, signature)
 }
@@ -207,7 +184,7 @@ fun produceShardBlock(
   slot: Slot,
   beaconHeadState: BeaconState
 ): SignedShardBlock {
-  val proposerIndex = get_shard_proposer_index(beaconHeadState, slot, shard)
+  val proposerIndex = spec.get_shard_proposer_index(beaconHeadState, slot, shard)
   val body = Bytes.random(SHARD_BLOCK_SIZE, rnd).toArrayUnsafe().toList()
   val shardBlock = ShardBlock(shardParentRoot, beaconHeadRoot, slot, shard, proposerIndex, body)
 
@@ -215,7 +192,7 @@ fun produceShardBlock(
 
   return SignedShardBlock(
     shardBlock,
-    get_shard_block_signature(
+    spec.get_shard_block_signature(
       beaconHeadState,
       shardBlock,
       blsKeyPairs[proposerIndex.toInt()].secretKey.toPyint()
@@ -255,21 +232,21 @@ fun attest(
   headBlockRoot: Root,
   headState: BeaconState
 ): Triple<Attestation, ShardTransition, SignedShardBlock> {
-  val startSlot = compute_start_slot_at_epoch(get_current_epoch(headState))
-  val shard = compute_shard_from_committee_index(headState, committeeIndex, headState.slot)
+  val startSlot = spec.compute_start_slot_at_epoch(spec.get_current_epoch(headState))
+  val shard = spec.compute_shard_from_committee_index(headState, committeeIndex, headState.slot)
   val epochBoundaryBlockRoot =
-    if (startSlot == headState.slot) headBlockRoot else get_block_root(
+    if (startSlot == headState.slot) headBlockRoot else spec.get_block_root(
       headState,
-      get_current_epoch(headState)
+      spec.get_current_epoch(headState)
     )
   val signedShardBlock = getOrProduceShardHead(shard, headState.slot, headBlockRoot, headState)
-  val shardTransition = get_shard_transition(headState, shard, listOf(signedShardBlock))
+  val shardTransition = spec.get_shard_transition(headState, shard, listOf(signedShardBlock))
   val data = AttestationData(
     headState.slot,
     committeeIndex,
     headBlockRoot,
     headState.current_justified_checkpoint,
-    Checkpoint(epoch = get_current_epoch(headState), root = epochBoundaryBlockRoot),
+    Checkpoint(epoch = spec.get_current_epoch(headState), root = epochBoundaryBlockRoot),
     shard,
     if (signedShardBlock.message.slot == GENESIS_SLOT) Root() else signedShardBlock.message.hashTreeRoot(),
     shardTransition.hashTreeRoot()
@@ -278,14 +255,14 @@ fun attest(
   val attestation = Attestation(
     SSZBitlistImpl(MAX_VALIDATORS_PER_COMMITTEE).set(indexWithinCommittee),
     data,
-    get_attestation_signature(headState, data, blsKeyPairs[index.toInt()].secretKey.toPyint())
+    spec.get_attestation_signature(headState, data, blsKeyPairs[index.toInt()].secretKey.toPyint())
   )
   return Triple(attestation, shardTransition, signedShardBlock)
 }
 
 fun getGenesisState(): BeaconState {
   val deposits = MockStartDepositGenerator().createDeposits(blsKeyPairs)
-  val state = upgrade_to_phase1(
+  val state = spec.upgrade_to_phase1(
     MockStartBeaconStateGenerator().createInitialBeaconState(
       0uL.toUnsignedLong(),
       deposits

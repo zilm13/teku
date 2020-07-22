@@ -15,6 +15,7 @@ fun main() = runBlocking<Unit> {
     it.slotsToRun = 128uL * SLOTS_PER_EPOCH
     it.validatorRegistrySize = 2048
     it.debug = false
+    it.bls = Phase1Simulation.BLSConfig.Pseudo
   }
   simulation.start()
 }

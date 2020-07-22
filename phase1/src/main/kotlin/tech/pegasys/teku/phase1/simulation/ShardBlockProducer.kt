@@ -6,6 +6,7 @@ import tech.pegasys.teku.phase1.eth1client.Eth1EngineClient
 import tech.pegasys.teku.phase1.eth1shard.ETH1_SHARD_NUMBER
 import tech.pegasys.teku.phase1.integration.datastructures.ShardBlock
 import tech.pegasys.teku.phase1.integration.datastructures.SignedShardBlock
+import tech.pegasys.teku.phase1.onotole.phase1.Phase1Spec
 import tech.pegasys.teku.phase1.onotole.phase1.Root
 import tech.pegasys.teku.phase1.onotole.phase1.Shard
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
@@ -26,7 +27,8 @@ interface ShardBlockProducer {
 
 class RandomShardBlockProducer(
   private val shard: Shard,
-  private val secretKeys: SecretKeyRegistry
+  private val secretKeys: SecretKeyRegistry,
+  private val spec: Phase1Spec
 ) : ShardBlockProducer {
   override fun produce(
     slot: Slot,
@@ -42,7 +44,8 @@ class RandomShardBlockProducer(
       beaconHead.root,
       beaconHead.state,
       body,
-      secretKeys
+      secretKeys,
+      spec
     )
   }
 }
@@ -50,7 +53,8 @@ class RandomShardBlockProducer(
 class Eth1ShardBlockProducer(
   private val shard: Shard,
   private val secretKeys: SecretKeyRegistry,
-  private val eth1Engine: Eth1EngineClient
+  private val eth1Engine: Eth1EngineClient,
+  private val spec: Phase1Spec
 ) : ShardBlockProducer {
 
   override fun produce(
@@ -84,7 +88,8 @@ class Eth1ShardBlockProducer(
       beaconHead.root,
       beaconHead.state,
       body,
-      secretKeys
+      secretKeys,
+      spec
     )
   }
 }
@@ -105,11 +110,12 @@ private fun getEth1BlockHash(block: ShardBlock, eth1Engine: Eth1EngineClient): B
 fun ShardBlockProducer(
   shard: Shard,
   secretKeys: SecretKeyRegistry,
-  eth1Engine: Eth1EngineClient
+  eth1Engine: Eth1EngineClient,
+  spec: Phase1Spec
 ): ShardBlockProducer {
   return if (shard == ETH1_SHARD_NUMBER) {
-    Eth1ShardBlockProducer(shard, secretKeys, eth1Engine)
+    Eth1ShardBlockProducer(shard, secretKeys, eth1Engine, spec)
   } else {
-    RandomShardBlockProducer(shard, secretKeys)
+    RandomShardBlockProducer(shard, secretKeys, spec)
   }
 }

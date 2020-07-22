@@ -8,6 +8,10 @@ import tech.pegasys.teku.datastructures.util.MockStartValidatorKeyPairFactory
 import tech.pegasys.teku.phase1.eth1client.Eth1EngineClient
 import tech.pegasys.teku.phase1.eth1client.stub.Eth1EngineClientStub
 import tech.pegasys.teku.phase1.eth1client.withLogger
+import tech.pegasys.teku.phase1.onotole.deps.BLS12381
+import tech.pegasys.teku.phase1.onotole.deps.NoOpBLS
+import tech.pegasys.teku.phase1.onotole.deps.PseudoBLS
+import tech.pegasys.teku.phase1.onotole.phase1.Phase1Spec
 import tech.pegasys.teku.phase1.onotole.phase1.SLOTS_PER_EPOCH
 import tech.pegasys.teku.phase1.simulation.actors.BeaconAttester
 import tech.pegasys.teku.phase1.simulation.actors.BeaconProposer
@@ -48,24 +52,32 @@ class Phase1Simulation(
   init {
     logSetDebugMode(config.debug)
 
+    val bls = when (config.bls) {
+      BLSConfig.BLS12381 -> BLS12381
+      BLSConfig.Pseudo -> PseudoBLS
+      BLSConfig.NoOp -> NoOpBLS
+    }
+
+    val spec = Phase1Spec(bls)
+
     log("Initializing ${config.validatorRegistrySize} BLS Key Pairs...")
     val blsKeyPairs =
       MockStartValidatorKeyPairFactory().generateKeyPairs(0, config.validatorRegistrySize)
 
     log("Initializing genesis state and store...")
-    val genesisState = getGenesisState(blsKeyPairs)
-    val store = getGenesisStore(genesisState)
-    val shardStores = getShardGenesisStores(genesisState)
+    val genesisState = getGenesisState(blsKeyPairs, spec)
+    val store = getGenesisStore(genesisState, spec)
+    val shardStores = getShardGenesisStores(genesisState, spec)
     val secretKeys = SecretKeyRegistry(blsKeyPairs)
     val proposerEth1Engine = config.proposerEth1Engine.withLogger("ProposerEth1Engine")
     val processorEth1Engine = config.processorEth1Engine.withLogger("ProcessorEth1Engine")
 
     actors = listOf(
       SlotTicker(eventBus, config.slotsToRun),
-      Eth2ChainProcessor(eventBus, store, shardStores, processorEth1Engine),
-      BeaconProposer(eventBus, secretKeys),
-      ShardProposer(eventBus, secretKeys, proposerEth1Engine),
-      BeaconAttester(eventBus, secretKeys),
+      Eth2ChainProcessor(eventBus, store, shardStores, processorEth1Engine, spec),
+      BeaconProposer(eventBus, secretKeys, spec),
+      ShardProposer(eventBus, secretKeys, proposerEth1Engine, spec),
+      BeaconAttester(eventBus, secretKeys, spec),
       DelayedAttestationsPark(eventBus),
       terminator
     )
@@ -101,8 +113,15 @@ class Phase1Simulation(
     var validatorRegistrySize: Int = 16,
     var proposerEth1Engine: Eth1EngineClient = Eth1EngineClientStub(SimulationRandomness),
     var processorEth1Engine: Eth1EngineClient = Eth1EngineClientStub(SimulationRandomness),
-    var debug: Boolean = false
+    var debug: Boolean = false,
+    var bls: BLSConfig = BLSConfig.BLS12381
   )
+
+  enum class BLSConfig {
+    BLS12381,
+    Pseudo,
+    NoOp
+  }
 }
 
 @Suppress("FunctionName")

@@ -12,6 +12,7 @@ import tech.pegasys.teku.phase1.integration.datastructures.ShardBlock
 import tech.pegasys.teku.phase1.integration.datastructures.SignedShardBlock
 import tech.pegasys.teku.phase1.onotole.phase1.GENESIS_SLOT
 import tech.pegasys.teku.phase1.onotole.phase1.INITIAL_ACTIVE_SHARDS
+import tech.pegasys.teku.phase1.onotole.phase1.Phase1Spec
 import tech.pegasys.teku.phase1.onotole.phase1.Root
 import tech.pegasys.teku.phase1.onotole.phase1.Slot
 import tech.pegasys.teku.phase1.simulation.BeaconHead
@@ -29,7 +30,8 @@ import tech.pegasys.teku.phase1.util.printRoot
 class ShardProposer(
   eventBus: SendChannel<Eth2Event>,
   private val secretKeys: SecretKeyRegistry,
-  private val eth1Engine: Eth1EngineClient
+  private val eth1Engine: Eth1EngineClient,
+  private val spec: Phase1Spec
 ) : Eth2Actor(eventBus) {
 
   private var recentSlot = GENESIS_SLOT
@@ -67,7 +69,7 @@ class ShardProposer(
 
   private suspend fun onHeadAfterNewBeaconBlock(head: BeaconHead) = coroutineScope {
     val newShardBlocks = (0uL until INITIAL_ACTIVE_SHARDS)
-      .map { it to ShardBlockProducer(it, secretKeys, eth1Engine) }
+      .map { it to ShardBlockProducer(it, secretKeys, eth1Engine, spec) }
       .map {
         val (shardHeadRoot, shardHead) = recentShardHeads[it.first.toInt()]!!
         async { it.second.produce(recentSlot, head, shardHeadRoot, shardHead.message) }
