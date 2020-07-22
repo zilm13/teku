@@ -18,25 +18,25 @@ class LoggerAwareEth1EngineClient(
 
   override fun eth2_produceBlock(parentHash: Bytes32): Eth1EngineClient.Response<Eth1BlockData> {
     val response = delegate.eth2_produceBlock(parentHash)
-    log("$name: eth2_produceBlock(${printRoot(parentHash)}) ~> ${response.result}")
+    log("$name: eth2_produceBlock(parent_hash=${printRoot(parentHash)}) ~> ${response.result}")
     return response
   }
 
   override fun eth2_validateBlock(blockRLP: Bytes): Eth1EngineClient.Response<Boolean> {
     val response = delegate.eth2_validateBlock(blockRLP)
-    log("$name: eth2_validateBlock(${blockRLP.slice(0, 8).toHexString()}...) ~> ${response.result}")
+    log("$name: eth2_validateBlock(rlp=${blockRLP.slice(0, 8).toHexString()}...) ~> ${response.result}")
     return response
   }
 
   override fun eth2_insertBlock(blockRLP: Bytes): Eth1EngineClient.Response<Boolean> {
     val response = delegate.eth2_insertBlock(blockRLP)
-    log("$name: eth2_insertBlock(${blockRLP.slice(0, 8).toHexString()}...) ~> ${response.result}")
+    log("$name: eth2_insertBlock(rlp=${blockRLP.slice(0, 8).toHexString()}...) ~> ${response.result}")
     return response
   }
 
   override fun eth2_setHead(blockHash: Bytes32): Eth1EngineClient.Response<Boolean> {
     val response = delegate.eth2_setHead(blockHash)
-    log("$name: eth2_setHead(${printRoot(blockHash)}) ~> ${response.result}")
+    log("$name: eth2_setHead(hash=${printRoot(blockHash)}) ~> ${response.result}")
     return response
   }
 
