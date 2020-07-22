@@ -2,6 +2,7 @@ package tech.pegasys.teku.phase1.eth1client.stub
 
 import tech.pegasys.teku.phase1.eth1client.Eth1BlockData
 import tech.pegasys.teku.phase1.eth1client.Eth1EngineClient
+import tech.pegasys.teku.phase1.eth1client.computeEth1BlockHash
 import tech.pegasys.teku.phase1.onotole.deps.hash_tree_root
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
@@ -27,11 +28,11 @@ class Eth1EngineClientStub(private val rnd: Random) :
         Bytes32(),
         genesisBody
       )
-    headBlockHash = hash(genesisRLP)
+    headBlockHash = computeEth1BlockHash(genesisRLP)
     blocks[headBlockHash] = genesisRLP
   }
 
-  override fun eth_getHead(): Eth1EngineClient.Response<Bytes32> =
+  override fun eth_getHeadBlockHash(): Eth1EngineClient.Response<Bytes32> =
     Eth1EngineClient.Response(headBlockHash)
 
   override fun eth2_produceBlock(parentHash: Bytes32): Eth1EngineClient.Response<Eth1BlockData> {
@@ -59,7 +60,7 @@ class Eth1EngineClientStub(private val rnd: Random) :
       )
     val blockData = Eth1BlockData(
       number = number,
-      blockHash = hash(blockRLP),
+      blockHash = computeEth1BlockHash(blockRLP),
       parentHash = parentHash,
       stateRoot = stateRoot,
       receiptsRoot = receiptsRoot,
@@ -89,7 +90,7 @@ class Eth1EngineClientStub(private val rnd: Random) :
       throw IllegalArgumentException("Block number != parentNumber + 1: [$number != ${parentNumber + 1uL}]")
     }
 
-    val blockHash = hash(blockRLP)
+    val blockHash = computeEth1BlockHash(blockRLP)
     blocks[blockHash] = blockRLP
     return Eth1EngineClient.Response(true)
   }

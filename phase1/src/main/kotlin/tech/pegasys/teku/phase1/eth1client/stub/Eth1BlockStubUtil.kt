@@ -1,12 +1,9 @@
 package tech.pegasys.teku.phase1.eth1client.stub
 
-import org.apache.tuweni.crypto.Hash
 import org.apache.tuweni.rlp.RLP
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes
 import tech.pegasys.teku.phase1.onotole.ssz.Bytes32
 import tech.pegasys.teku.phase1.onotole.ssz.uint64
-
-fun hash(rlp: Bytes): Bytes32 = Hash.sha2_256(rlp)
 
 fun encodeBlockDataWithRLP(
   number: uint64,

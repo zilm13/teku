@@ -97,7 +97,7 @@ private fun getEth1BlockHash(block: ShardBlock, eth1Engine: Eth1EngineClient): B
     val eth1ParentData = Eth1BlockData(block.body.toBytes())
     eth1ParentData.blockHash
   } else {
-    eth1Engine.eth_getHead().result!!
+    eth1Engine.eth_getHeadBlockHash().result!!
   }
 }
 

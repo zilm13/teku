@@ -24,6 +24,7 @@ import tech.pegasys.teku.phase1.simulation.NewSlot
 import tech.pegasys.teku.phase1.simulation.ShardBlockProducer
 import tech.pegasys.teku.phase1.simulation.util.SecretKeyRegistry
 import tech.pegasys.teku.phase1.util.log
+import tech.pegasys.teku.phase1.util.printRoot
 
 class ShardProposer(
   eventBus: SendChannel<Eth2Event>,
@@ -52,6 +53,8 @@ class ShardProposer(
 
     // Update eth1-engine with new Eth1 heads
     updateEth1ShardHead(heads[ETH1_SHARD_NUMBER.toInt()].second.message)
+
+    log("ShardProposer: shard heads updated to [${heads.joinToString { printRoot(it.first) }}]")
   }
 
   private fun updateEth1ShardHead(head: ShardBlock) {

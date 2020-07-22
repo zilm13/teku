@@ -1,34 +1,36 @@
 plugins {
-  id "org.jetbrains.kotlin.jvm" version "1.3.72"
+    id "org.jetbrains.kotlin.jvm" version "1.3.72"
 }
 
 dependencies {
-  implementation project(':bls')
-  implementation project(':ethereum:datastructures')
-  implementation project(':ssz')
+    implementation project(':bls')
+    implementation project(':ethereum:datastructures')
+    implementation project(':ssz')
 
-  implementation 'org.miracl.milagro.amcl:milagro-crypto-java'
-  implementation 'org.apache.tuweni:tuweni-crypto'
-  implementation 'org.apache.tuweni:tuweni-ssz'
-  implementation 'org.apache.tuweni:tuweni-bytes'
-  implementation 'org.apache.tuweni:tuweni-rlp:0.10.0'
+    implementation 'org.miracl.milagro.amcl:milagro-crypto-java'
+    implementation 'org.apache.tuweni:tuweni-crypto'
+    implementation 'org.apache.tuweni:tuweni-ssz'
+    implementation 'org.apache.tuweni:tuweni-bytes'
+    implementation 'org.apache.tuweni:tuweni-rlp'
+    implementation 'org.web3j:core'
 
-  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
-  implementation "org.jetbrains.kotlin:kotlin-reflect"
-  implementation "org.jetbrains.kotlin:kotlin-test"
-  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+    implementation "org.jetbrains.kotlin:kotlin-reflect"
+    implementation "org.jetbrains.kotlin:kotlin-test"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-reactive"
 
-  testImplementation "org.jetbrains.kotlin:kotlin-test-junit"
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit"
 
-  tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-    kotlinOptions {
-      jvmTarget = 11
+    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        kotlinOptions {
+            jvmTarget = 11
+        }
     }
-  }
 
-  test {
-    testLogging.showStandardStreams = true
-  }
+    test {
+        testLogging.showStandardStreams = true
+    }
 }
 compileKotlin {
     kotlinOptions {
