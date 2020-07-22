@@ -27,7 +27,7 @@ import tech.pegasys.teku.phase1.util.logSetDebugMode
 
 class Phase1Simulation(
   private val scope: CoroutineScope,
-  userConfig: (Config) -> Unit
+  private val config: Config
 ) {
   private val eventBus: Channel<Eth2Event> = Channel(Channel.UNLIMITED)
   private val terminator = object : Eth2Actor(eventBus) {
@@ -43,12 +43,9 @@ class Phase1Simulation(
     }
   }
 
-  private val config: Config = Config()
   private val actors: List<Eth2Actor>
 
   init {
-    userConfig(config)
-
     logSetDebugMode(config.debug)
 
     log("Initializing ${config.validatorRegistrySize} BLS Key Pairs...")
@@ -106,4 +103,14 @@ class Phase1Simulation(
     var processorEth1Engine: Eth1EngineClient = Eth1EngineClientStub(SimulationRandomness),
     var debug: Boolean = false
   )
+}
+
+@Suppress("FunctionName")
+fun Phase1Simulation(
+  scope: CoroutineScope,
+  userConfig: (Phase1Simulation.Config) -> Unit
+): Phase1Simulation {
+  val config = Phase1Simulation.Config()
+  userConfig(config)
+  return Phase1Simulation(scope, config)
 }
