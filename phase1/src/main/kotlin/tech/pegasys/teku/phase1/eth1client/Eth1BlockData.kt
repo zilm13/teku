@@ -14,16 +14,16 @@ data class Eth1BlockData(
   val blockRLP: Bytes
 ) {
 
-  constructor(sosBytes: Bytes) : this(
-    Bytes32.wrap(sosBytes.slice(0 * Bytes32.SIZE, Bytes32.SIZE)),
-    Bytes32.wrap(sosBytes.slice(1 * Bytes32.SIZE, Bytes32.SIZE)),
-    Bytes32.wrap(sosBytes.slice(2 * Bytes32.SIZE, Bytes32.SIZE)),
-    Bytes32.wrap(sosBytes.slice(3 * Bytes32.SIZE, Bytes32.SIZE)),
-    sosBytes.slice(4 * Bytes32.SIZE, 8).toLong().toULong(),
-    sosBytes.slice(4 * Bytes32.SIZE + 8, sosBytes.size() - (4 * Bytes32.SIZE + 8))
+  constructor(pseudoSosBytes: Bytes) : this(
+    Bytes32.wrap(pseudoSosBytes.slice(0 * Bytes32.SIZE, Bytes32.SIZE)),
+    Bytes32.wrap(pseudoSosBytes.slice(1 * Bytes32.SIZE, Bytes32.SIZE)),
+    Bytes32.wrap(pseudoSosBytes.slice(2 * Bytes32.SIZE, Bytes32.SIZE)),
+    Bytes32.wrap(pseudoSosBytes.slice(3 * Bytes32.SIZE, Bytes32.SIZE)),
+    pseudoSosBytes.slice(4 * Bytes32.SIZE, 8).toLong().toULong(),
+    pseudoSosBytes.slice(4 * Bytes32.SIZE + 8, pseudoSosBytes.size() - (4 * Bytes32.SIZE + 8))
   )
 
-  fun encodeWithSOS(): Bytes {
+  fun encodeWithPseudoSOS(): Bytes {
     return Bytes.concatenate(
       blockHash,
       parentHash,
@@ -41,6 +41,6 @@ data class Eth1BlockData(
         "parentHash=${printRoot(parentHash)}, " +
         "stateRoot=${printRoot(stateRoot)}, " +
         "receiptsRoot=${printRoot(receiptsRoot)}, " +
-        "blockRLP=[${blockRLP.size()} bytes])"
+        "blockRLP=[(${blockRLP.size()} bytes): ${blockRLP.slice(0, 8).toHexString()}...])"
   }
 }

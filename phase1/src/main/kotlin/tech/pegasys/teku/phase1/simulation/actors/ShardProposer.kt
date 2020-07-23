@@ -63,7 +63,13 @@ class ShardProposer(
     // Skip PHASE_1_GENESIS case
     if (head.body.size > 0) {
       val eth1BlockData = Eth1BlockData(head.body.toBytes())
-      eth1Engine.eth2_setHead(eth1BlockData.blockHash)
+      val response = eth1Engine.eth2_setHead(eth1BlockData.blockHash)
+      if (response.result != true) {
+        throw IllegalStateException(
+          "Failed to eth2_setHead(parent_hash=${printRoot(eth1BlockData.blockHash)}), " +
+              "reason ${response.reason}"
+        )
+      }
     }
   }
 

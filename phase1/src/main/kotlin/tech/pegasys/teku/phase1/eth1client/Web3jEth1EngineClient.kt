@@ -32,12 +32,12 @@ class Web3jEth1EngineClient(rpcUrl: String, private val context: CoroutineContex
       }
       .flattenConcat().first()
 
-    getResultOrThrowError(response, { Bytes32.fromHexString(it.hash) })
+    getResultOrThrowError(response, { Bytes32.fromHexString(it!!.hash) })
   }
 
   override fun eth2_produceBlock(parentHash: Bytes32) = runBlocking(context) {
     val response = web3j.eth2ProduceBlock(parentHash.toHexString()).flowable().asFlow().first()
-    getResultOrThrowError(response, { parseEth1BlockDataFromRLP(Bytes.fromHexString(it[0])) })
+    getResultOrThrowError(response, { parseEth1BlockDataFromRLP(Bytes.fromBase64String(it)) })
   }
 
   override fun eth2_validateBlock(blockRLP: Bytes): Eth1EngineClient.Response<Boolean> {
@@ -45,7 +45,7 @@ class Web3jEth1EngineClient(rpcUrl: String, private val context: CoroutineContex
   }
 
   override fun eth2_insertBlock(blockRLP: Bytes) = runBlocking {
-    val response = web3j.eth2InsertBlock(blockRLP.toHexString()).flowable().asFlow().first()
+    val response = web3j.eth2InsertBlock(blockRLP.toBase64String()).flowable().asFlow().first()
     getResponseOnActionResultOrThrowError(response)
   }
 
@@ -88,8 +88,8 @@ class EthereumJsonRPCError(message: String?) : RuntimeException(message)
 
 private fun <U, V> getResultOrThrowError(
   response: Response<U>,
-  result: (U) -> V,
-  reason: (U) -> String? = { null }
+  result: (U?) -> V,
+  reason: (U?) -> String? = { null }
 ): Eth1EngineClient.Response<V> {
   return if (response.hasError()) {
     throw EthereumJsonRPCError("${response.error.code}: ${response.error.message}")
@@ -99,11 +99,11 @@ private fun <U, V> getResultOrThrowError(
 }
 
 private fun getResponseOnActionResultOrThrowError(
-  response: Response<ResponseOnAction>
-): Eth1EngineClient.Response<Boolean> =
-  getResultOrThrowError(response, { it.result == "success" }, { it.reason })
+  response: Response<String>
+): Eth1EngineClient.Response<Boolean> {
+  return getResultOrThrowError(response, { true })
+}
 
 
-private class ProducedBlock : Response<Array<String>>()
-private data class ResponseOnAction(val result: String, val reason: String) :
-  Response<ResponseOnAction>()
+private class ProducedBlock : Response<String>()
+private class ResponseOnAction : Response<String>()

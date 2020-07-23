@@ -15,7 +15,7 @@ class Eth1ShardSpec(private val spec: Phase1Spec) {
     val eth1BlockData = Eth1BlockData(signed_shard_block.message.body.toBytes())
     val ret = eth1_engine.eth2_insertBlock(eth1BlockData.blockRLP)
     if (ret.result != true) {
-      throw IllegalStateException("Failed to import $eth1BlockData, reason: ${ret.reason}")
+      throw IllegalStateException("Failed to eth2_insertBlock($eth1BlockData), reason: ${ret.reason}")
     }
     spec.on_shard_block(store, shard_store, signed_shard_block)
   }
