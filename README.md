@@ -1,4 +1,4 @@
-# [WIP] Simulation of sharded state with ARF with Disc v5
+# [WIP] Simulation of distributed state with ARF with Disc v5
 
 Based on [Teku Eth2 Java client](https://github.com/PegaSysEng/teku/)  
 Simulates distributed state via several virtual peers with [Adaptive Range Filters](http://www.vldb.org/pvldb/vol6/p1714-kossmann.pdf) built over Discovery V5.
