@@ -17,6 +17,8 @@ import tech.pegasys.teku.service.serviceutils.Service;
 import tech.pegasys.teku.storage.client.RecentChainData;
 import tech.pegasys.teku.util.async.SafeFuture;
 
+import java.util.concurrent.TimeUnit;
+
 public class DefaultSyncService extends Service implements SyncService {
 
   private final SyncManager syncManager;
@@ -68,5 +70,10 @@ public class DefaultSyncService extends Service implements SyncService {
   @Override
   public void unsubscribeFromSyncChanges(final long subscriberId) {
     syncManager.unsubscribeFromSyncChanges(subscriberId);
+  }
+
+  @Override
+  public SafeFuture<Void> onSyncDone(int millisDelay) {
+    return syncManager.onSyncDone(millisDelay);
   }
 }

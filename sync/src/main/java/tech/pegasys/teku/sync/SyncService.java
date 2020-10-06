@@ -29,6 +29,8 @@ public interface SyncService {
 
   void unsubscribeFromSyncChanges(long subscriberId);
 
+  SafeFuture<Void> onSyncDone(int millisDelay);
+
   interface SyncSubscriber {
     void onSyncingChange(boolean isSyncing);
   }

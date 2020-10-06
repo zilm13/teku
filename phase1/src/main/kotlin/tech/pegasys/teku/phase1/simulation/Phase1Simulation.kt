@@ -8,11 +8,16 @@ import tech.pegasys.teku.datastructures.util.MockStartValidatorKeyPairFactory
 import tech.pegasys.teku.phase1.eth1client.Eth1EngineClient
 import tech.pegasys.teku.phase1.eth1client.stub.Eth1EngineClientStub
 import tech.pegasys.teku.phase1.eth1client.withLogger
+import tech.pegasys.teku.phase1.integration.datastructures.BeaconBlockHeader
+import tech.pegasys.teku.phase1.integration.datastructures.BeaconState
+import tech.pegasys.teku.phase1.integration.datastructures.Store
 import tech.pegasys.teku.phase1.onotole.deps.BLS12381
 import tech.pegasys.teku.phase1.onotole.deps.NoOpBLS
 import tech.pegasys.teku.phase1.onotole.deps.PseudoBLS
 import tech.pegasys.teku.phase1.onotole.phase1.Phase1Spec
+import tech.pegasys.teku.phase1.onotole.phase1.Root
 import tech.pegasys.teku.phase1.onotole.phase1.SLOTS_PER_EPOCH
+import tech.pegasys.teku.phase1.onotole.ssz.SSZDict
 import tech.pegasys.teku.phase1.simulation.actors.BeaconAttester
 import tech.pegasys.teku.phase1.simulation.actors.BeaconProposer
 import tech.pegasys.teku.phase1.simulation.actors.DelayedAttestationsPark
@@ -48,6 +53,7 @@ class Phase1Simulation(
   }
 
   private val actors: List<Eth2Actor>
+  private val store: Store
 
   init {
     logSetDebugMode(config.debug)
@@ -66,7 +72,7 @@ class Phase1Simulation(
 
     log("Initializing genesis state and store...")
     val genesisState = getGenesisState(blsKeyPairs, spec)
-    val store = getGenesisStore(genesisState, spec)
+    store = getGenesisStore(genesisState, spec)
     val shardStores = getShardGenesisStores(genesisState, spec)
     val secretKeys = SecretKeyRegistry(blsKeyPairs)
     val proposerEth1Engine = config.proposerEth1Engine.withLogger("ProposerEth1Engine")
@@ -81,6 +87,18 @@ class Phase1Simulation(
       DelayedAttestationsPark(eventBus),
       terminator
     )
+  }
+
+  fun getBlockSlots(): SSZDict<ULong, Root> {
+    return store.blocks_by_slot
+  }
+
+  fun getBlocks(): SSZDict<Root, BeaconBlockHeader> {
+    return store.blocks
+  }
+
+  fun getState(): BeaconState {
+    return store.block_states[store.best_justified_checkpoint.root]!!
   }
 
   suspend fun start() {

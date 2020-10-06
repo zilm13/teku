@@ -1,0 +1,76 @@
+plugins {
+    id "org.jetbrains.kotlin.jvm" version "1.4.0"
+}
+
+dependencies {
+    implementation project(':phase1')
+    implementation project(':ethereum:core')
+    implementation project(':ethereum:datastructures')
+    implementation project(':ethereum:statetransition')
+    implementation project(':sync')
+    implementation project(':storage')
+    implementation project(':storage:api')
+    implementation project(':services:serviceutils')
+    implementation project(':services:beaconchain')
+    implementation project(':networking:p2p')
+    implementation project(':networking:eth2')
+    implementation project(':bls')
+    implementation project(':util')
+    implementation project(':events')
+    implementation project(':logging')
+    implementation project(':data:metrics')
+    implementation project(':teku')
+
+    implementation 'tech.pegasys.discovery:discovery'
+    implementation 'io.projectreactor:reactor-core'
+    implementation 'org.assertj:assertj-core'
+    implementation 'org.awaitility:awaitility'
+    implementation 'org.hyperledger.besu:plugin-api'
+    implementation 'org.hyperledger.besu.internal:metrics-core'
+//
+//    implementation project(':data:beaconrestapi')
+//    implementation project(':data:metrics')
+//    implementation project(':data:provider')
+//    implementation project(':ethereum:core')
+//    implementation project(':logging')
+//    implementation project(':pow')
+//    implementation project(':services:powchain')
+//    implementation project(':ssz')
+//    implementation project(':storage')
+//    implementation project(':storage:api')
+//    implementation project(':util')
+//    implementation project(':validator:api')
+//    implementation project(':validator:coordinator')
+//    implementation project(':validator:client')
+//
+//    implementation 'org.miracl.milagro.amcl:milagro-crypto-java'
+    implementation 'org.apache.tuweni:tuweni-crypto'
+    implementation 'org.apache.tuweni:tuweni-ssz'
+    implementation 'org.apache.tuweni:tuweni-bytes'
+//    implementation 'org.apache.tuweni:tuweni-rlp'
+//    implementation 'org.web3j:core'
+    implementation 'io.libp2p:jvm-libp2p-minimal'
+//    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.4.0"
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib'
+    implementation "org.jetbrains.kotlin:kotlin-reflect"
+    implementation "org.jetbrains.kotlin:kotlin-test"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-reactive"
+
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit"
+
+    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        kotlinOptions {
+            jvmTarget = 11
+        }
+    }
+
+    test {
+        testLogging.showStandardStreams = true
+    }
+}
+compileKotlin {
+    kotlinOptions {
+        freeCompilerArgs = ["-XXLanguage:+InlineClasses"]
+    }
+}

@@ -21,6 +21,7 @@ import java.util.stream.Stream;
 public class BLSKeyGenerator {
   @SuppressWarnings("DoNotCreateSecureRandomDirectly")
   public static List<BLSKeyPair> generateKeyPairs(final int count) {
+    // TODO: Pass seed here
     final SecureRandom srng = new SecureRandom();
     return Stream.generate(() -> BLSKeyPair.random(srng)).limit(count).collect(Collectors.toList());
   }

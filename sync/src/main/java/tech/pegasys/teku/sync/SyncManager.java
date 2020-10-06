@@ -13,18 +13,9 @@
 
 package tech.pegasys.teku.sync;
 
-import static tech.pegasys.teku.util.async.SafeFuture.completedFuture;
-import static tech.pegasys.teku.util.config.Constants.SLOTS_PER_EPOCH;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 import com.google.common.primitives.UnsignedLong;
-import java.time.Duration;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import tech.pegasys.teku.networking.eth2.peers.Eth2Peer;
@@ -38,6 +29,16 @@ import tech.pegasys.teku.sync.SyncService.SyncSubscriber;
 import tech.pegasys.teku.util.async.AsyncRunner;
 import tech.pegasys.teku.util.async.SafeFuture;
 import tech.pegasys.teku.util.events.Subscribers;
+
+import java.time.Duration;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+
+import static tech.pegasys.teku.util.async.SafeFuture.completedFuture;
+import static tech.pegasys.teku.util.config.Constants.SLOTS_PER_EPOCH;
 
 public class SyncManager extends Service {
   private static final Duration SHORT_DELAY = Duration.ofSeconds(5);
@@ -161,6 +162,25 @@ public class SyncManager extends Service {
       }
     }
     return new SyncingStatus(false, null);
+  }
+
+  public SafeFuture<Void> onSyncDone(final int millisDelay) {
+    SafeFuture<Void> future = new SafeFuture<>();
+    asyncRunner.runWithFixedDelay(
+            () -> {
+              if (getSyncStatus().getSyncStatus() != null) {
+                final SyncStatus syncStatus = getSyncStatus().getSyncStatus();
+                if (syncStatus.getHighestSlot().equals(syncStatus.getCurrentSlot())) {
+                  future.complete(null);
+                }
+              } else {
+                future.complete(null);
+              }
+            },
+            millisDelay, TimeUnit.MILLISECONDS, future::completeExceptionally
+    );
+
+    return future;
   }
 
   private SafeFuture<Void> executeSync() {

@@ -49,4 +49,9 @@ public class NoopSyncService implements SyncService {
 
   @Override
   public void unsubscribeFromSyncChanges(final long subscriberId) {}
+
+  @Override
+  public SafeFuture<Void> onSyncDone(int millisDelay) {
+    return SafeFuture.completedFuture(null);
+  }
 }

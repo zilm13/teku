@@ -1159,7 +1159,9 @@ class Phase1Spec(internal val bls: BLS) {
     assert((block.slot > finalized_slot))
     assert((get_ancestor(store, block.parent_root, finalized_slot) == store.finalized_checkpoint.root))
     val state = state_transition(pre_state, signed_block, true)
-    store.blocks[hash_tree_root(block)] = BeaconBlockHeader(slot = block.slot, proposer_index = block.proposer_index, parent_root = block.parent_root, state_root = block.state_root, body_root = hash_tree_root(block.body))
+    val root = hash_tree_root(block)
+    store.blocks[root] = BeaconBlockHeader(slot = block.slot, proposer_index = block.proposer_index, parent_root = block.parent_root, state_root = block.state_root, body_root = hash_tree_root(block.body))
+    store.blocks_by_slot[block.slot] = root
     store.block_states[hash_tree_root(block)] = state
     if ((state.current_justified_checkpoint.epoch > store.justified_checkpoint.epoch)) {
       if ((state.current_justified_checkpoint.epoch > store.best_justified_checkpoint.epoch)) {

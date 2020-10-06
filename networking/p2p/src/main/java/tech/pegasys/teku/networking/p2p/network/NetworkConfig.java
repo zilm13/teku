@@ -16,6 +16,8 @@ package tech.pegasys.teku.networking.p2p.network;
 import static com.google.common.net.InetAddresses.isInetAddress;
 
 import io.libp2p.core.crypto.PrivKey;
+
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -88,6 +90,10 @@ public class NetworkConfig {
     this.targetPeerRange = targetPeerRange;
     this.gossipConfig = gossipConfig;
     this.wireLogsConfig = wireLogsConfig;
+  }
+
+  public InetSocketAddress getAddress() {
+    return InetSocketAddress.createUnresolved(getAdvertisedIp(), getAdvertisedPort());
   }
 
   public PrivKey getPrivateKey() {
