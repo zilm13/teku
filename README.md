@@ -1,31 +1,7 @@
-# teku
+# Simulation of sharded state with ARF with Disc v5
 
- [![Build Status](https://circleci.com/gh/PegaSysEng/teku.svg?style=svg)](https://circleci.com/gh/PegaSysEng/workflows/teku)
- [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/PegasysEng/teku/blob/master/LICENSE)
- [![Gitter chat](https://badges.gitter.im/PegaSysEng/teku.png)](https://gitter.im/PegaSysEng/teku)
-
-Teku is a Java implementation of the Ethereum 2.0 Beacon Chain. Teku is changing rapidly hence we recommend building from the latest master. See the [Changelog](CHANGELOG.md) for known issues and breaking changes.
-
-## Useful links 
-
-* [Ethereum 2.0 Beacon Chain specification](https://github.com/ethereum/eth2.0-specs/blob/dev/specs/phase0/beacon-chain.md) 
-* [Teku user documentation](https://docs.teku.pegasys.tech/)
-* [Teku REST API reference documentation](https://pegasyseng.github.io/teku/)
-* [Teku issues](https://github.com/PegaSysEng/teku/issues)
-* [Contribution guidelines](CONTRIBUTING.md)
-* [Teku Changelog](CHANGELOG.md)
-
-## Teku users 
-
-See our [user documentation](https://docs.teku.pegasys.tech/). 
-
-Raise a [documentation issue](https://github.com/PegaSysEng/doc.teku/issues) or get in touch on 
-[Gitter](https://gitter.im/PegaSysEng/teku) if you've got questions or feedback. 
-
-## Teku developers 
-
-* [Contribution Guidelines](CONTRIBUTING.md)
-* [Coding Conventions](https://github.com/hyperledger/besu/blob/master/CODING-CONVENTIONS.md)
+Based on [Teku Eth2 Java client](https://github.com/PegaSysEng/teku/)
+Simulates distributed state via several virtual peers with [Adaptive Range Filters](http://www.vldb.org/pvldb/vol6/p1714-kossmann.pdf) built over Disc V5.
 
 ## Build Instructions
 
@@ -38,7 +14,7 @@ Raise a [documentation issue](https://github.com/PegaSysEng/doc.teku/issues) or 
 To create a ready to run distribution:
 
 ```shell script
-git clone https://github.com/PegaSysEng/teku.git
+git clone https://github.com/zilm13/teku.git
 cd teku && ./gradlew distTar installDist
 ```
 
@@ -51,7 +27,7 @@ This produces:
 To build, clone this repo and run with `gradle`:
 
 ```shell script
-git clone https://github.com/PegaSysEng/teku.git
+git clone https://github.com/zilm13/teku.git
 cd teku && ./gradlew
 
 ```
@@ -59,7 +35,7 @@ cd teku && ./gradlew
 Or clone it manually:
 
 ```shell script
-git clone https://github.com/PegaSysEng/teku.git
+git clone https://github.com/zilm13/teku.git
 cd teku && ./gradlew
 ```
 
@@ -91,14 +67,3 @@ All the unit tests are run as part of the build, but can be explicitly triggered
 ```shell script 
 ./gradlew test
 ```
-
-## Special thanks
-YourKit for providing us with a free profiler open source license. 
-
-YourKit supports open source projects with innovative and intelligent tools
-for monitoring and profiling Java and .NET applications.
-YourKit is the creator of <a href="https://www.yourkit.com/java/profiler/">YourKit Java Profiler</a>,
-<a href="https://www.yourkit.com/.net/profiler/">YourKit .NET Profiler</a>,
-and <a href="https://www.yourkit.com/youmonitor/">YourKit YouMonitor</a>.
-
-![YourKit Logo](https://www.yourkit.com/images/yklogo.png)
