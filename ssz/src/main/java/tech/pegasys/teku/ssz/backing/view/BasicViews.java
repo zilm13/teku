@@ -14,6 +14,7 @@
 package tech.pegasys.teku.ssz.backing.view;
 
 import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.units.bigints.UInt256;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
 import tech.pegasys.teku.ssz.backing.type.BasicViewTypes;
@@ -52,6 +53,13 @@ public class BasicViews {
 
     public long longValue() {
       return get().longValue();
+    }
+  }
+
+  public static class UInt256View extends AbstractBasicView<UInt256, UInt256View> {
+
+    public UInt256View(UInt256 val) {
+      super(val, BasicViewTypes.UINT256_TYPE);
     }
   }
 

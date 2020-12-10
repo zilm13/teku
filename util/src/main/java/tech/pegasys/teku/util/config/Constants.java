@@ -170,6 +170,11 @@ public class Constants {
   public static final int VALID_VALIDATOR_SET_SIZE = 10000;
   public static final int NETWORKING_FAILURE_REPEAT_INTERVAL = 3; // in sec
 
+  // Execution
+  public static final long MAX_BYTES_PER_TRANSACTION_PAYLOAD = 1L << 32;
+  public static final long BYTES_PER_LOGS_BLOOM = 256;
+  public static final long MAX_ETH1_TRANSACTIONS = 1L << 32;
+
   public static final Map<String, Object> CONFIG_ITEM_MAP = new HashMap<>();
 
   static {

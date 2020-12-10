@@ -25,6 +25,7 @@ import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.ssz.SSZ;
 import tech.pegasys.teku.bls.BLSSignature;
+import tech.pegasys.teku.datastructures.blocks.exec.ExecutableData;
 import tech.pegasys.teku.datastructures.operations.Attestation;
 import tech.pegasys.teku.datastructures.operations.AttesterSlashing;
 import tech.pegasys.teku.datastructures.operations.Deposit;
@@ -47,6 +48,7 @@ public class BeaconBlockBody implements SimpleOffsetSerializable, SSZContainer, 
   private final BLSSignature randao_reveal;
   private final Eth1Data eth1_data;
   private final Bytes32 graffiti;
+  private final ExecutableData executable_data;
   private final SSZList<ProposerSlashing>
       proposer_slashings; // List bounded by MAX_PROPOSER_SLASHINGS
   private final SSZList<AttesterSlashing>
@@ -62,6 +64,7 @@ public class BeaconBlockBody implements SimpleOffsetSerializable, SSZContainer, 
       BLSSignature randao_reveal,
       Eth1Data eth1_data,
       Bytes32 graffiti,
+      ExecutableData executable_data,
       SSZList<ProposerSlashing> proposer_slashings,
       SSZList<AttesterSlashing> attester_slashings,
       SSZList<Attestation> attestations,
@@ -69,6 +72,7 @@ public class BeaconBlockBody implements SimpleOffsetSerializable, SSZContainer, 
       SSZList<SignedVoluntaryExit> voluntary_exits) {
     this.randao_reveal = randao_reveal;
     this.eth1_data = eth1_data;
+    this.executable_data = executable_data;
     this.graffiti = graffiti;
     this.proposer_slashings = proposer_slashings;
     this.attester_slashings = attester_slashings;
@@ -77,10 +81,32 @@ public class BeaconBlockBody implements SimpleOffsetSerializable, SSZContainer, 
     this.voluntary_exits = voluntary_exits;
   }
 
+  public BeaconBlockBody(
+      BLSSignature randao_reveal,
+      Eth1Data eth1_data,
+      Bytes32 graffiti,
+      SSZList<ProposerSlashing> proposer_slashings,
+      SSZList<AttesterSlashing> attester_slashings,
+      SSZList<Attestation> attestations,
+      SSZList<Deposit> deposits,
+      SSZList<SignedVoluntaryExit> voluntary_exits) {
+    this(
+        randao_reveal,
+        eth1_data,
+        graffiti,
+        new ExecutableData(),
+        proposer_slashings,
+        attester_slashings,
+        attestations,
+        deposits,
+        voluntary_exits);
+  }
+
   public BeaconBlockBody() {
     this.randao_reveal = BLSSignature.empty();
     this.eth1_data = new Eth1Data();
     this.graffiti = Bytes32.ZERO;
+    this.executable_data = new ExecutableData();
     this.proposer_slashings = BeaconBlockBodyLists.createProposerSlashings();
     this.attester_slashings = BeaconBlockBodyLists.createAttesterSlashings();
     this.attestations = BeaconBlockBodyLists.createAttestations();
@@ -90,7 +116,10 @@ public class BeaconBlockBody implements SimpleOffsetSerializable, SSZContainer, 
 
   @Override
   public int getSSZFieldCount() {
-    return randao_reveal.getSSZFieldCount() + eth1_data.getSSZFieldCount() + SSZ_FIELD_COUNT;
+    return randao_reveal.getSSZFieldCount()
+        + eth1_data.getSSZFieldCount()
+        + executable_data.getSSZFieldCount()
+        + SSZ_FIELD_COUNT;
   }
 
   @Override
@@ -99,7 +128,7 @@ public class BeaconBlockBody implements SimpleOffsetSerializable, SSZContainer, 
     fixedPartsList.addAll(randao_reveal.get_fixed_parts());
     fixedPartsList.addAll(eth1_data.get_fixed_parts());
     fixedPartsList.addAll(List.of(SSZ.encode(writer -> writer.writeFixedBytes(graffiti))));
-    fixedPartsList.addAll(Collections.nCopies(5, Bytes.EMPTY));
+    fixedPartsList.addAll(Collections.nCopies(6, Bytes.EMPTY));
     return fixedPartsList;
   }
 
@@ -111,6 +140,7 @@ public class BeaconBlockBody implements SimpleOffsetSerializable, SSZContainer, 
     variablePartsList.addAll(List.of(Bytes.EMPTY));
     variablePartsList.addAll(
         List.of(
+            SimpleOffsetSerializer.serialize(executable_data),
             SimpleOffsetSerializer.serializeFixedCompositeList(proposer_slashings),
             SimpleOffsetSerializer.serializeVariableCompositeList(attester_slashings),
             SimpleOffsetSerializer.serializeVariableCompositeList(attestations),
@@ -124,6 +154,7 @@ public class BeaconBlockBody implements SimpleOffsetSerializable, SSZContainer, 
     return Objects.hash(
         randao_reveal,
         eth1_data,
+        executable_data,
         graffiti,
         proposer_slashings,
         attester_slashings,
@@ -149,6 +180,7 @@ public class BeaconBlockBody implements SimpleOffsetSerializable, SSZContainer, 
     BeaconBlockBody other = (BeaconBlockBody) obj;
     return Objects.equals(this.getRandao_reveal(), other.getRandao_reveal())
         && Objects.equals(this.getEth1_data(), other.getEth1_data())
+        && Objects.equals(this.getExecutable_data(), other.getExecutable_data())
         && Objects.equals(this.getGraffiti(), other.getGraffiti())
         && Objects.equals(this.getProposer_slashings(), other.getProposer_slashings())
         && Objects.equals(this.getAttester_slashings(), other.getAttester_slashings())
@@ -164,6 +196,10 @@ public class BeaconBlockBody implements SimpleOffsetSerializable, SSZContainer, 
 
   public Eth1Data getEth1_data() {
     return eth1_data;
+  }
+
+  public ExecutableData getExecutable_data() {
+    return executable_data;
   }
 
   public Bytes32 getGraffiti() {
@@ -201,6 +237,7 @@ public class BeaconBlockBody implements SimpleOffsetSerializable, SSZContainer, 
             HashTreeUtil.hash_tree_root(SSZTypes.VECTOR_OF_BASIC, randao_reveal.toSSZBytes()),
             eth1_data.hash_tree_root(),
             HashTreeUtil.hash_tree_root(SSZTypes.VECTOR_OF_BASIC, graffiti),
+            executable_data.hash_tree_root(),
             HashTreeUtil.hash_tree_root(SSZTypes.LIST_OF_COMPOSITE, proposer_slashings),
             HashTreeUtil.hash_tree_root(SSZTypes.LIST_OF_COMPOSITE, attester_slashings),
             HashTreeUtil.hash_tree_root(SSZTypes.LIST_OF_COMPOSITE, attestations),

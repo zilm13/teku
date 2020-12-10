@@ -387,6 +387,7 @@ public class ChainBuilder {
               signer,
               slot,
               preState,
+              latestBlockAndState.getBlock().getMessage().getEth1ParentHash(),
               parentRoot,
               Optional.of(options.getAttestations()),
               Optional.empty(),

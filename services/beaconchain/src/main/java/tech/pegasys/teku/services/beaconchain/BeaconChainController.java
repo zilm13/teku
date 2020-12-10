@@ -40,6 +40,7 @@ import org.hyperledger.besu.plugin.services.MetricsSystem;
 import tech.pegasys.teku.api.DataProvider;
 import tech.pegasys.teku.beaconrestapi.BeaconRestApi;
 import tech.pegasys.teku.core.BlockProposalUtil;
+import tech.pegasys.teku.core.ExecutableDataUtil;
 import tech.pegasys.teku.core.ForkChoiceUtilWrapper;
 import tech.pegasys.teku.core.StateTransition;
 import tech.pegasys.teku.core.operationsignatureverifiers.ProposerSlashingSignatureVerifier;
@@ -56,6 +57,7 @@ import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
 import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
 import tech.pegasys.teku.datastructures.state.AnchorPoint;
 import tech.pegasys.teku.datastructures.state.BeaconState;
+import tech.pegasys.teku.exec.eth1engine.Eth1EngineClient;
 import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.infrastructure.async.AsyncRunnerFactory;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
@@ -189,6 +191,8 @@ public class BeaconChainController extends Service implements TimeTickChannel {
   private ForkChoiceExecutor forkChoiceExecutor;
   private BlockManager blockManager;
 
+  private Eth1EngineClient eth1EngineClient;
+
   public BeaconChainController(
       final ServiceConfig serviceConfig, final BeaconChainConfiguration beaconConfig) {
     this.beaconConfig = beaconConfig;
@@ -203,6 +207,9 @@ public class BeaconChainController extends Service implements TimeTickChannel {
     this.eventChannels = serviceConfig.getEventChannels();
     this.metricsSystem = serviceConfig.getMetricsSystem();
     this.slotEventsChannelPublisher = eventChannels.getPublisher(SlotEventsChannel.class);
+    //    this.eth1EngineClient =
+    // Eth1EngineClient.createWeb3jClient(serviceConfig.getConfig().getEth1Endpoint())
+    this.eth1EngineClient = Eth1EngineClient.Stub;
   }
 
   @Override
@@ -417,7 +424,7 @@ public class BeaconChainController extends Service implements TimeTickChannel {
 
   private void initStateTransition() {
     LOG.debug("BeaconChainController.initStateTransition()");
-    stateTransition = new StateTransition();
+    stateTransition = new StateTransition(new ExecutableDataUtil(eth1EngineClient));
   }
 
   private void initForkChoice() {
@@ -473,7 +480,8 @@ public class BeaconChainController extends Service implements TimeTickChannel {
             voluntaryExitPool,
             depositProvider,
             eth1DataCache,
-            VersionProvider.getDefaultGraffiti());
+            VersionProvider.getDefaultGraffiti(),
+            eth1EngineClient);
     final BlockImportChannel blockImportChannel =
         eventChannels.getPublisher(BlockImportChannel.class, beaconAsyncRunner);
     final ValidatorApiHandler validatorApiHandler =

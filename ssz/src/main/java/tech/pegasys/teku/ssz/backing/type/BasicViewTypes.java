@@ -20,6 +20,7 @@ import java.util.Arrays;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes;
+import org.apache.tuweni.units.bigints.UInt256;
 import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
 import tech.pegasys.teku.ssz.backing.ViewRead;
 import tech.pegasys.teku.ssz.backing.tree.LeafNode;
@@ -28,6 +29,7 @@ import tech.pegasys.teku.ssz.backing.view.BasicViews.BitView;
 import tech.pegasys.teku.ssz.backing.view.BasicViews.ByteView;
 import tech.pegasys.teku.ssz.backing.view.BasicViews.Bytes32View;
 import tech.pegasys.teku.ssz.backing.view.BasicViews.Bytes4View;
+import tech.pegasys.teku.ssz.backing.view.BasicViews.UInt256View;
 import tech.pegasys.teku.ssz.backing.view.BasicViews.UInt64View;
 
 /** The collection of commonly used basic types */
@@ -122,6 +124,24 @@ public class BasicViewTypes {
         @Override
         public TreeNode getDefaultTree() {
           return LeafNode.ZERO_LEAVES[8];
+        }
+      };
+
+  public static final BasicViewType<UInt256View> UINT256_TYPE =
+      new BasicViewType<>(256) {
+        @Override
+        public UInt256View createFromBackingNode(TreeNode node, int internalIndex) {
+          return new UInt256View(UInt256.fromBytes(node.hashTreeRoot()));
+        }
+
+        @Override
+        public TreeNode updateBackingNode(TreeNode srcNode, int index, ViewRead newValue) {
+          return LeafNode.create(((UInt256View) newValue).get().toBytes());
+        }
+
+        @Override
+        public TreeNode getDefaultTree() {
+          return LeafNode.ZERO_LEAVES[32];
         }
       };
 

@@ -34,6 +34,7 @@ import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlockHeader;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.datastructures.state.BeaconState;
+import tech.pegasys.teku.exec.eth1engine.Eth1EngineClient;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 
 public class StateTransition {
@@ -44,14 +45,28 @@ public class StateTransition {
     return new BatchBlockValidator();
   }
 
+  private static ExecutableDataUtil createDefaultExecutableDataUtil() {
+    return new ExecutableDataUtil(Eth1EngineClient.Stub);
+  }
+
   private final BlockValidator blockValidator;
+  private final ExecutableDataUtil executableDataUtil;
 
   public StateTransition() {
-    this(createDefaultBlockValidator());
+    this(createDefaultBlockValidator(), createDefaultExecutableDataUtil());
   }
 
   public StateTransition(BlockValidator blockValidator) {
+    this(blockValidator, createDefaultExecutableDataUtil());
+  }
+
+  public StateTransition(ExecutableDataUtil executableDataUtil) {
+    this(createDefaultBlockValidator(), executableDataUtil);
+  }
+
+  public StateTransition(BlockValidator blockValidator, ExecutableDataUtil executableDataUtil) {
     this.blockValidator = blockValidator;
+    this.executableDataUtil = executableDataUtil;
   }
 
   public BeaconState initiate(BeaconState preState, SignedBeaconBlock signed_block)
@@ -143,6 +158,7 @@ public class StateTransition {
           BlockProcessorUtil.process_randao_no_validation(state, block.getBody());
           BlockProcessorUtil.process_eth1_data(state, block.getBody());
           BlockProcessorUtil.process_operations_no_validation(state, block.getBody());
+          executableDataUtil.process_executable_data(state, block.getBody());
         });
   }
 

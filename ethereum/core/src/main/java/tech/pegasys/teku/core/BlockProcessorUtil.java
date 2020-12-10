@@ -107,6 +107,7 @@ public final class BlockProcessorUtil {
               block.getProposerIndex(),
               block.getParentRoot(),
               Bytes32.ZERO, // Overwritten in the next `process_slot` call
+              block.getEth1ParentHash(),
               block.getBody().hash_tree_root()));
 
       // Only if we are processing blocks (not proposing them)

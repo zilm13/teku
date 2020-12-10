@@ -39,6 +39,8 @@ import tech.pegasys.teku.datastructures.blocks.BeaconBlockHeader;
 import tech.pegasys.teku.datastructures.blocks.Eth1Data;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlockHeader;
+import tech.pegasys.teku.datastructures.blocks.exec.Eth1Transaction;
+import tech.pegasys.teku.datastructures.blocks.exec.ExecutableData;
 import tech.pegasys.teku.datastructures.forkchoice.VoteTracker;
 import tech.pegasys.teku.datastructures.networking.libp2p.rpc.BeaconBlocksByRangeRequestMessage;
 import tech.pegasys.teku.datastructures.networking.libp2p.rpc.EmptyMessage;
@@ -70,6 +72,7 @@ import tech.pegasys.teku.datastructures.state.Validator;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
 import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
+import tech.pegasys.teku.ssz.SSZTypes.Bytes20;
 import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
 import tech.pegasys.teku.ssz.SSZTypes.SSZContainer;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
@@ -122,7 +125,9 @@ public class SimpleOffsetSerializer {
             MetadataMessage.class,
             EmptyMessage.class,
             PingMessage.class,
-            SigningData.class);
+            SigningData.class,
+            Eth1Transaction.class,
+            ExecutableData.class);
 
     for (Class classItem : classes) {
       classReflectionInfo.put(classItem, new ReflectionInformation(classItem));
@@ -489,6 +494,9 @@ public class SimpleOffsetSerializer {
   private static Object deserializePrimitive(
       Class classInfo, SSZReader reader, MutableInt bytePointer) {
     switch (classInfo.getSimpleName()) {
+      case "UInt256":
+        bytePointer.add(Bytes32.SIZE);
+        return reader.readUInt256();
       case "UInt64":
         bytePointer.add(UInt64.BYTES);
         return UInt64.fromLongBits(reader.readUInt64());
@@ -499,9 +507,15 @@ public class SimpleOffsetSerializer {
       case "Bytes48":
         bytePointer.add(Bytes48.SIZE);
         return Bytes48.wrap(reader.readFixedBytes(Bytes48.SIZE));
+      case "Bytes20":
+        bytePointer.add(Bytes20.SIZE);
+        return new Bytes20(reader.readFixedBytes(Bytes20.SIZE));
       case "Bytes4":
         bytePointer.add(Bytes4.SIZE);
         return new Bytes4(reader.readFixedBytes(Bytes4.SIZE));
+      case "Byte":
+        bytePointer.add(Byte.BYTES);
+        return reader.readFixedBytes(Byte.BYTES).get(0);
       case "BLSSignature":
         bytePointer.add(BLSSignature.SSZ_BLS_SIGNATURE_SIZE);
         return BLSSignature.fromSSZBytes(

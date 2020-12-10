@@ -30,6 +30,7 @@ import tech.pegasys.teku.bls.BLSSignature;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
 import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
+import tech.pegasys.teku.ssz.SSZTypes.Bytes20;
 import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
 import tech.pegasys.teku.ssz.sos.ReflectionInformation;
@@ -141,13 +142,18 @@ public class LengthBoundCalculator {
     switch (classInfo.getSimpleName()) {
       case "UInt64":
         return UInt64.BYTES;
+      case "UInt256":
       case "ArrayWrappingBytes32":
       case "Bytes32":
         return Bytes32.SIZE;
       case "Bytes48":
         return Bytes48.SIZE;
+      case "Bytes20":
+        return Bytes20.SIZE;
       case "Bytes4":
         return Bytes4.SIZE;
+      case "Byte":
+        return Byte.BYTES;
       case "BLSSignature":
         return BLSSignature.SSZ_BLS_SIGNATURE_SIZE;
       case "BLSPublicKey":

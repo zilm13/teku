@@ -22,6 +22,7 @@ import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlockAndState;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlockBody;
 import tech.pegasys.teku.datastructures.blocks.Eth1Data;
+import tech.pegasys.teku.datastructures.blocks.exec.ExecutableData;
 import tech.pegasys.teku.datastructures.operations.Attestation;
 import tech.pegasys.teku.datastructures.operations.AttesterSlashing;
 import tech.pegasys.teku.datastructures.operations.Deposit;
@@ -44,8 +45,10 @@ public class BlockProposalUtil {
       final int proposerIndex,
       final BLSSignature randaoReveal,
       final BeaconState blockSlotState,
+      final Bytes32 eth1ParentHash,
       final Bytes32 parentBlockSigningRoot,
       final Eth1Data eth1Data,
+      final ExecutableData executableData,
       final Bytes32 graffiti,
       final SSZList<Attestation> attestations,
       final SSZList<ProposerSlashing> proposerSlashings,
@@ -65,6 +68,7 @@ public class BlockProposalUtil {
             randaoReveal,
             eth1Data,
             graffiti,
+            executableData,
             proposerSlashings,
             attesterSlashings,
             attestations,
@@ -79,6 +83,7 @@ public class BlockProposalUtil {
             UInt64.valueOf(proposerIndex),
             parentBlockSigningRoot,
             tmpStateRoot,
+            eth1ParentHash,
             beaconBlockBody);
 
     // Run state transition and set state root

@@ -45,6 +45,7 @@ import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
 import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
 import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.datastructures.util.DataStructureUtil;
+import tech.pegasys.teku.exec.eth1engine.Eth1EngineClient;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
@@ -52,6 +53,7 @@ import tech.pegasys.teku.statetransition.OperationPool;
 import tech.pegasys.teku.statetransition.attestation.AggregatingAttestationPool;
 import tech.pegasys.teku.storage.client.MemoryOnlyRecentChainData;
 import tech.pegasys.teku.storage.client.RecentChainData;
+import tech.pegasys.teku.validator.coordinator.exceptions.Eth1BlockProductionException;
 
 @SuppressWarnings("unchecked")
 class BlockFactoryTest {
@@ -85,7 +87,8 @@ class BlockFactoryTest {
           voluntaryExitPool,
           depositProvider,
           eth1DataCache,
-          graffiti);
+          graffiti,
+          Eth1EngineClient.Stub);
 
   @BeforeEach
   void setUp() {
@@ -117,7 +120,8 @@ class BlockFactoryTest {
   }
 
   private void assertBlockCreated(final UInt64 newSlot)
-      throws EpochProcessingException, SlotProcessingException, StateTransitionException {
+      throws EpochProcessingException, SlotProcessingException, StateTransitionException,
+          Eth1BlockProductionException {
     final BLSSignature randaoReveal = dataStructureUtil.randomSignature();
     final StateAndBlockSummary bestBlockAndState = recentChainData.getChainHead().orElseThrow();
     final Bytes32 bestBlockRoot = bestBlockAndState.getRoot();

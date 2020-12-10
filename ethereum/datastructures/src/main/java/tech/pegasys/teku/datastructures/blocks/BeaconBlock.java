@@ -37,13 +37,14 @@ public final class BeaconBlock
     implements BeaconBlockSummary, Merkleizable, SimpleOffsetSerializable, SSZContainer {
 
   // The number of SimpleSerialize basic types in this SSZ Container/POJO.
-  public static final int SSZ_FIELD_COUNT = 4;
+  public static final int SSZ_FIELD_COUNT = 5;
 
   // Header
   private final UInt64 slot;
   private final UInt64 proposer_index;
   private final Bytes32 parent_root;
   private final Bytes32 state_root;
+  private final Bytes32 eth1_parent_hash;
 
   // Body
   private final BeaconBlockBody body;
@@ -56,12 +57,23 @@ public final class BeaconBlock
       UInt64 proposer_index,
       Bytes32 parent_root,
       Bytes32 state_root,
+      Bytes32 eth1_parent_hash,
       BeaconBlockBody body) {
     this.slot = slot;
     this.proposer_index = proposer_index;
     this.parent_root = parent_root;
     this.state_root = state_root;
+    this.eth1_parent_hash = eth1_parent_hash;
     this.body = body;
+  }
+
+  public BeaconBlock(
+      UInt64 slot,
+      UInt64 proposer_index,
+      Bytes32 parent_root,
+      Bytes32 state_root,
+      BeaconBlockBody body) {
+    this(slot, proposer_index, parent_root, state_root, Bytes32.ZERO, body);
   }
 
   public BeaconBlock(BeaconBlock block, Bytes32 stateRoot) {
@@ -70,6 +82,7 @@ public final class BeaconBlock
     this.parent_root = block.getParentRoot();
     this.body = block.getBody();
     this.state_root = stateRoot;
+    this.eth1_parent_hash = block.getEth1ParentHash();
   }
 
   public BeaconBlock() {
@@ -77,6 +90,7 @@ public final class BeaconBlock
     this.proposer_index = UInt64.ZERO;
     this.parent_root = Bytes32.ZERO;
     this.state_root = Bytes32.ZERO;
+    this.eth1_parent_hash = Bytes32.ZERO;
     this.body = new BeaconBlockBody();
   }
 
@@ -85,6 +99,7 @@ public final class BeaconBlock
     this.proposer_index = UInt64.ZERO;
     this.parent_root = Bytes32.ZERO;
     this.state_root = state_root;
+    this.eth1_parent_hash = Bytes32.ZERO;
     this.body = new BeaconBlockBody();
   }
 
@@ -104,18 +119,24 @@ public final class BeaconBlock
         SSZ.encodeUInt64(proposer_index.longValue()),
         SSZ.encode(writer -> writer.writeFixedBytes(parent_root)),
         SSZ.encode(writer -> writer.writeFixedBytes(state_root)),
+        SSZ.encode(writer -> writer.writeFixedBytes(eth1_parent_hash)),
         Bytes.EMPTY);
   }
 
   @Override
   public List<Bytes> get_variable_parts() {
     return List.of(
-        Bytes.EMPTY, Bytes.EMPTY, Bytes.EMPTY, Bytes.EMPTY, SimpleOffsetSerializer.serialize(body));
+        Bytes.EMPTY,
+        Bytes.EMPTY,
+        Bytes.EMPTY,
+        Bytes.EMPTY,
+        Bytes.EMPTY,
+        SimpleOffsetSerializer.serialize(body));
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(slot, proposer_index, parent_root, state_root, body);
+    return Objects.hash(slot, proposer_index, parent_root, state_root, eth1_parent_hash, body);
   }
 
   @Override
@@ -137,6 +158,7 @@ public final class BeaconBlock
         && Objects.equals(this.getProposerIndex(), other.getProposerIndex())
         && Objects.equals(this.getParentRoot(), other.getParentRoot())
         && Objects.equals(this.getStateRoot(), other.getStateRoot())
+        && Objects.equals(this.getEth1ParentHash(), other.getEth1ParentHash())
         && Objects.equals(this.getBody(), other.getBody());
   }
 
@@ -170,6 +192,10 @@ public final class BeaconBlock
     return proposer_index;
   }
 
+  public Bytes32 getEth1ParentHash() {
+    return eth1_parent_hash;
+  }
+
   @Override
   public Bytes32 getRoot() {
     return hash_tree_root();
@@ -193,6 +219,7 @@ public final class BeaconBlock
                 SSZTypes.BASIC, SSZ.encodeUInt64(proposer_index.longValue())),
             HashTreeUtil.hash_tree_root(SSZTypes.VECTOR_OF_BASIC, parent_root),
             HashTreeUtil.hash_tree_root(SSZTypes.VECTOR_OF_BASIC, state_root),
+            HashTreeUtil.hash_tree_root(SSZTypes.VECTOR_OF_BASIC, eth1_parent_hash),
             body.hash_tree_root()));
   }
 
@@ -204,6 +231,7 @@ public final class BeaconBlock
         .add("proposer_index", proposer_index)
         .add("parent_root", parent_root)
         .add("state_root", state_root)
+        .add("eth1_parent_hash", eth1_parent_hash)
         .add("body", body.hash_tree_root())
         .toString();
   }

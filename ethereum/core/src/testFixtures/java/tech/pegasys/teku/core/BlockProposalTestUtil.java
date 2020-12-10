@@ -31,6 +31,7 @@ import tech.pegasys.teku.datastructures.blocks.BeaconBlockBodyLists;
 import tech.pegasys.teku.datastructures.blocks.Eth1Data;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.SignedBlockAndState;
+import tech.pegasys.teku.datastructures.blocks.exec.ExecutableData;
 import tech.pegasys.teku.datastructures.operations.Attestation;
 import tech.pegasys.teku.datastructures.operations.Deposit;
 import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
@@ -54,6 +55,7 @@ public class BlockProposalTestUtil {
       final Signer signer,
       final UInt64 newSlot,
       final BeaconState state,
+      final Bytes32 eth1ParentHash,
       final Bytes32 parentBlockSigningRoot,
       final Eth1Data eth1Data,
       final SSZList<Attestation> attestations,
@@ -67,14 +69,17 @@ public class BlockProposalTestUtil {
         signer.createRandaoReveal(newEpoch, state.getForkInfo()).join();
 
     final BeaconState blockSlotState = stateTransition.process_slots(state, newSlot);
+    final ExecutableData executableData = new ExecutableData();
     final BeaconBlockAndState newBlockAndState =
         blockProposalUtil.createNewUnsignedBlock(
             newSlot,
             get_beacon_proposer_index(blockSlotState, newSlot),
             randaoReveal,
             blockSlotState,
+            eth1ParentHash,
             parentBlockSigningRoot,
             eth1Data,
+            executableData,
             Bytes32.ZERO,
             attestations,
             slashings,
@@ -94,6 +99,7 @@ public class BlockProposalTestUtil {
       final Signer signer,
       final UInt64 newSlot,
       final BeaconState previousState,
+      final Bytes32 eth1ParentHash,
       final Bytes32 parentBlockSigningRoot,
       final Optional<SSZList<Attestation>> attestations,
       final Optional<SSZList<Deposit>> deposits,
@@ -105,6 +111,7 @@ public class BlockProposalTestUtil {
         signer,
         newSlot,
         previousState,
+        eth1ParentHash,
         parentBlockSigningRoot,
         eth1Data.orElse(get_eth1_data_stub(previousState, newEpoch)),
         attestations.orElse(BeaconBlockBodyLists.createAttestations()),

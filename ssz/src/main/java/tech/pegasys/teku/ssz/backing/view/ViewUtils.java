@@ -41,12 +41,36 @@ public class ViewUtils {
     return ret.commitChanges();
   }
 
+  /**
+   * Creates immutable list of bytes with size `bytes.size()` and `maxLength` from {@link Bytes}
+   * value
+   */
+  public static ListViewRead<ByteView> createListFromBytes(Bytes bytes, long maxLength) {
+    ListViewType<ByteView> type = new ListViewType<>(BasicViewTypes.BYTE_TYPE, maxLength);
+    // TODO optimize
+    ListViewWrite<ByteView> ret = type.getDefault().createWritableCopy();
+    for (int i = 0; i < bytes.size(); i++) {
+      ret.set(i, new ByteView(bytes.get(i)));
+    }
+    return ret.commitChanges();
+  }
+
   /** Retrieve bytes from vector of bytes to a {@link Bytes} instance */
   public static Bytes getAllBytes(VectorViewRead<ByteView> vector) {
     // TODO optimize
     MutableBytes bytes = MutableBytes.create((int) vector.getType().getMaxLength());
     for (int i = 0; i < bytes.size(); i++) {
       bytes.set(i, vector.get(i).get());
+    }
+    return bytes;
+  }
+
+  /** Retrieve bytes from vector of bytes to a {@link Bytes} instance */
+  public static Bytes getListBytes(ListViewRead<ByteView> list) {
+    // TODO optimize
+    MutableBytes bytes = MutableBytes.create(list.size());
+    for (int i = 0; i < bytes.size(); i++) {
+      bytes.set(i, list.get(i).get());
     }
     return bytes;
   }
