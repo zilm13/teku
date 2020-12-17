@@ -16,27 +16,25 @@ package tech.pegasys.teku.exec.eth1engine.schema;
 import java.math.BigInteger;
 import java.util.List;
 
-public class ExecutableDTO {
+public class ExecutableDataDTO {
   private String block_hash;
   private String coinbase;
   private String state_root;
-  private Long gas_limit;
-  private Long gas_used;
+  private BigInteger gas_limit;
+  private BigInteger gas_used;
   private String receipt_root;
   private String logs_bloom;
-  private Long number;
   private BigInteger difficulty;
   private List<Eth1TransactionDTO> transactions;
 
-  public ExecutableDTO(
+  public ExecutableDataDTO(
       String block_hash,
       String coinbase,
       String state_root,
-      Long gas_limit,
-      Long gas_used,
+      BigInteger gas_limit,
+      BigInteger gas_used,
       String receipt_root,
       String logs_bloom,
-      Long number,
       BigInteger difficulty,
       List<Eth1TransactionDTO> transactions) {
     this.block_hash = block_hash;
@@ -46,7 +44,6 @@ public class ExecutableDTO {
     this.gas_used = gas_used;
     this.receipt_root = receipt_root;
     this.logs_bloom = logs_bloom;
-    this.number = number;
     this.difficulty = difficulty;
     this.transactions = transactions;
   }
@@ -75,19 +72,19 @@ public class ExecutableDTO {
     this.state_root = state_root;
   }
 
-  public Long getGas_limit() {
+  public BigInteger getGas_limit() {
     return gas_limit;
   }
 
-  public void setGas_limit(Long gas_limit) {
+  public void setGas_limit(BigInteger gas_limit) {
     this.gas_limit = gas_limit;
   }
 
-  public Long getGas_used() {
+  public BigInteger getGas_used() {
     return gas_used;
   }
 
-  public void setGas_used(Long gas_used) {
+  public void setGas_used(BigInteger gas_used) {
     this.gas_used = gas_used;
   }
 
@@ -105,14 +102,6 @@ public class ExecutableDTO {
 
   public void setLogs_bloom(String logs_bloom) {
     this.logs_bloom = logs_bloom;
-  }
-
-  public Long getNumber() {
-    return number;
-  }
-
-  public void setNumber(Long number) {
-    this.number = number;
   }
 
   public BigInteger getDifficulty() {

@@ -16,7 +16,9 @@ package tech.pegasys.teku.core;
 import static tech.pegasys.teku.core.ForkChoiceUtil.getSlotStartTime;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_current_epoch;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_randao_mix;
+import static tech.pegasys.teku.util.config.Constants.RECENT_BLOCK_ROOTS_SIZE;
 
+import java.util.Collections;
 import java.util.concurrent.ExecutionException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -26,7 +28,7 @@ import tech.pegasys.teku.datastructures.blocks.BeaconBlockBody;
 import tech.pegasys.teku.datastructures.state.MutableBeaconState;
 import tech.pegasys.teku.exec.eth1engine.Eth1EngineClient;
 import tech.pegasys.teku.exec.eth1engine.Eth1EngineClient.Response;
-import tech.pegasys.teku.exec.eth1engine.schema.ExecutableDTO;
+import tech.pegasys.teku.exec.eth1engine.schema.ExecutableDataDTO;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 
 public final class ExecutableDataUtil {
@@ -48,13 +50,19 @@ public final class ExecutableDataUtil {
     Bytes32 parent_hash = state.getLatest_block_header().getEth1ParentHash();
     // assumes randao mix of the beacon block has been processed
     Bytes32 randao_mix = get_randao_mix(state, epoch);
-    ExecutableDTO executableDTO =
-        Eth1EngineApiSchemaUtil.getExecutableDTO(body.getExecutable_data());
+    ExecutableDataDTO executableDataDTO =
+        Eth1EngineApiSchemaUtil.getExecutableDataDTO(body.getExecutable_data());
 
     try {
       Response<Boolean> response =
           eth1EngineClient
-              .eth2InsertBlock(parent_hash, randao_mix, slot, timestamp, executableDTO)
+              .eth2InsertBlock(
+                  parent_hash,
+                  randao_mix,
+                  slot,
+                  timestamp,
+                  Collections.nCopies((int) RECENT_BLOCK_ROOTS_SIZE, Bytes32.ZERO),
+                  executableDataDTO)
               .get();
 
       if (!Boolean.TRUE.equals(response.getPayload())) {

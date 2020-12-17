@@ -15,9 +15,10 @@ package tech.pegasys.teku.exec.eth1engine;
 
 import java.math.BigInteger;
 import java.util.Collections;
+import java.util.List;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-import tech.pegasys.teku.exec.eth1engine.schema.ExecutableDTO;
+import tech.pegasys.teku.exec.eth1engine.schema.ExecutableDataDTO;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.ssz.SSZTypes.Bytes20;
@@ -40,10 +41,15 @@ public interface Eth1EngineClient {
    * @param randaoMix the most recent randao mix
    * @param slot current slot that the proposal is happening in
    * @param timestamp the timestamp of the beginning of the slot
+   * @param recentBeaconBlockRoots a list of recent beacon block roots
    * @return a response with executable data payload
    */
-  SafeFuture<Response<ExecutableDTO>> eth2ProduceBlock(
-      Bytes32 parentHash, Bytes32 randaoMix, UInt64 slot, UInt64 timestamp);
+  SafeFuture<Response<ExecutableDataDTO>> eth2ProduceBlock(
+      Bytes32 parentHash,
+      Bytes32 randaoMix,
+      UInt64 slot,
+      UInt64 timestamp,
+      List<Bytes32> recentBeaconBlockRoots);
 
   /**
    * Requests eth1-engine to insert a block.
@@ -52,6 +58,7 @@ public interface Eth1EngineClient {
    * @param randaoMix the most recent randao mix
    * @param slot current slot
    * @param timestamp the timestamp of the beginning of the slot
+   * @param recentBeaconBlockRoots a list of recent beacon block roots
    * @param executableData an executable payload
    * @return {@code true} if processing succeeded, {@code false} otherwise
    */
@@ -60,7 +67,8 @@ public interface Eth1EngineClient {
       Bytes32 randaoMix,
       UInt64 slot,
       UInt64 timestamp,
-      ExecutableDTO executableData);
+      List<Bytes32> recentBeaconBlockRoots,
+      ExecutableDataDTO executableData);
 
   static Eth1EngineClient createWeb3jClient(String eth1Endpoint) {
     return Web3jEth1EngineClient.create(eth1Endpoint);
@@ -101,19 +109,22 @@ public interface Eth1EngineClient {
         }
 
         @Override
-        public SafeFuture<Response<ExecutableDTO>> eth2ProduceBlock(
-            Bytes32 parentHash, Bytes32 randaoMix, UInt64 slot, UInt64 timestamp) {
+        public SafeFuture<Response<ExecutableDataDTO>> eth2ProduceBlock(
+            Bytes32 parentHash,
+            Bytes32 randaoMix,
+            UInt64 slot,
+            UInt64 timestamp,
+            List<Bytes32> recentBeaconBlockRoots) {
           return SafeFuture.completedFuture(
               new Response<>(
-                  new ExecutableDTO(
+                  new ExecutableDataDTO(
                       Bytes32.ZERO.toHexString(),
                       Bytes20.ZERO.toHexString(),
                       Bytes32.ZERO.toHexString(),
-                      0L,
-                      0L,
+                      BigInteger.ZERO,
+                      BigInteger.ZERO,
                       Bytes32.ZERO.toHexString(),
-                      Bytes.wrap(new byte[256]).toHexString(),
-                      0L,
+                      Bytes.wrap(new byte[256]).toBase64String(),
                       BigInteger.ZERO,
                       Collections.emptyList())));
         }
@@ -124,7 +135,8 @@ public interface Eth1EngineClient {
             Bytes32 randaoMix,
             UInt64 slot,
             UInt64 timestamp,
-            ExecutableDTO executableData) {
+            List<Bytes32> recentBeaconBlockRoots,
+            ExecutableDataDTO executableData) {
           return SafeFuture.completedFuture(new Response<>(true));
         }
       };

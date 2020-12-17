@@ -58,7 +58,6 @@ public class ExecutableData extends AbstractImmutableContainer
               BasicViewTypes.BYTES32_TYPE,
               new VectorViewType<ByteView>(BasicViewTypes.BYTE_TYPE, BYTES_PER_LOGS_BLOOM),
               BasicViewTypes.UINT64_TYPE,
-              BasicViewTypes.UINT64_TYPE,
               new ListViewType<Eth1Transaction>(Eth1Transaction.TYPE, MAX_ETH1_TRANSACTIONS)),
           ExecutableData::new);
 
@@ -85,9 +84,6 @@ public class ExecutableData extends AbstractImmutableContainer
       SSZVector.createMutable(Byte.class, (int) BYTES_PER_LOGS_BLOOM);
 
   @SuppressWarnings("unused")
-  private final UInt64 number = null;
-
-  @SuppressWarnings("unused")
   private final UInt64 difficulty = null;
 
   @SuppressWarnings("unused")
@@ -111,7 +107,6 @@ public class ExecutableData extends AbstractImmutableContainer
       UInt64 gas_used,
       Bytes32 receipt_root,
       SSZVector<Byte> logs_bloom,
-      UInt64 number,
       UInt64 difficulty,
       SSZList<Eth1Transaction> transactions) {
     super(
@@ -123,7 +118,6 @@ public class ExecutableData extends AbstractImmutableContainer
         new UInt64View(gas_used),
         new Bytes32View(receipt_root),
         createLogsBloomView(logs_bloom),
-        new UInt64View(number),
         new UInt64View(difficulty),
         createTransactionListView(transactions));
   }
@@ -136,7 +130,6 @@ public class ExecutableData extends AbstractImmutableContainer
       UInt64 gas_used,
       Bytes32 receipt_root,
       Bytes logs_bloom,
-      UInt64 number,
       UInt64 difficulty,
       Iterable<Eth1Transaction> transactions) {
     super(
@@ -148,7 +141,6 @@ public class ExecutableData extends AbstractImmutableContainer
         new UInt64View(gas_used),
         new Bytes32View(receipt_root),
         ViewUtils.createVectorFromBytes(logs_bloom),
-        new UInt64View(number),
         new UInt64View(difficulty),
         createTransactionListView(transactions));
   }
@@ -207,17 +199,13 @@ public class ExecutableData extends AbstractImmutableContainer
     return ViewUtils.getAllBytes(getAny(6));
   }
 
-  public UInt64 getNumber() {
-    return ((UInt64View) get(7)).get();
-  }
-
   public UInt64 getDifficulty() {
-    return ((UInt64View) get(8)).get();
+    return ((UInt64View) get(7)).get();
   }
 
   public SSZList<Eth1Transaction> getTransactions() {
     return new SSZBackingList<>(
-        Eth1Transaction.class, getAny(9), Function.identity(), Function.identity());
+        Eth1Transaction.class, getAny(8), Function.identity(), Function.identity());
   }
 
   @Override
@@ -235,7 +223,6 @@ public class ExecutableData extends AbstractImmutableContainer
         .add("gas_used", getGas_used())
         .add("receipt_root", getReceipt_root())
         .add("logs_bloom", getLogs_bloom())
-        .add("number", getNumber())
         .add("difficulty", getDifficulty())
         .toString();
   }

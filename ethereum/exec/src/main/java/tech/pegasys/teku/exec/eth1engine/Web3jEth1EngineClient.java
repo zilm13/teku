@@ -13,8 +13,13 @@
 
 package tech.pegasys.teku.exec.eth1engine;
 
-import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.web3j.protocol.Web3jService;
 import org.web3j.protocol.core.DefaultBlockParameter;
@@ -23,7 +28,7 @@ import org.web3j.protocol.core.Request;
 import org.web3j.protocol.core.methods.response.EthBlock;
 import org.web3j.protocol.core.methods.response.EthBlockNumber;
 import org.web3j.protocol.http.HttpService;
-import tech.pegasys.teku.exec.eth1engine.schema.ExecutableDTO;
+import tech.pegasys.teku.exec.eth1engine.schema.ExecutableDataDTO;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 
@@ -58,10 +63,14 @@ public class Web3jEth1EngineClient implements Eth1EngineClient {
   }
 
   @Override
-  public SafeFuture<Response<ExecutableDTO>> eth2ProduceBlock(
-      Bytes32 parentHash, Bytes32 randaoMix, UInt64 slot, UInt64 timestamp) {
-    Request<String, ProduceBlockResponse> request =
-        web3j.eth2ProduceBlock(parentHash, randaoMix, slot, timestamp);
+  public SafeFuture<Response<ExecutableDataDTO>> eth2ProduceBlock(
+      Bytes32 parentHash,
+      Bytes32 randaoMix,
+      UInt64 slot,
+      UInt64 timestamp,
+      List<Bytes32> recentBeaconBlockRoots) {
+    Request<?, ProduceBlockResponse> request =
+        web3j.eth2ProduceBlock(parentHash, randaoMix, slot, timestamp, recentBeaconBlockRoots);
     return processRequest(request);
   }
 
@@ -71,9 +80,11 @@ public class Web3jEth1EngineClient implements Eth1EngineClient {
       Bytes32 randaoMix,
       UInt64 slot,
       UInt64 timestamp,
-      ExecutableDTO executableData) {
+      List<Bytes32> recentBeaconBlockRoots,
+      ExecutableDataDTO executableData) {
     Request<?, InsertBlockResponse> request =
-        web3j.eth2InsertBlock(parentHash, randaoMix, slot, timestamp, executableData);
+        web3j.eth2InsertBlock(
+            parentHash, randaoMix, slot, timestamp, recentBeaconBlockRoots, executableData);
     return processRequest(request);
   }
 
@@ -102,15 +113,24 @@ public class Web3jEth1EngineClient implements Eth1EngineClient {
       super(web3jService);
     }
 
-    public Request<String, ProduceBlockResponse> eth2ProduceBlock(
-        Bytes32 parentHash, Bytes32 randaoMix, UInt64 slot, UInt64 timestamp) {
+    public Request<?, ProduceBlockResponse> eth2ProduceBlock(
+        Bytes32 parentHash,
+        Bytes32 randaoMix,
+        UInt64 slot,
+        UInt64 timestamp,
+        List<Bytes32> recentBeaconBlockRoots) {
+      Map<String, Object> params = new HashMap<>();
+      params.put("parent_hash", parentHash.toHexString());
+      params.put("randao_mix", randaoMix.toHexString());
+      params.put("slot", slot.toString());
+      params.put("timestamp", timestamp.toString());
+      params.put(
+          "recent_beacon_block_roots",
+          recentBeaconBlockRoots.stream().map(Bytes::toHexString).collect(Collectors.toList()));
+
       return new Request<>(
           "eth2_produceBlock",
-          Arrays.asList(
-              parentHash.toHexString(),
-              randaoMix.toHexString(),
-              slot.toString(),
-              timestamp.toString()),
+          Collections.singletonList(params),
           web3jService,
           ProduceBlockResponse.class);
     }
@@ -120,22 +140,28 @@ public class Web3jEth1EngineClient implements Eth1EngineClient {
         Bytes32 randaoMix,
         UInt64 slot,
         UInt64 timestamp,
-        ExecutableDTO executableData) {
+        List<Bytes32> recentBeaconBlockRoots,
+        ExecutableDataDTO executableData) {
+      Map<String, Object> params = new HashMap<>();
+      params.put("parent_hash", parentHash.toHexString());
+      params.put("randao_mix", randaoMix.toHexString());
+      params.put("slot", slot.toString());
+      params.put("timestamp", timestamp.toString());
+      params.put(
+          "recent_beacon_block_roots",
+          recentBeaconBlockRoots.stream().map(Bytes::toHexString).collect(Collectors.toList()));
+      params.put("executable_data", executableData);
+
       return new Request<>(
           "eth2_insertBlock",
-          Arrays.asList(
-              parentHash.toHexString(),
-              randaoMix.toHexString(),
-              slot.toString(),
-              timestamp.toString(),
-              executableData),
+          Collections.singletonList(params),
           web3jService,
           InsertBlockResponse.class);
     }
   }
 
   private static class ProduceBlockResponse
-      extends org.web3j.protocol.core.Response<ExecutableDTO> {}
+      extends org.web3j.protocol.core.Response<ExecutableDataDTO> {}
 
   private static class InsertBlockResponse extends org.web3j.protocol.core.Response<Boolean> {}
 }

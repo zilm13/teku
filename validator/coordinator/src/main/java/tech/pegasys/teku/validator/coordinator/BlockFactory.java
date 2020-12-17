@@ -16,7 +16,9 @@ package tech.pegasys.teku.validator.coordinator;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_beacon_proposer_index;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_current_epoch;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_randao_mix;
+import static tech.pegasys.teku.util.config.Constants.RECENT_BLOCK_ROOTS_SIZE;
 
+import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import org.apache.tuweni.bytes.Bytes32;
@@ -40,7 +42,7 @@ import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
 import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.exec.eth1engine.Eth1EngineClient;
 import tech.pegasys.teku.exec.eth1engine.Eth1EngineClient.Response;
-import tech.pegasys.teku.exec.eth1engine.schema.ExecutableDTO;
+import tech.pegasys.teku.exec.eth1engine.schema.ExecutableDataDTO;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
 import tech.pegasys.teku.statetransition.OperationPool;
@@ -128,28 +130,35 @@ public class BlockFactory {
     UInt64 timestamp = ForkChoiceUtil.getSlotStartTime(newSlot, blockSlotState.getGenesis_time());
     UInt64 epoch = get_current_epoch(blockSlotState);
     // Pre-compute randao mix
-    Bytes32 randao_mix =
+    Bytes32 randaoMix =
         get_randao_mix(blockSlotState, epoch).xor(Hash.sha2_256(randaoReveal.toSSZBytes()));
 
     try {
-      Response<ExecutableDTO> executableDTOResponse =
-          eth1EngineClient.eth2ProduceBlock(eth1ParentHash, randao_mix, newSlot, timestamp).get();
-      if (executableDTOResponse.getPayload() == null) {
+      Response<ExecutableDataDTO> executableDataResponse =
+          eth1EngineClient
+              .eth2ProduceBlock(
+                  eth1ParentHash,
+                  randaoMix,
+                  newSlot,
+                  timestamp,
+                  Collections.nCopies((int) RECENT_BLOCK_ROOTS_SIZE, Bytes32.ZERO))
+              .get();
+      if (executableDataResponse.getPayload() == null) {
         throw new IllegalStateException(
             "Failed to eth2_produceBlock(parent_hash="
                 + eth1ParentHash
-                + ", randao_mix="
-                + randao_mix
+                + ", randaoMix="
+                + randaoMix
                 + ", slot="
                 + newSlot
                 + ", timestamp="
                 + timestamp
                 + "), reason: "
-                + String.valueOf(executableDTOResponse.getReason()));
+                + String.valueOf(executableDataResponse.getReason()));
       }
 
       ExecutableData executableData =
-          Eth1EngineApiSchemaUtil.parseExecutableDTO(executableDTOResponse.getPayload());
+          Eth1EngineApiSchemaUtil.parseExecutableDataDTO(executableDataResponse.getPayload());
 
       return blockCreator
           .createNewUnsignedBlock(

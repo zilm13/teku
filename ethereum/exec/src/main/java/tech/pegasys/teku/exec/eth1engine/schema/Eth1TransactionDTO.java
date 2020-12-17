@@ -13,33 +13,31 @@
 
 package tech.pegasys.teku.exec.eth1engine.schema;
 
-import java.math.BigInteger;
-
 public class Eth1TransactionDTO {
-  private Long nonce;
-  private BigInteger gas_price;
-  private Long gas_limit;
-  private String recipient;
-  private BigInteger value;
+  private String nonce;
+  private String gasPrice;
+  private String gas;
+  private String to;
+  private String value;
   private String input;
-  private BigInteger v;
-  private BigInteger r;
-  private BigInteger s;
+  private String v;
+  private String r;
+  private String s;
 
   public Eth1TransactionDTO(
-      Long nonce,
-      BigInteger gas_price,
-      Long gas_limit,
+      String nonce,
+      String gasPrice,
+      String gas_limit,
       String recipient,
-      BigInteger value,
+      String value,
       String input,
-      BigInteger v,
-      BigInteger r,
-      BigInteger s) {
+      String v,
+      String r,
+      String s) {
     this.nonce = nonce;
-    this.gas_price = gas_price;
-    this.gas_limit = gas_limit;
-    this.recipient = recipient;
+    this.gasPrice = gasPrice;
+    this.gas = gas_limit;
+    this.to = recipient;
     this.value = value;
     this.input = input;
     this.v = v;
@@ -47,43 +45,43 @@ public class Eth1TransactionDTO {
     this.s = s;
   }
 
-  public Long getNonce() {
+  public String getNonce() {
     return nonce;
   }
 
-  public void setNonce(Long nonce) {
+  public void setNonce(String nonce) {
     this.nonce = nonce;
   }
 
-  public BigInteger getGas_price() {
-    return gas_price;
+  public String getGasPrice() {
+    return gasPrice;
   }
 
-  public void setGas_price(BigInteger gas_price) {
-    this.gas_price = gas_price;
+  public void setGasPrice(String gasPrice) {
+    this.gasPrice = gasPrice;
   }
 
-  public Long getGas_limit() {
-    return gas_limit;
+  public String getGas() {
+    return gas;
   }
 
-  public void setGas_limit(Long gas_limit) {
-    this.gas_limit = gas_limit;
+  public void setGas(String gas) {
+    this.gas = gas;
   }
 
-  public String getRecipient() {
-    return recipient;
+  public String getTo() {
+    return to;
   }
 
-  public void setRecipient(String recipient) {
-    this.recipient = recipient;
+  public void setTo(String to) {
+    this.to = to;
   }
 
-  public BigInteger getValue() {
+  public String getValue() {
     return value;
   }
 
-  public void setValue(BigInteger value) {
+  public void setValue(String value) {
     this.value = value;
   }
 
@@ -95,27 +93,27 @@ public class Eth1TransactionDTO {
     this.input = input;
   }
 
-  public BigInteger getV() {
+  public String getV() {
     return v;
   }
 
-  public void setV(BigInteger v) {
+  public void setV(String v) {
     this.v = v;
   }
 
-  public BigInteger getR() {
+  public String getR() {
     return r;
   }
 
-  public void setR(BigInteger r) {
+  public void setR(String r) {
     this.r = r;
   }
 
-  public BigInteger getS() {
+  public String getS() {
     return s;
   }
 
-  public void setS(BigInteger s) {
+  public void setS(String s) {
     this.s = s;
   }
 }
