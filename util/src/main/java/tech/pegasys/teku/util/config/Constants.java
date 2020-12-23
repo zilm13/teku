@@ -172,9 +172,9 @@ public class Constants {
 
   // Execution
   public static final long MAX_BYTES_PER_TRANSACTION_PAYLOAD = 1L << 32;
-  public static final long BYTES_PER_LOGS_BLOOM = 256;
   public static final long MAX_ETH1_TRANSACTIONS = 1L << 32;
-  public static final long RECENT_BLOCK_ROOTS_SIZE = 256;
+  public static final int BYTES_PER_LOGS_BLOOM = 256;
+  public static final int BLOCK_ROOTS_FOR_EVM_SIZE = 256;
 
   public static final Map<String, Object> CONFIG_ITEM_MAP = new HashMap<>();
 

@@ -20,6 +20,7 @@ import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_star
 import static tech.pegasys.teku.util.config.Constants.DOMAIN_DEPOSIT;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
 import java.util.Random;
@@ -28,6 +29,7 @@ import java.util.stream.LongStream;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.Bytes48;
+import org.apache.tuweni.units.bigints.UInt256;
 import tech.pegasys.teku.bls.BLS;
 import tech.pegasys.teku.bls.BLSKeyPair;
 import tech.pegasys.teku.bls.BLSPublicKey;
@@ -41,6 +43,8 @@ import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlockHeader;
 import tech.pegasys.teku.datastructures.blocks.SignedBlockAndState;
 import tech.pegasys.teku.datastructures.blocks.SlotAndBlockRoot;
+import tech.pegasys.teku.datastructures.blocks.exec.Eth1Transaction;
+import tech.pegasys.teku.datastructures.blocks.exec.ExecutableData;
 import tech.pegasys.teku.datastructures.forkchoice.VoteTracker;
 import tech.pegasys.teku.datastructures.networking.libp2p.rpc.EnrForkId;
 import tech.pegasys.teku.datastructures.operations.AggregateAndProof;
@@ -68,6 +72,7 @@ import tech.pegasys.teku.pow.event.DepositsFromBlockEvent;
 import tech.pegasys.teku.pow.event.MinGenesisTimeBlockEvent;
 import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
 import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
+import tech.pegasys.teku.ssz.SSZTypes.Bytes20;
 import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
@@ -106,12 +111,20 @@ public final class DataStructureUtil {
     return UInt64.fromLongBits(randomLong());
   }
 
+  public UInt256 randomUInt256() {
+    return UInt256.fromBytes(randomBytes32());
+  }
+
   public Eth1Address randomEth1Address() {
     return new Eth1Address(randomBytes32().slice(0, 20));
   }
 
   public Bytes4 randomBytes4() {
     return new Bytes4(randomBytes32().slice(0, 4));
+  }
+
+  public Bytes20 randomBytes20() {
+    return new Bytes20(randomBytes32().slice(0, Bytes20.SIZE));
   }
 
   public Bytes32 randomBytes32() {
@@ -408,6 +421,7 @@ public final class DataStructureUtil {
         randomSignature(),
         randomEth1Data(),
         Bytes32.ZERO,
+        randomExecutableData(),
         randomSSZList(
             ProposerSlashing.class,
             Constants.MAX_PROPOSER_SLASHINGS,
@@ -432,6 +446,7 @@ public final class DataStructureUtil {
         randomSignature(),
         randomEth1Data(),
         Bytes32.ZERO,
+        randomExecutableData(),
         randomFullSSZList(
             ProposerSlashing.class, Constants.MAX_PROPOSER_SLASHINGS, this::randomProposerSlashing),
         randomFullSSZList(
@@ -643,5 +658,32 @@ public final class DataStructureUtil {
     final Checkpoint anchorCheckpoint = new Checkpoint(anchorEpoch, anchorRoot);
 
     return AnchorPoint.create(anchorCheckpoint, signedAnchorBlock, anchorState);
+  }
+
+  public Eth1Transaction randomEth1Transaction() {
+    return new Eth1Transaction(
+        randomUInt64(),
+        randomUInt256(),
+        randomUInt64(),
+        randomBytes20(),
+        randomUInt256(),
+        randomBytes20().getWrappedBytes(),
+        randomUInt256(),
+        randomUInt256(),
+        randomUInt256());
+  }
+
+  public ExecutableData randomExecutableData() {
+    return new ExecutableData(
+        randomBytes32(),
+        randomBytes32(),
+        randomBytes20(),
+        randomBytes32(),
+        randomUInt64(),
+        randomUInt64(),
+        randomBytes32(),
+        Bytes.random(256),
+        randomUInt64(),
+        Arrays.asList(randomEth1Transaction(), randomEth1Transaction(), randomEth1Transaction()));
   }
 }

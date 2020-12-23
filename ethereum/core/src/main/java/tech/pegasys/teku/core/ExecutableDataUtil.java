@@ -13,32 +13,38 @@
 
 package tech.pegasys.teku.core;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static tech.pegasys.teku.core.ForkChoiceUtil.getSlotStartTime;
+import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_block_root_at_slot;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_current_epoch;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_randao_mix;
-import static tech.pegasys.teku.util.config.Constants.RECENT_BLOCK_ROOTS_SIZE;
+import static tech.pegasys.teku.util.config.Constants.GENESIS_SLOT;
+import static tech.pegasys.teku.util.config.Constants.BLOCK_ROOTS_FOR_EVM_SIZE;
+import static tech.pegasys.teku.util.config.Constants.SLOTS_PER_HISTORICAL_ROOT;
 
 import java.util.Collections;
-import java.util.concurrent.ExecutionException;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.core.exceptions.BlockProcessingException;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlockBody;
+import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.datastructures.state.MutableBeaconState;
-import tech.pegasys.teku.exec.eth1engine.Eth1EngineClient;
-import tech.pegasys.teku.exec.eth1engine.Eth1EngineClient.Response;
-import tech.pegasys.teku.exec.eth1engine.schema.ExecutableDataDTO;
+import tech.pegasys.teku.exec.ExecutableDataService;
+import tech.pegasys.teku.infrastructure.logging.LogFormatter;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 
 public final class ExecutableDataUtil {
 
   private static final Logger LOG = LogManager.getLogger();
 
-  private final Eth1EngineClient eth1EngineClient;
+  private final ExecutableDataService executableDataService;
 
-  public ExecutableDataUtil(Eth1EngineClient eth1EngineClient) {
-    this.eth1EngineClient = eth1EngineClient;
+  public ExecutableDataUtil(ExecutableDataService executableDataService) {
+    this.executableDataService = executableDataService;
   }
 
   public void process_executable_data(MutableBeaconState state, BeaconBlockBody body)
@@ -47,47 +53,50 @@ public final class ExecutableDataUtil {
     UInt64 timestamp = getSlotStartTime(slot, state.getGenesis_time());
     UInt64 epoch = get_current_epoch(state);
 
-    Bytes32 parent_hash = state.getLatest_block_header().getEth1ParentHash();
     // assumes randao mix of the beacon block has been processed
     Bytes32 randao_mix = get_randao_mix(state, epoch);
-    ExecutableDataDTO executableDataDTO =
-        Eth1EngineApiSchemaUtil.getExecutableDataDTO(body.getExecutable_data());
+    List<Bytes32> recent_block_roots = get_block_roots_for_evm(state);
 
     try {
-      Response<Boolean> response =
-          eth1EngineClient
-              .eth2InsertBlock(
-                  parent_hash,
-                  randao_mix,
-                  slot,
-                  timestamp,
-                  Collections.nCopies((int) RECENT_BLOCK_ROOTS_SIZE, Bytes32.ZERO),
-                  executableDataDTO)
-              .get();
+      boolean response =
+          executableDataService.insert(
+              randao_mix, slot, timestamp, recent_block_roots, body.getExecutable_data());
 
-      if (!Boolean.TRUE.equals(response.getPayload())) {
-        throw new IllegalStateException(
-            "Failed to eth2_insertBlock("
-                + "parent_hash="
-                + parent_hash
-                + ", randao_mix="
-                + randao_mix
-                + ", slot="
-                + slot
-                + ", timestamp="
-                + timestamp
-                + ", executable_data="
-                + body.getExecutable_data()
-                + "), reason: "
-                + String.valueOf(response.getReason()));
-      }
+      checkArgument(
+          response,
+          "process_executable_data failed: randao_mix=%s, slot=%s, timestamp=%s, executable_data=%s",
+          LogFormatter.formatHashRoot(randao_mix),
+          slot,
+          timestamp,
+          body.getExecutable_data());
 
-    } catch (IllegalArgumentException
-        | IllegalStateException
-        | InterruptedException
-        | ExecutionException e) {
+    } catch (IllegalArgumentException | IllegalStateException e) {
       LOG.warn(e.getMessage());
       throw new BlockProcessingException(e);
     }
+  }
+
+  public static List<Bytes32> get_block_roots_for_evm(BeaconState state) {
+    return get_recent_block_roots(
+        state, Math.min(BLOCK_ROOTS_FOR_EVM_SIZE, SLOTS_PER_HISTORICAL_ROOT));
+  }
+
+  public static List<Bytes32> get_recent_block_roots(BeaconState state, long qty) {
+    UInt64 current_slot = state.getSlot();
+    List<Bytes32> result =
+        LongStream.rangeClosed(1, qty)
+            .mapToObj(
+                idx -> {
+                  if (current_slot.minus(GENESIS_SLOT).isLessThan(UInt64.valueOf(idx))) {
+                    return Bytes32.ZERO;
+                  } else {
+                    return get_block_root_at_slot(state, current_slot.minus(idx));
+                  }
+                })
+            .collect(Collectors.toList());
+
+    // reverting to ascending order
+    Collections.reverse(result);
+    return result;
   }
 }

@@ -45,7 +45,7 @@ import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
 import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
 import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.datastructures.util.DataStructureUtil;
-import tech.pegasys.teku.exec.eth1engine.Eth1EngineClient;
+import tech.pegasys.teku.exec.ExecutableDataService;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
@@ -88,7 +88,7 @@ class BlockFactoryTest {
           depositProvider,
           eth1DataCache,
           graffiti,
-          Eth1EngineClient.Stub);
+          ExecutableDataService.Stub);
 
   @BeforeEach
   void setUp() {

@@ -14,84 +14,50 @@
 package tech.pegasys.teku.exec.eth1engine;
 
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
-import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.Bytes32;
-import org.web3j.protocol.Web3jService;
-import org.web3j.protocol.core.DefaultBlockParameter;
-import org.web3j.protocol.core.JsonRpc2_0Web3j;
 import org.web3j.protocol.core.Request;
-import org.web3j.protocol.core.methods.response.EthBlock;
-import org.web3j.protocol.core.methods.response.EthBlockNumber;
 import org.web3j.protocol.http.HttpService;
-import tech.pegasys.teku.exec.eth1engine.schema.ExecutableDataDTO;
+import tech.pegasys.teku.api.schema.ExecutableData;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
-import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 
 public class Web3jEth1EngineClient implements Eth1EngineClient {
 
-  private final CustomJsonRpc2_0Web3j web3j;
+  private final HttpService web3jService;
 
-  public static Web3jEth1EngineClient create(String eth1Endpoint) {
-    final HttpService web3jService = new HttpService(eth1Endpoint);
-    final CustomJsonRpc2_0Web3j web3j = new CustomJsonRpc2_0Web3j(web3jService);
-
-    return new Web3jEth1EngineClient(web3j);
-  }
-
-  Web3jEth1EngineClient(CustomJsonRpc2_0Web3j web3j) {
-    this.web3j = web3j;
+  public Web3jEth1EngineClient(String eth1Endpoint) {
+    this.web3jService = new HttpService(eth1Endpoint);
   }
 
   @Override
-  public Response<Bytes32> eth_getHeadBlockHash() {
-    try {
-      EthBlockNumber blockNumber = web3j.ethBlockNumber().send();
-      EthBlock block =
-          web3j
-              .ethGetBlockByNumber(
-                  DefaultBlockParameter.valueOf(blockNumber.getBlockNumber()), false)
-              .send();
-      return new Response<>(Bytes32.fromHexString(block.getBlock().getHash()));
-    } catch (Exception e) {
-      return new Response<>(e.getMessage());
-    }
+  public SafeFuture<Response<ExecutableData>> eth2ProduceBlock(ProduceBlockRequest request) {
+    Request<?, ProduceBlockWeb3jResponse> web3jRequest =
+        new Request<>(
+            "eth2_produceBlock",
+            Collections.singletonList(request),
+            web3jService,
+            ProduceBlockWeb3jResponse.class);
+    return doRequest(web3jRequest);
   }
+
+  // Easter egg from my son:
+  // fujffrfdsatfdtgfyghgghygyhyhyhhyhhyyuui8uuuyuyyyyuyuuyuuiu877776768ioppoop-00poliufffujk,
+  // mjjhhhhhgyhgtggt66666666
 
   @Override
-  public SafeFuture<Response<ExecutableDataDTO>> eth2ProduceBlock(
-      Bytes32 parentHash,
-      Bytes32 randaoMix,
-      UInt64 slot,
-      UInt64 timestamp,
-      List<Bytes32> recentBeaconBlockRoots) {
-    Request<?, ProduceBlockResponse> request =
-        web3j.eth2ProduceBlock(parentHash, randaoMix, slot, timestamp, recentBeaconBlockRoots);
-    return processRequest(request);
+  public SafeFuture<Response<Boolean>> eth2InsertBlock(InsertBlockRequest request) {
+    Request<?, InsertBlockWeb3jResponse> web3jRequest =
+        new Request<>(
+            "eth2_insertBlock",
+            Collections.singletonList(request),
+            web3jService,
+            InsertBlockWeb3jResponse.class);
+    return doRequest(web3jRequest);
   }
 
-  @Override
-  public SafeFuture<Response<Boolean>> eth2InsertBlock(
-      Bytes32 parentHash,
-      Bytes32 randaoMix,
-      UInt64 slot,
-      UInt64 timestamp,
-      List<Bytes32> recentBeaconBlockRoots,
-      ExecutableDataDTO executableData) {
-    Request<?, InsertBlockResponse> request =
-        web3j.eth2InsertBlock(
-            parentHash, randaoMix, slot, timestamp, recentBeaconBlockRoots, executableData);
-    return processRequest(request);
-  }
-
-  private <T> SafeFuture<Response<T>> processRequest(
-      Request<?, ? extends org.web3j.protocol.core.Response<T>> request) {
+  private <T> SafeFuture<Response<T>> doRequest(
+      Request<?, ? extends org.web3j.protocol.core.Response<T>> web3jRequest) {
     CompletableFuture<Response<T>> responseFuture =
-        request
+        web3jRequest
             .sendAsync()
             .handle(
                 (response, exception) -> {
@@ -107,61 +73,7 @@ public class Web3jEth1EngineClient implements Eth1EngineClient {
     return SafeFuture.of(responseFuture);
   }
 
-  private static class CustomJsonRpc2_0Web3j extends JsonRpc2_0Web3j {
+  static class ProduceBlockWeb3jResponse extends org.web3j.protocol.core.Response<ExecutableData> {}
 
-    public CustomJsonRpc2_0Web3j(Web3jService web3jService) {
-      super(web3jService);
-    }
-
-    public Request<?, ProduceBlockResponse> eth2ProduceBlock(
-        Bytes32 parentHash,
-        Bytes32 randaoMix,
-        UInt64 slot,
-        UInt64 timestamp,
-        List<Bytes32> recentBeaconBlockRoots) {
-      Map<String, Object> params = new HashMap<>();
-      params.put("parent_hash", parentHash.toHexString());
-      params.put("randao_mix", randaoMix.toHexString());
-      params.put("slot", slot.toString());
-      params.put("timestamp", timestamp.toString());
-      params.put(
-          "recent_beacon_block_roots",
-          recentBeaconBlockRoots.stream().map(Bytes::toHexString).collect(Collectors.toList()));
-
-      return new Request<>(
-          "eth2_produceBlock",
-          Collections.singletonList(params),
-          web3jService,
-          ProduceBlockResponse.class);
-    }
-
-    public Request<?, InsertBlockResponse> eth2InsertBlock(
-        Bytes32 parentHash,
-        Bytes32 randaoMix,
-        UInt64 slot,
-        UInt64 timestamp,
-        List<Bytes32> recentBeaconBlockRoots,
-        ExecutableDataDTO executableData) {
-      Map<String, Object> params = new HashMap<>();
-      params.put("parent_hash", parentHash.toHexString());
-      params.put("randao_mix", randaoMix.toHexString());
-      params.put("slot", slot.toString());
-      params.put("timestamp", timestamp.toString());
-      params.put(
-          "recent_beacon_block_roots",
-          recentBeaconBlockRoots.stream().map(Bytes::toHexString).collect(Collectors.toList()));
-      params.put("executable_data", executableData);
-
-      return new Request<>(
-          "eth2_insertBlock",
-          Collections.singletonList(params),
-          web3jService,
-          InsertBlockResponse.class);
-    }
-  }
-
-  private static class ProduceBlockResponse
-      extends org.web3j.protocol.core.Response<ExecutableDataDTO> {}
-
-  private static class InsertBlockResponse extends org.web3j.protocol.core.Response<Boolean> {}
+  static class InsertBlockWeb3jResponse extends org.web3j.protocol.core.Response<Boolean> {}
 }

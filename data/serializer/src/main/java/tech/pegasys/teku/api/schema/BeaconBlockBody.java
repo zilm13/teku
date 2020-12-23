@@ -39,6 +39,8 @@ public class BeaconBlockBody {
   @Schema(type = "string", format = "byte", description = DESCRIPTION_BYTES32)
   public final Bytes32 graffiti;
 
+  public final ExecutableData executable_data;
+
   public final List<ProposerSlashing> proposer_slashings;
   public final List<AttesterSlashing> attester_slashings;
   public final List<Attestation> attestations;
@@ -50,6 +52,7 @@ public class BeaconBlockBody {
       @JsonProperty("randao_reveal") final BLSSignature randao_reveal,
       @JsonProperty("eth1_data") final Eth1Data eth1_data,
       @JsonProperty("graffiti") final Bytes32 graffiti,
+      @JsonProperty("executable_data") final ExecutableData executable_data,
       @JsonProperty("proposer_slashings") final List<ProposerSlashing> proposer_slashings,
       @JsonProperty("attester_slashings") final List<AttesterSlashing> attester_slashings,
       @JsonProperty("attestations") final List<Attestation> attestations,
@@ -58,6 +61,7 @@ public class BeaconBlockBody {
     this.randao_reveal = randao_reveal;
     this.eth1_data = eth1_data;
     this.graffiti = graffiti;
+    this.executable_data = executable_data;
     this.proposer_slashings = proposer_slashings;
     this.attester_slashings = attester_slashings;
     this.attestations = attestations;
@@ -69,6 +73,7 @@ public class BeaconBlockBody {
     this.randao_reveal = new BLSSignature(body.getRandao_reveal().toSSZBytes());
     this.eth1_data = new Eth1Data(body.getEth1_data());
     this.graffiti = body.getGraffiti();
+    this.executable_data = new ExecutableData(body.getExecutable_data());
     this.proposer_slashings =
         body.getProposer_slashings().stream()
             .map(ProposerSlashing::new)
@@ -92,6 +97,7 @@ public class BeaconBlockBody {
         new tech.pegasys.teku.datastructures.blocks.Eth1Data(
             eth1_data.deposit_root, eth1_data.deposit_count, eth1_data.block_hash),
         graffiti,
+        executable_data.asInternalExecutableData(),
         SSZList.createMutable(
             proposer_slashings.stream().map(ProposerSlashing::asInternalProposerSlashing),
             MAX_PROPOSER_SLASHINGS,

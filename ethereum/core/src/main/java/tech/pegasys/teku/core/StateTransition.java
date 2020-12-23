@@ -34,7 +34,7 @@ import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlockHeader;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.exec.eth1engine.Eth1EngineClient;
+import tech.pegasys.teku.exec.ExecutableDataService;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 
 public class StateTransition {
@@ -46,7 +46,7 @@ public class StateTransition {
   }
 
   private static ExecutableDataUtil createDefaultExecutableDataUtil() {
-    return new ExecutableDataUtil(Eth1EngineClient.Stub);
+    return new ExecutableDataUtil(ExecutableDataService.Stub);
   }
 
   private final BlockValidator blockValidator;

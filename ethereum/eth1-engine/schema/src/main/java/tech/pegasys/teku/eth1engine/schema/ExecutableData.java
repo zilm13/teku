@@ -11,12 +11,14 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package tech.pegasys.teku.exec.eth1engine.schema;
+package tech.pegasys.teku.eth1engine.schema;
 
+import com.google.common.base.MoreObjects;
 import java.math.BigInteger;
 import java.util.List;
 
-public class ExecutableDataDTO {
+public class ExecutableData {
+  private String parent_hash;
   private String block_hash;
   private String coinbase;
   private String state_root;
@@ -25,9 +27,12 @@ public class ExecutableDataDTO {
   private String receipt_root;
   private String logs_bloom;
   private BigInteger difficulty;
-  private List<Eth1TransactionDTO> transactions;
+  private List<Eth1Transaction> transactions;
 
-  public ExecutableDataDTO(
+  public ExecutableData() {}
+
+  public ExecutableData(
+      String parent_hash,
       String block_hash,
       String coinbase,
       String state_root,
@@ -36,7 +41,8 @@ public class ExecutableDataDTO {
       String receipt_root,
       String logs_bloom,
       BigInteger difficulty,
-      List<Eth1TransactionDTO> transactions) {
+      List<Eth1Transaction> transactions) {
+    this.parent_hash = parent_hash;
     this.block_hash = block_hash;
     this.coinbase = coinbase;
     this.state_root = state_root;
@@ -46,6 +52,14 @@ public class ExecutableDataDTO {
     this.logs_bloom = logs_bloom;
     this.difficulty = difficulty;
     this.transactions = transactions;
+  }
+
+  public String getParent_hash() {
+    return parent_hash;
+  }
+
+  public void setParent_hash(String parent_hash) {
+    this.parent_hash = parent_hash;
   }
 
   public String getBlock_hash() {
@@ -112,11 +126,27 @@ public class ExecutableDataDTO {
     this.difficulty = difficulty;
   }
 
-  public List<Eth1TransactionDTO> getTransactions() {
+  public List<Eth1Transaction> getTransactions() {
     return transactions;
   }
 
-  public void setTransactions(List<Eth1TransactionDTO> transactions) {
+  public void setTransactions(List<Eth1Transaction> transactions) {
     this.transactions = transactions;
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this)
+        .add("parent_hash", block_hash.substring(0, 10))
+        .add("block_hash", block_hash.substring(0, 10))
+        .add("coinbase", coinbase.substring(0, 10))
+        .add("state_root", state_root.substring(0, 10))
+        .add("gas_limit", gas_limit)
+        .add("gas_used", gas_used)
+        .add("receipt_root", receipt_root.substring(0, 10))
+        .add("logs_bloom", logs_bloom.substring(0, 10))
+        .add("difficulty", difficulty)
+        .add("transactions", transactions)
+        .toString();
   }
 }

@@ -11,9 +11,11 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package tech.pegasys.teku.exec.eth1engine.schema;
+package tech.pegasys.teku.eth1engine.schema;
 
-public class Eth1TransactionDTO {
+import com.google.common.base.MoreObjects;
+
+public class Eth1Transaction {
   private String nonce;
   private String gasPrice;
   private String gas;
@@ -24,7 +26,9 @@ public class Eth1TransactionDTO {
   private String r;
   private String s;
 
-  public Eth1TransactionDTO(
+  public Eth1Transaction() {}
+
+  public Eth1Transaction(
       String nonce,
       String gasPrice,
       String gas_limit,
@@ -115,5 +119,20 @@ public class Eth1TransactionDTO {
 
   public void setS(String s) {
     this.s = s;
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this)
+        .add("nonce", nonce)
+        .add("gasPrice", gasPrice)
+        .add("gas", gas)
+        .add("to", to)
+        .add("value", value)
+        .add("input", input)
+        .add("v", v)
+        .add("r", r)
+        .add("s", s)
+        .toString();
   }
 }

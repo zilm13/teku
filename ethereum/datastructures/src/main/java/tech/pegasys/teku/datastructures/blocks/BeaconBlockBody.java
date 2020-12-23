@@ -81,27 +81,6 @@ public class BeaconBlockBody implements SimpleOffsetSerializable, SSZContainer, 
     this.voluntary_exits = voluntary_exits;
   }
 
-  public BeaconBlockBody(
-      BLSSignature randao_reveal,
-      Eth1Data eth1_data,
-      Bytes32 graffiti,
-      SSZList<ProposerSlashing> proposer_slashings,
-      SSZList<AttesterSlashing> attester_slashings,
-      SSZList<Attestation> attestations,
-      SSZList<Deposit> deposits,
-      SSZList<SignedVoluntaryExit> voluntary_exits) {
-    this(
-        randao_reveal,
-        eth1_data,
-        graffiti,
-        new ExecutableData(),
-        proposer_slashings,
-        attester_slashings,
-        attestations,
-        deposits,
-        voluntary_exits);
-  }
-
   public BeaconBlockBody() {
     this.randao_reveal = BLSSignature.empty();
     this.eth1_data = new Eth1Data();
@@ -180,8 +159,8 @@ public class BeaconBlockBody implements SimpleOffsetSerializable, SSZContainer, 
     BeaconBlockBody other = (BeaconBlockBody) obj;
     return Objects.equals(this.getRandao_reveal(), other.getRandao_reveal())
         && Objects.equals(this.getEth1_data(), other.getEth1_data())
-        && Objects.equals(this.getExecutable_data(), other.getExecutable_data())
         && Objects.equals(this.getGraffiti(), other.getGraffiti())
+        && Objects.equals(this.getExecutable_data(), other.getExecutable_data())
         && Objects.equals(this.getProposer_slashings(), other.getProposer_slashings())
         && Objects.equals(this.getAttester_slashings(), other.getAttester_slashings())
         && Objects.equals(this.getAttestations(), other.getAttestations())

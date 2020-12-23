@@ -46,7 +46,6 @@ public class BeaconBlockHeader extends AbstractImmutableContainer
               BasicViewTypes.UINT64_TYPE,
               BasicViewTypes.BYTES32_TYPE,
               BasicViewTypes.BYTES32_TYPE,
-              BasicViewTypes.BYTES32_TYPE,
               BasicViewTypes.BYTES32_TYPE),
           BeaconBlockHeader::new);
 
@@ -61,9 +60,6 @@ public class BeaconBlockHeader extends AbstractImmutableContainer
 
   @SuppressWarnings("unused")
   private final Bytes32 state_root = null;
-
-  @SuppressWarnings("unused")
-  private final Bytes32 eth1_parent_hash = null;
 
   @SuppressWarnings("unused")
   private final Bytes32 body_root = null;
@@ -81,23 +77,12 @@ public class BeaconBlockHeader extends AbstractImmutableContainer
       Bytes32 parent_root,
       Bytes32 state_root,
       Bytes32 body_root) {
-    this(slot, proposer_index, parent_root, state_root, Bytes32.ZERO, body_root);
-  }
-
-  public BeaconBlockHeader(
-      UInt64 slot,
-      UInt64 proposer_index,
-      Bytes32 parent_root,
-      Bytes32 state_root,
-      Bytes32 eth1_parent_hash,
-      Bytes32 body_root) {
     super(
         TYPE,
         new UInt64View(slot),
         new UInt64View(proposer_index),
         new Bytes32View(parent_root),
         new Bytes32View(state_root),
-        new Bytes32View(eth1_parent_hash),
         new Bytes32View(body_root));
   }
 
@@ -127,7 +112,6 @@ public class BeaconBlockHeader extends AbstractImmutableContainer
               latestHeader.getProposerIndex(),
               latestHeader.getParentRoot(),
               stateRoot,
-              latestHeader.getEth1ParentHash(),
               latestHeader.getBodyRoot());
     }
 
@@ -146,7 +130,6 @@ public class BeaconBlockHeader extends AbstractImmutableContainer
         SSZ.encodeUInt64(getProposerIndex().longValue()),
         SSZ.encode(writer -> writer.writeFixedBytes(getParentRoot())),
         SSZ.encode(writer -> writer.writeFixedBytes(getStateRoot())),
-        SSZ.encode(writer -> writer.writeFixedBytes(getEth1ParentHash())),
         SSZ.encode(writer -> writer.writeFixedBytes(getBodyRoot())));
   }
 
@@ -170,13 +153,9 @@ public class BeaconBlockHeader extends AbstractImmutableContainer
     return ((Bytes32View) get(3)).get();
   }
 
-  public Bytes32 getEth1ParentHash() {
-    return ((Bytes32View) get(4)).get();
-  }
-
   @Override
   public Bytes32 getBodyRoot() {
-    return ((Bytes32View) get(5)).get();
+    return ((Bytes32View) get(4)).get();
   }
 
   @Override
@@ -200,7 +179,6 @@ public class BeaconBlockHeader extends AbstractImmutableContainer
         .add("proposer_index", getProposerIndex())
         .add("parent_root", getParentRoot())
         .add("state_root", getStateRoot())
-        .add("eth1_parent_hash", getEth1ParentHash())
         .add("body_root", getBodyRoot())
         .toString();
   }

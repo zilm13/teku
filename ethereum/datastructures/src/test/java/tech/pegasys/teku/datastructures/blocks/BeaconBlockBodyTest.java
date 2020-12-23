@@ -24,6 +24,7 @@ import static tech.pegasys.teku.util.config.Constants.MAX_VOLUNTARY_EXITS;
 import org.apache.tuweni.bytes.Bytes32;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.bls.BLSSignature;
+import tech.pegasys.teku.datastructures.blocks.exec.ExecutableData;
 import tech.pegasys.teku.datastructures.operations.Attestation;
 import tech.pegasys.teku.datastructures.operations.AttesterSlashing;
 import tech.pegasys.teku.datastructures.operations.Deposit;
@@ -38,6 +39,7 @@ class BeaconBlockBodyTest {
   private final DataStructureUtil dataStructureUtil = new DataStructureUtil();
   private BLSSignature blsSignature = dataStructureUtil.randomSignature();
   private Eth1Data eth1Data = dataStructureUtil.randomEth1Data();
+  private ExecutableData executableData = dataStructureUtil.randomExecutableData();
   private Bytes32 graffiti = dataStructureUtil.randomBytes32();
   private SSZMutableList<ProposerSlashing> proposerSlashings =
       SSZList.createMutable(ProposerSlashing.class, MAX_PROPOSER_SLASHINGS);
@@ -68,6 +70,7 @@ class BeaconBlockBodyTest {
           blsSignature,
           eth1Data,
           graffiti,
+          executableData,
           proposerSlashings,
           attesterSlashings,
           attestations,
@@ -88,6 +91,7 @@ class BeaconBlockBodyTest {
             blsSignature,
             eth1Data,
             graffiti,
+            executableData,
             proposerSlashings,
             attesterSlashings,
             attestations,
@@ -95,6 +99,26 @@ class BeaconBlockBodyTest {
             voluntaryExits);
 
     assertEquals(beaconBlockBody, testBeaconBlockBody);
+  }
+
+  @Test
+  void equalsReturnsFalseWhenExecutableDataAreDifferent() {
+    // Create copy of proposerSlashings and reverse to ensure it is different.
+    ExecutableData executableData = dataStructureUtil.randomExecutableData();
+
+    BeaconBlockBody testBeaconBlockBody =
+        new BeaconBlockBody(
+            blsSignature,
+            eth1Data,
+            graffiti,
+            executableData,
+            proposerSlashings,
+            attesterSlashings,
+            attestations,
+            deposits,
+            voluntaryExits);
+
+    assertNotEquals(beaconBlockBody, testBeaconBlockBody);
   }
 
   @Test
@@ -107,6 +131,7 @@ class BeaconBlockBodyTest {
             blsSignature,
             eth1Data,
             graffiti,
+            executableData,
             SSZList.createMutable(reverseProposerSlashings),
             attesterSlashings,
             attestations,
@@ -128,6 +153,7 @@ class BeaconBlockBodyTest {
             blsSignature,
             eth1Data,
             graffiti,
+            executableData,
             proposerSlashings,
             otherAttesterSlashings,
             attestations,
@@ -147,6 +173,7 @@ class BeaconBlockBodyTest {
             blsSignature,
             eth1Data,
             graffiti,
+            executableData,
             proposerSlashings,
             attesterSlashings,
             reverseAttestations,
@@ -166,6 +193,7 @@ class BeaconBlockBodyTest {
             blsSignature,
             eth1Data,
             graffiti,
+            executableData,
             proposerSlashings,
             attesterSlashings,
             attestations,
@@ -185,6 +213,7 @@ class BeaconBlockBodyTest {
             blsSignature,
             eth1Data,
             graffiti,
+            executableData,
             proposerSlashings,
             attesterSlashings,
             attestations,

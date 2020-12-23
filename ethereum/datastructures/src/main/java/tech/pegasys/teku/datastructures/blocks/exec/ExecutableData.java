@@ -22,6 +22,7 @@ import java.util.function.Function;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.datastructures.util.Merkleizable;
+import tech.pegasys.teku.infrastructure.logging.LogFormatter;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.ssz.SSZTypes.Bytes20;
 import tech.pegasys.teku.ssz.SSZTypes.SSZBackingList;
@@ -51,6 +52,7 @@ public class ExecutableData extends AbstractImmutableContainer
       new ContainerViewType<>(
           List.of(
               BasicViewTypes.BYTES32_TYPE,
+              BasicViewTypes.BYTES32_TYPE,
               new VectorViewType<ByteView>(BasicViewTypes.BYTE_TYPE, Bytes20.SIZE),
               BasicViewTypes.BYTES32_TYPE,
               BasicViewTypes.UINT64_TYPE,
@@ -60,6 +62,9 @@ public class ExecutableData extends AbstractImmutableContainer
               BasicViewTypes.UINT64_TYPE,
               new ListViewType<Eth1Transaction>(Eth1Transaction.TYPE, MAX_ETH1_TRANSACTIONS)),
           ExecutableData::new);
+
+  @SuppressWarnings("unused")
+  private final Bytes32 parent_hash = null;
 
   @SuppressWarnings("unused")
   private final Bytes32 block_hash = null;
@@ -81,7 +86,7 @@ public class ExecutableData extends AbstractImmutableContainer
 
   @SuppressWarnings("unused")
   private final SSZVector<Byte> logs_bloom =
-      SSZVector.createMutable(Byte.class, (int) BYTES_PER_LOGS_BLOOM);
+      SSZVector.createMutable(Byte.class, BYTES_PER_LOGS_BLOOM);
 
   @SuppressWarnings("unused")
   private final UInt64 difficulty = null;
@@ -100,6 +105,7 @@ public class ExecutableData extends AbstractImmutableContainer
   }
 
   public ExecutableData(
+      Bytes32 parent_hash,
       Bytes32 block_hash,
       Bytes20 coinbase,
       Bytes32 state_root,
@@ -111,6 +117,7 @@ public class ExecutableData extends AbstractImmutableContainer
       SSZList<Eth1Transaction> transactions) {
     super(
         TYPE,
+        new Bytes32View(parent_hash),
         new Bytes32View(block_hash),
         ViewUtils.createVectorFromBytes(coinbase.getWrappedBytes()),
         new Bytes32View(state_root),
@@ -123,6 +130,7 @@ public class ExecutableData extends AbstractImmutableContainer
   }
 
   public ExecutableData(
+      Bytes32 parent_hash,
       Bytes32 block_hash,
       Bytes20 coinbase,
       Bytes32 state_root,
@@ -131,9 +139,10 @@ public class ExecutableData extends AbstractImmutableContainer
       Bytes32 receipt_root,
       Bytes logs_bloom,
       UInt64 difficulty,
-      Iterable<Eth1Transaction> transactions) {
+      List<Eth1Transaction> transactions) {
     super(
         TYPE,
+        new Bytes32View(parent_hash),
         new Bytes32View(block_hash),
         ViewUtils.createVectorFromBytes(coinbase.getWrappedBytes()),
         new Bytes32View(state_root),
@@ -171,41 +180,45 @@ public class ExecutableData extends AbstractImmutableContainer
     return 0;
   }
 
-  public Bytes32 getBlock_hash() {
+  public Bytes32 getParent_hash() {
     return ((Bytes32View) get(0)).get();
   }
 
+  public Bytes32 getBlock_hash() {
+    return ((Bytes32View) get(1)).get();
+  }
+
   public Bytes20 getCoinbase() {
-    return new Bytes20(ViewUtils.getAllBytes(getAny(1)));
+    return new Bytes20(ViewUtils.getAllBytes(getAny(2)));
   }
 
   public Bytes32 getState_root() {
-    return ((Bytes32View) get(2)).get();
+    return ((Bytes32View) get(3)).get();
   }
 
   public UInt64 getGas_limit() {
-    return ((UInt64View) get(3)).get();
-  }
-
-  public UInt64 getGas_used() {
     return ((UInt64View) get(4)).get();
   }
 
+  public UInt64 getGas_used() {
+    return ((UInt64View) get(5)).get();
+  }
+
   public Bytes32 getReceipt_root() {
-    return ((Bytes32View) get(5)).get();
+    return ((Bytes32View) get(6)).get();
   }
 
   public Bytes getLogs_bloom() {
-    return ViewUtils.getAllBytes(getAny(6));
+    return ViewUtils.getAllBytes(getAny(7));
   }
 
   public UInt64 getDifficulty() {
-    return ((UInt64View) get(7)).get();
+    return ((UInt64View) get(8)).get();
   }
 
   public SSZList<Eth1Transaction> getTransactions() {
     return new SSZBackingList<>(
-        Eth1Transaction.class, getAny(8), Function.identity(), Function.identity());
+        Eth1Transaction.class, getAny(9), Function.identity(), Function.identity());
   }
 
   @Override
@@ -216,13 +229,14 @@ public class ExecutableData extends AbstractImmutableContainer
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
-        .add("block_hash", getBlock_hash())
-        .add("coinbase", getCoinbase())
-        .add("state_root", getState_root())
+        .add("parent_hash", LogFormatter.formatHashRoot(getParent_hash()))
+        .add("block_hash", LogFormatter.formatHashRoot(getBlock_hash()))
+        .add("coinbase", getCoinbase().getWrappedBytes().slice(0, 8))
+        .add("state_root", LogFormatter.formatHashRoot(getState_root()))
         .add("gas_limit", getGas_limit())
         .add("gas_used", getGas_used())
-        .add("receipt_root", getReceipt_root())
-        .add("logs_bloom", getLogs_bloom())
+        .add("receipt_root", LogFormatter.formatHashRoot(getReceipt_root()))
+        .add("logs_bloom", getLogs_bloom().slice(0, 8))
         .add("difficulty", getDifficulty())
         .toString();
   }

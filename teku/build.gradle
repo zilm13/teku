@@ -8,6 +8,7 @@ dependencies {
   implementation project(':data:yaml')
   implementation project(':ethereum:core')
   implementation project(':ethereum:datastructures')
+  implementation project(':ethereum:exec')
   implementation project(':ethereum:statetransition')
   implementation project(':ethereum:weaksubjectivity')
   implementation project(':infrastructure:events')

@@ -45,7 +45,6 @@ public class BlockProposalUtil {
       final int proposerIndex,
       final BLSSignature randaoReveal,
       final BeaconState blockSlotState,
-      final Bytes32 eth1ParentHash,
       final Bytes32 parentBlockSigningRoot,
       final Eth1Data eth1Data,
       final ExecutableData executableData,
@@ -83,7 +82,6 @@ public class BlockProposalUtil {
             UInt64.valueOf(proposerIndex),
             parentBlockSigningRoot,
             tmpStateRoot,
-            eth1ParentHash,
             beaconBlockBody);
 
     // Run state transition and set state root

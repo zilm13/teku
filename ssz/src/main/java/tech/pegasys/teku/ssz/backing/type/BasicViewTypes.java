@@ -131,12 +131,12 @@ public class BasicViewTypes {
       new BasicViewType<>(256) {
         @Override
         public UInt256View createFromBackingNode(TreeNode node, int internalIndex) {
-          return new UInt256View(UInt256.fromBytes(node.hashTreeRoot()));
+          return new UInt256View(UInt256.fromBytes(node.hashTreeRoot().reverse()));
         }
 
         @Override
         public TreeNode updateBackingNode(TreeNode srcNode, int index, ViewRead newValue) {
-          return LeafNode.create(((UInt256View) newValue).get().toBytes());
+          return LeafNode.create(((UInt256View) newValue).get().toBytes().reverse());
         }
 
         @Override

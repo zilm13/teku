@@ -25,16 +25,23 @@ import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 
 public class MockStartBeaconStateGenerator {
 
-  private static final Bytes32 BLOCK_HASH;
+  public static final Bytes32 INTEROP_ETH1_BLOCK_HASH;
 
   static {
     final byte[] eth1BlockHashBytes = new byte[32];
     Arrays.fill(eth1BlockHashBytes, (byte) 0x42);
-    BLOCK_HASH = Bytes32.wrap(eth1BlockHashBytes);
+    INTEROP_ETH1_BLOCK_HASH = Bytes32.wrap(eth1BlockHashBytes);
   }
 
   public BeaconState createInitialBeaconState(
       final UInt64 genesisTime, final List<DepositData> initialDepositData) {
+    return createInitialBeaconState(INTEROP_ETH1_BLOCK_HASH, genesisTime, initialDepositData);
+  }
+
+  public BeaconState createInitialBeaconState(
+      final Bytes32 eth1BlockHash,
+      final UInt64 genesisTime,
+      final List<DepositData> initialDepositData) {
     final List<DepositWithIndex> deposits = new ArrayList<>();
     for (int index = 0; index < initialDepositData.size(); index++) {
       final DepositData data = initialDepositData.get(index);
@@ -42,7 +49,7 @@ public class MockStartBeaconStateGenerator {
       deposits.add(deposit);
     }
     final BeaconState initialState =
-        BeaconStateUtil.initialize_beacon_state_from_eth1(BLOCK_HASH, genesisTime, deposits);
+        BeaconStateUtil.initialize_beacon_state_from_eth1(eth1BlockHash, genesisTime, deposits);
     return initialState.updated(state -> state.setGenesis_time(genesisTime));
   }
 }

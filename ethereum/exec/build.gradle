@@ -1,5 +1,8 @@
 dependencies {
+  implementation project(':data:serializer')
+  implementation project(':ethereum:datastructures')
   implementation project(':infrastructure:async')
+  implementation project(':infrastructure:logging')
   implementation project(':ssz')
 
   api 'org.web3j:core'
