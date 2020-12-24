@@ -130,7 +130,12 @@ class BlockFactoryTest {
         recentChainData.retrieveBlockState(bestBlockRoot).join().orElseThrow();
     final BeaconBlock block =
         blockFactory.createUnsignedBlock(
-            previousState, previousBlock, newSlot, randaoReveal, Optional.empty());
+            previousState,
+            previousBlock,
+            Optional.empty(),
+            newSlot,
+            randaoReveal,
+            Optional.empty());
 
     assertThat(block).isNotNull();
     assertThat(block.getSlot()).isEqualTo(newSlot);

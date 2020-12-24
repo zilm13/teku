@@ -25,8 +25,10 @@ import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tech.pegasys.teku.beaconrestapi.BeaconRestApiConfig;
 import tech.pegasys.teku.exec.ExecutionConfig;
 import tech.pegasys.teku.infrastructure.events.EventChannels;
+import tech.pegasys.teku.infrastructure.logging.LoggingConfig;
 import tech.pegasys.teku.networking.eth2.P2PConfig;
 import tech.pegasys.teku.service.serviceutils.ServiceConfig;
 import tech.pegasys.teku.service.serviceutils.layout.DataConfig;
@@ -34,6 +36,7 @@ import tech.pegasys.teku.service.serviceutils.layout.DataDirLayout;
 import tech.pegasys.teku.storage.store.MemKeyValueStore;
 import tech.pegasys.teku.util.config.GlobalConfiguration;
 import tech.pegasys.teku.util.time.channels.SlotEventsChannel;
+import tech.pegasys.teku.validator.api.InteropConfig;
 import tech.pegasys.teku.validator.api.ValidatorConfig;
 import tech.pegasys.teku.weaksubjectivity.config.WeakSubjectivityConfig;
 
@@ -42,6 +45,8 @@ public class BeaconChainControllerTest {
   private final ServiceConfig serviceConfig = mock(ServiceConfig.class);
   private final EventChannels eventChannels = mock(EventChannels.class);
   private P2PConfig p2pConfig = P2PConfig.builder().build();
+  private final BeaconRestApiConfig restApiConfig = BeaconRestApiConfig.builder().build();
+  private final LoggingConfig loggingConfig = LoggingConfig.builder().build();
   private final ExecutionConfig executionConfig = ExecutionConfig.builder().build();
 
   @TempDir public Path dataDir;
@@ -61,7 +66,10 @@ public class BeaconChainControllerTest {
     return new BeaconChainConfiguration(
         WeakSubjectivityConfig.builder().build(),
         ValidatorConfig.builder().build(),
+        InteropConfig.builder().build(),
         p2pConfig,
+        restApiConfig,
+        loggingConfig,
         executionConfig);
   }
 

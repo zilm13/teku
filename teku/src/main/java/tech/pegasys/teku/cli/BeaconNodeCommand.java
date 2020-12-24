@@ -97,6 +97,9 @@ import tech.pegasys.teku.util.config.InvalidConfigurationException;
     footer = "Teku is licensed under the Apache License 2.0")
 public class BeaconNodeCommand implements Callable<Integer> {
 
+  public static final String LOG_FILE = "teku.log";
+  public static final String LOG_PATTERN = "teku_%d{yyyy-MM-dd}.log";
+
   public static final String CONFIG_FILE_OPTION_NAME = "--config-file";
   static final String TEKU_CONFIG_FILE_ENV = "TEKU_CONFIG_FILE";
   private final PrintWriter outputWriter;
@@ -329,11 +332,14 @@ public class BeaconNodeCommand implements Callable<Integer> {
   protected TekuConfiguration tekuConfiguration() {
     try {
       TekuConfiguration.Builder builder = TekuConfiguration.builder();
-      builder.globalConfig(globalBuilder -> buildGlobalConfiguration(globalBuilder));
+      builder.globalConfig(this::buildGlobalConfiguration);
       weakSubjectivityOptions.configure(builder, networkOptions.getNetwork());
       validatorOptions.configure(builder);
       dataOptions.configure(builder);
       p2POptions.configure(builder, networkOptions.getNetwork());
+      beaconRestApiOptions.configure(builder, networkOptions.getNetwork());
+      loggingOptions.configure(builder, dataOptions.getDataBasePath(), LOG_FILE, LOG_PATTERN);
+      interopOptions.configure(builder);
       executionOptions.configure(builder);
 
       return builder.build();
@@ -349,24 +355,10 @@ public class BeaconNodeCommand implements Callable<Integer> {
         .setStartupTimeoutSeconds(networkOptions.getStartupTimeoutSeconds())
         .setPeerRateLimit(networkOptions.getPeerRateLimit())
         .setPeerRequestLimit(networkOptions.getPeerRequestLimit())
-        .setInteropGenesisTime(interopOptions.getInteropGenesisTime())
-        .setInteropOwnedValidatorStartIndex(interopOptions.getInteropOwnerValidatorStartIndex())
-        .setInteropOwnedValidatorCount(interopOptions.getInteropOwnerValidatorCount())
-        .setInteropNumberOfValidators(interopOptions.getInteropNumberOfValidators())
-        .setInteropEnabled(interopOptions.isInteropEnabled())
         .setEth1DepositContractAddress(depositOptions.getEth1DepositContractAddress())
         .setEth1Endpoint(depositOptions.getEth1Endpoint())
         .setEth1LogsMaxBlockRange(depositOptions.getEth1LogsMaxBlockRange())
         .setEth1DepositsFromStorageEnabled(depositOptions.isEth1DepositsFromStorageEnabled())
-        .setLogColorEnabled(loggingOptions.isLogColorEnabled())
-        .setLogIncludeEventsEnabled(loggingOptions.isLogIncludeEventsEnabled())
-        .setLogIncludeValidatorDutiesEnabled(loggingOptions.isLogIncludeValidatorDutiesEnabled())
-        .setLogDestination(loggingOptions.getLogDestination())
-        .setLogFileNamePattern(loggingOptions.getLogFileNamePattern())
-        .setLogWireCipher(loggingOptions.isLogWireCipherEnabled())
-        .setLogWirePlain(loggingOptions.isLogWirePlainEnabled())
-        .setLogWireMuxFrames(loggingOptions.isLogWireMuxEnabled())
-        .setLogWireGossip(loggingOptions.isLogWireGossipEnabled())
         .setTransitionRecordDirectory(outputOptions.getTransitionRecordDirectory())
         .setMetricsEnabled(metricsOptions.isMetricsEnabled())
         .setMetricsPort(metricsOptions.getMetricsPort())
@@ -378,21 +370,7 @@ public class BeaconNodeCommand implements Callable<Integer> {
         .setDataStorageCreateDbVersion(dataStorageOptions.getCreateDbVersion())
         .setHotStatePersistenceFrequencyInEpochs(
             storeOptions.getHotStatePersistenceFrequencyInEpochs())
-        .setIsBlockProcessingAtStartupDisabled(storeOptions.isBlockProcessingAtStartupDisabled())
-        .setRestApiPort(beaconRestApiOptions.getRestApiPort())
-        .setRestApiDocsEnabled(beaconRestApiOptions.isRestApiDocsEnabled())
-        .setRestApiEnabled(beaconRestApiOptions.isRestApiEnabled())
-        .setRestApiInterface(beaconRestApiOptions.getRestApiInterface())
-        .setRestApiHostAllowlist(beaconRestApiOptions.getRestApiHostAllowlist())
-        .setRestApiCorsAllowedOrigins(beaconRestApiOptions.getRestApiCorsAllowedOrigins());
-
-    String logFile =
-        loggingOptions
-            .getMaybeLogFile()
-            .orElse(
-                LoggingOptions.getDefaultLogFileGivenDataDir(
-                    dataOptions.getDataBasePath().toString(), false));
-    builder.setLogFile(logFile);
+        .setIsBlockProcessingAtStartupDisabled(storeOptions.isBlockProcessingAtStartupDisabled());
   }
 
   @FunctionalInterface

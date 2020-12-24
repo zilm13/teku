@@ -13,15 +13,22 @@
 
 package tech.pegasys.teku.ssz.backing.type;
 
+import static java.util.Collections.emptyList;
+
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.tuweni.bytes.Bytes;
 import tech.pegasys.teku.ssz.backing.VectorViewRead;
 import tech.pegasys.teku.ssz.backing.tree.LeafNode;
+import tech.pegasys.teku.ssz.backing.tree.SszSuperNode;
 import tech.pegasys.teku.ssz.backing.tree.TreeNode;
 import tech.pegasys.teku.ssz.backing.tree.TreeUtil;
+import tech.pegasys.teku.ssz.backing.type.TypeHints.SszSuperNodeHint;
 import tech.pegasys.teku.ssz.backing.view.VectorViewReadImpl;
+import tech.pegasys.teku.ssz.sos.SSZDeserializeException;
+import tech.pegasys.teku.ssz.sos.SszReader;
 
 public class VectorViewType<C> extends CollectionViewType {
 
@@ -31,8 +38,12 @@ public class VectorViewType<C> extends CollectionViewType {
     this(elementType, vectorLength, false);
   }
 
-  VectorViewType(ViewType elementType, long maxLength, boolean isListBacking) {
-    super(maxLength, elementType);
+  VectorViewType(ViewType elementType, long vectorLength, boolean isListBacking) {
+    this(elementType, vectorLength, isListBacking, TypeHints.none());
+  }
+
+  VectorViewType(ViewType elementType, long vectorLength, boolean isListBacking, TypeHints hints) {
+    super(vectorLength, elementType, hints);
     this.isListBacking = isListBacking;
   }
 
@@ -44,7 +55,16 @@ public class VectorViewType<C> extends CollectionViewType {
   @Override
   protected TreeNode createDefaultTree() {
     if (isListBacking) {
-      return TreeUtil.createDefaultTree(maxChunks(), LeafNode.EMPTY_LEAF);
+      Optional<SszSuperNodeHint> sszSuperNodeHint = getHints().getHint(SszSuperNodeHint.class);
+      if (sszSuperNodeHint.isPresent()) {
+        int superNodeDepth = sszSuperNodeHint.get().getDepth();
+        SszSuperNode defaultSuperSszNode =
+            new SszSuperNode(superNodeDepth, elementSszSupernodeTemplate.get(), Bytes.EMPTY);
+        int binaryDepth = treeDepth() - superNodeDepth;
+        return TreeUtil.createTree(emptyList(), defaultSuperSszNode, binaryDepth);
+      } else {
+        return TreeUtil.createDefaultTree(maxChunks(), LeafNode.EMPTY_LEAF);
+      }
     } else if (getElementType().getBitsSize() == LeafNode.MAX_BIT_SIZE) {
       return TreeUtil.createDefaultTree(maxChunks(), getElementType().getDefaultTree());
     } else {
@@ -104,5 +124,22 @@ public class VectorViewType<C> extends CollectionViewType {
   @Override
   public int sszSerialize(TreeNode node, Consumer<Bytes> writer) {
     return sszSerializeVector(node, writer, getLength());
+  }
+
+  @Override
+  public TreeNode sszDeserializeTree(SszReader reader) {
+    DeserializedData data = sszDeserializeVector(reader);
+    if (getElementType() == BasicViewTypes.BIT_TYPE && getLength() % 8 > 0) {
+      // for BitVector we need to check that all 'unused' bits in the last byte are 0
+      int usedBitCount = getLength() % 8;
+      if (data.getLastSszByte().orElseThrow() >>> usedBitCount != 0) {
+        throw new SSZDeserializeException("Invalid Bitvector ssz: trailing bits are not 0");
+      }
+    } else {
+      if (data.getChildrenCount() != getLength()) {
+        throw new SSZDeserializeException("Invalid Vector ssz");
+      }
+    }
+    return data.getDataTree();
   }
 }

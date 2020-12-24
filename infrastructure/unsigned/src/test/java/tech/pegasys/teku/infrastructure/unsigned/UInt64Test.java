@@ -27,6 +27,17 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class UInt64Test {
+  /**
+   * Square root of the maximum uint64 value. Any two values less than or equal to this can be
+   * safely multiplied together without overflowing a long.
+   *
+   * <p>If either value is greater than this number, overflow checks must be performed.
+   */
+  private static final long SQRT_MAX_VALUE = 4294967295L;
+
+  private static final long SPECIAL_CASE_MULTIPLICAND = 64L;
+  private static final long MAX_SAFE_VALUE_WITH_SPECIAL_CASE_MULTIPLICAND =
+      Long.divideUnsigned(-1L, SPECIAL_CASE_MULTIPLICAND);
 
   @ParameterizedTest
   @ValueSource(longs = {Long.MIN_VALUE, -1, 0, 1, 1234, Long.MAX_VALUE})
@@ -147,6 +158,38 @@ class UInt64Test {
     assertThat(UInt64.fromLongBits(-675)).isEqualByComparingTo(UInt64.fromLongBits(-675));
   }
 
+  @Test
+  void compareTo_withLongLessThanZero() {
+    assertThatThrownBy(() -> UInt64.valueOf(10).compareTo(-1))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("must be >= 0");
+  }
+
+  @Test
+  void compareTo_withNonZeroLong() {
+    final UInt64 value = UInt64.valueOf(10);
+    assertThat(value.compareTo(10)).isEqualTo(0);
+    assertThat(value.compareTo(11)).isEqualTo(-1);
+    assertThat(value.compareTo(1111)).isEqualTo(-1);
+    assertThat(value.compareTo(9)).isEqualTo(1);
+    assertThat(value.compareTo(0)).isEqualTo(1);
+  }
+
+  @Test
+  void isZero_shouldBeTrueWhenZero() {
+    assertThat(UInt64.ZERO.isZero()).isTrue();
+    assertThat(UInt64.valueOf(0).isZero()).isTrue();
+    assertThat(UInt64.valueOf(1).minus(1).isZero()).isTrue();
+  }
+
+  @Test
+  void isZero_shouldBeFalseWhenNotZero() {
+    assertThat(UInt64.ONE.isZero()).isFalse();
+    assertThat(UInt64.MAX_VALUE.isZero()).isFalse();
+    assertThat(UInt64.ZERO.plus(1).isZero()).isFalse();
+    assertThat(UInt64.valueOf(2).isZero()).isFalse();
+  }
+
   @ParameterizedTest
   @MethodSource("comparableNumbers")
   void greaterThan_shouldReturnTrueWhenNumberIsStrictlyGreater(
@@ -157,6 +200,18 @@ class UInt64Test {
     // Must be strictly greater than
     assertThat(smaller.isGreaterThan(smaller)).isFalse();
     assertThat(bigger.isGreaterThan(bigger)).isFalse();
+  }
+
+  @ParameterizedTest
+  @MethodSource("comparableLongValues")
+  void greaterThan_shouldReturnTrueWhenNumberIsStrictlyGreater(
+      final long smaller, final long bigger) {
+    assertThat(UInt64.valueOf(smaller).isGreaterThan(bigger)).isFalse();
+    assertThat(UInt64.valueOf(bigger).isGreaterThan(smaller)).isTrue();
+
+    // Must be strictly greater than
+    assertThat(UInt64.valueOf(smaller).isGreaterThan(smaller)).isFalse();
+    assertThat(UInt64.valueOf(bigger).isGreaterThan(bigger)).isFalse();
   }
 
   @ParameterizedTest
@@ -172,6 +227,18 @@ class UInt64Test {
   }
 
   @ParameterizedTest
+  @MethodSource("comparableLongValues")
+  void greaterThanOrEqualTo_shouldReturnTrueWhenNumberIsGreaterOrEqual(
+      final long smaller, final long bigger) {
+    assertThat(UInt64.valueOf(smaller).isGreaterThanOrEqualTo(bigger)).isFalse();
+    assertThat(UInt64.valueOf(bigger).isGreaterThanOrEqualTo(smaller)).isTrue();
+
+    // True when equal
+    assertThat(UInt64.valueOf(smaller).isGreaterThanOrEqualTo(smaller)).isTrue();
+    assertThat(UInt64.valueOf(bigger).isGreaterThanOrEqualTo(bigger)).isTrue();
+  }
+
+  @ParameterizedTest
   @MethodSource("comparableNumbers")
   void lessThan_shouldReturnTrueWhenNumberIsStrictlyLessThan(
       final UInt64 smaller, final UInt64 bigger) {
@@ -184,6 +251,18 @@ class UInt64Test {
   }
 
   @ParameterizedTest
+  @MethodSource("comparableLongValues")
+  void lessThan_shouldReturnTrueWhenNumberIsStrictlyLessThan(
+      final long smaller, final long bigger) {
+    assertThat(UInt64.valueOf(smaller).isLessThan(bigger)).isTrue();
+    assertThat(UInt64.valueOf(bigger).isLessThan(smaller)).isFalse();
+
+    // Must be strictly greater than
+    assertThat(UInt64.valueOf(smaller).isLessThan(smaller)).isFalse();
+    assertThat(UInt64.valueOf(bigger).isLessThan(bigger)).isFalse();
+  }
+
+  @ParameterizedTest
   @MethodSource("comparableNumbers")
   void lessThanOrEqualTo_shouldReturnTrueWhenNumberIsLessThanOrEqual(
       final UInt64 smaller, final UInt64 bigger) {
@@ -193,6 +272,18 @@ class UInt64Test {
     // Must be strictly greater than
     assertThat(smaller.isLessThanOrEqualTo(smaller)).isTrue();
     assertThat(bigger.isLessThanOrEqualTo(bigger)).isTrue();
+  }
+
+  @ParameterizedTest
+  @MethodSource("comparableLongValues")
+  void lessThanOrEqualTo_shouldReturnTrueWhenNumberIsLessThanOrEqual(
+      final long smaller, final long bigger) {
+    assertThat(UInt64.valueOf(smaller).isLessThanOrEqualTo(bigger)).isTrue();
+    assertThat(UInt64.valueOf(bigger).isLessThanOrEqualTo(smaller)).isFalse();
+
+    // Must be strictly greater than
+    assertThat(UInt64.valueOf(smaller).isLessThanOrEqualTo(smaller)).isTrue();
+    assertThat(UInt64.valueOf(bigger).isLessThanOrEqualTo(bigger)).isTrue();
   }
 
   @Test
@@ -536,7 +627,8 @@ class UInt64Test {
         Arguments.of(Long.divideUnsigned(-1, 2) + 1, 2),
         Arguments.of(Long.MAX_VALUE, 3),
         Arguments.of(Long.MIN_VALUE, 2),
-        Arguments.of(UInt64.SQRT_MAX_VALUE + 1, UInt64.SQRT_MAX_VALUE + 1));
+        Arguments.of(SQRT_MAX_VALUE + 1, SQRT_MAX_VALUE + 1),
+        Arguments.of(SPECIAL_CASE_MULTIPLICAND, MAX_SAFE_VALUE_WITH_SPECIAL_CASE_MULTIPLICAND + 1));
   }
 
   static List<Arguments> additionNumbers() {
@@ -569,15 +661,18 @@ class UInt64Test {
         Arguments.of(0, 1, 0),
         Arguments.of(1, 1, 1),
         Arguments.of(2, 4, 8),
+        Arguments.of(3, 4, 12),
+        Arguments.of(
+            SPECIAL_CASE_MULTIPLICAND,
+            MAX_SAFE_VALUE_WITH_SPECIAL_CASE_MULTIPLICAND,
+            Long.parseUnsignedLong("18446744073709551552")),
         Arguments.of(Integer.MAX_VALUE, 2, ((long) Integer.MAX_VALUE) * 2),
         Arguments.of(Long.MIN_VALUE, 1, Long.MIN_VALUE),
         Arguments.of(Long.MAX_VALUE, 1, Long.MAX_VALUE),
         Arguments.of(Long.MAX_VALUE, 2, -2),
         Arguments.of(Long.divideUnsigned(-1, 3), 3, -1),
         Arguments.of(
-            UInt64.SQRT_MAX_VALUE,
-            UInt64.SQRT_MAX_VALUE,
-            Long.parseUnsignedLong("18446744065119617025")));
+            SQRT_MAX_VALUE, SQRT_MAX_VALUE, Long.parseUnsignedLong("18446744065119617025")));
   }
 
   static List<Arguments> comparableNumbers() {
@@ -590,5 +685,15 @@ class UInt64Test {
         Arguments.of(UInt64.fromLongBits(-445), UInt64.fromLongBits(-444)),
         Arguments.of(UInt64.valueOf(22244), UInt64.valueOf(22245)),
         Arguments.of(UInt64.valueOf(Long.MAX_VALUE), UInt64.fromLongBits(Long.MIN_VALUE)));
+  }
+
+  static List<Arguments> comparableLongValues() {
+    // (Smaller Number, Bigger Number)
+    return List.of(
+        Arguments.of(0, 1),
+        Arguments.of(10, 11),
+        Arguments.of(100, 200),
+        Arguments.of(0, Long.MAX_VALUE),
+        Arguments.of(Long.MAX_VALUE - 1, Long.MAX_VALUE));
   }
 }

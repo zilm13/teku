@@ -20,6 +20,7 @@ import java.util.List;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.ssz.SSZ;
+import tech.pegasys.teku.datastructures.blocks.SlotAndBlockRoot;
 import tech.pegasys.teku.datastructures.util.Merkleizable;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.ssz.SSZTypes.SSZContainer;
@@ -30,6 +31,7 @@ import tech.pegasys.teku.ssz.backing.view.AbstractImmutableContainer;
 import tech.pegasys.teku.ssz.backing.view.BasicViews.Bytes32View;
 import tech.pegasys.teku.ssz.backing.view.BasicViews.UInt64View;
 import tech.pegasys.teku.ssz.sos.SimpleOffsetSerializable;
+import tech.pegasys.teku.ssz.sos.SszTypeDescriptor;
 
 public class Checkpoint extends AbstractImmutableContainer
     implements Merkleizable, SimpleOffsetSerializable, SSZContainer {
@@ -37,6 +39,7 @@ public class Checkpoint extends AbstractImmutableContainer
   // The number of SimpleSerialize basic types in this SSZ Container/POJO.
   public static final int SSZ_FIELD_COUNT = 2;
 
+  @SszTypeDescriptor
   public static final ContainerViewType<Checkpoint> TYPE =
       new ContainerViewType<>(
           List.of(BasicViewTypes.UINT64_TYPE, BasicViewTypes.BYTES32_TYPE), Checkpoint::new);
@@ -98,6 +101,10 @@ public class Checkpoint extends AbstractImmutableContainer
 
   public UInt64 getEpochStartSlot() {
     return compute_start_slot_at_epoch(getEpoch());
+  }
+
+  public SlotAndBlockRoot toSlotAndBlockRoot() {
+    return new SlotAndBlockRoot(getEpochStartSlot(), getRoot());
   }
 
   @Override

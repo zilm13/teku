@@ -14,8 +14,10 @@
 package tech.pegasys.teku.infrastructure.logging;
 
 import static java.util.stream.Collectors.joining;
+import static tech.pegasys.teku.infrastructure.logging.ColorConsolePrinter.print;
 
 import java.math.BigInteger;
+import java.net.URL;
 import java.nio.file.Path;
 import java.util.List;
 import org.apache.commons.lang3.time.DateFormatUtils;
@@ -158,12 +160,49 @@ public class StatusLogger {
   }
 
   public void loadedInitialStateResource(
-      final Bytes32 stateRoot, final Bytes32 blockRoot, final UInt64 slot) {
-    log.info(
-        "Loaded initial state at slot {} (state root = {}, block root = {})",
-        slot,
-        stateRoot,
-        blockRoot);
+      final Bytes32 stateRoot,
+      final Bytes32 blockRoot,
+      final UInt64 blockSlot,
+      final UInt64 epoch,
+      final UInt64 epochStartSlot) {
+    if (blockSlot.isGreaterThan(0)) {
+      log.info(
+          "Loaded initial state at epoch {} (state root = {}, block root = {}, block slot = {}).  Please ensure that the supplied initial state corresponds to the latest finalized block as of the start of epoch {} (slot {}).",
+          epoch,
+          stateRoot,
+          blockRoot,
+          blockSlot,
+          epoch,
+          epochStartSlot);
+    } else {
+      log.info(
+          "Loaded initial state at epoch {} (state root = {}, block root = {}, block slot = {}).",
+          epoch,
+          stateRoot,
+          blockRoot,
+          blockSlot);
+    }
+  }
+
+  public void warnOnInitialStateWithSkippedSlots(
+      final Level level,
+      final UInt64 anchorBlockSlot,
+      final UInt64 anchorEpoch,
+      final UInt64 anchorEpochStartSlot) {
+    final UInt64 slotsBetweenBlockAndEpochStart =
+        anchorEpochStartSlot.minusMinZero(anchorBlockSlot);
+    if (slotsBetweenBlockAndEpochStart.equals(UInt64.ZERO)) {
+      return;
+    }
+
+    final String msg =
+        String.format(
+            "The provided initial state is %s slots prior to the start of epoch %s. Please ensure that slots %s - %s (inclusive) are empty.",
+            slotsBetweenBlockAndEpochStart,
+            anchorEpoch,
+            anchorBlockSlot.plus(1),
+            anchorEpochStartSlot);
+    logWithColorIfLevelGreaterThanInfo(level, msg, ColorConsolePrinter.Color.YELLOW);
   }
 
   public void loadingGenesisFromEth1Chain() {
@@ -234,5 +273,46 @@ public class StatusLogger {
         "PLEASE CHECK YOUR ETH1 NODE | Wrong Eth1 chain id (expected={}, actual={})",
         expectedChainId,
         eth1ChainId);
+  }
+
+  public void externalSignerStatus(final URL externalSignerUrl, boolean isReachable) {
+    if (isReachable) {
+      log.info("External signer is reachable at {}", externalSignerUrl);
+    } else {
+      log.error(
+          ColorConsolePrinter.print(
+              "External signer is currently not reachable at " + externalSignerUrl,
+              ColorConsolePrinter.Color.RED));
+    }
+  }
+
+  public void unableToRetrieveValidatorStatusesFromBeaconNode() {
+    log.error("Unable to retrieve validator statuses from BeaconNode.");
+  }
+
+  public void validatorStatus(String publicKey, String validatorStatus) {
+    log.info("Validator {} status is {}.", publicKey, validatorStatus);
+  }
+
+  public void unableToRetrieveValidatorStatus(String publicKey) {
+    log.warn("Unable to retrieve status for validator {}.", publicKey);
+  }
+
+  public void unableToRetrieveValidatorStatusSummary(int n) {
+    log.warn("Unable to retrieve status for {} validators.", n);
+  }
+
+  public void validatorStatusSummary(int n, String validatorStatus) {
+    log.info("{} validators are in {} state.", n, validatorStatus);
+  }
+
+  public void validatorStatusChange(String oldStatus, String newStatus, String publicKey) {
+    log.warn("Validator {} has changed status from {} to {}.", publicKey, oldStatus, newStatus);
+  }
+
+  private void logWithColorIfLevelGreaterThanInfo(
+      final Level level, final String msg, final ColorConsolePrinter.Color color) {
+    final boolean useColor = level.compareTo(Level.INFO) < 0;
+    log.log(level, useColor ? print(msg, color) : msg);
   }
 }

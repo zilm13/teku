@@ -109,6 +109,11 @@ class TestStoreImpl implements MutableStore {
     return best_justified_checkpoint;
   }
 
+  @Override
+  public ReadOnlyForkChoiceStrategy getForkChoiceStrategy() {
+    throw new UnsupportedOperationException("Not implemented");
+  }
+
   private SignedBeaconBlock getSignedBlock(final Bytes32 blockRoot) {
     return blocks.get(blockRoot);
   }
@@ -183,6 +188,12 @@ class TestStoreImpl implements MutableStore {
   @Override
   public SafeFuture<Optional<BeaconState>> retrieveCheckpointState(Checkpoint checkpoint) {
     return SafeFuture.completedFuture(getCheckpointState(checkpoint));
+  }
+
+  @Override
+  public SafeFuture<Optional<BeaconState>> retrieveStateAtSlot(
+      final SlotAndBlockRoot slotAndBlockRoot) {
+    throw new UnsupportedOperationException("Not implemented");
   }
 
   @Override

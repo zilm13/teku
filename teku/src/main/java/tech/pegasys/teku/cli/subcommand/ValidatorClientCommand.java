@@ -47,6 +47,8 @@ import tech.pegasys.teku.util.config.InvalidConfigurationException;
     footerHeading = "%n",
     footer = "Teku is licensed under the Apache License 2.0")
 public class ValidatorClientCommand implements Callable<Integer> {
+  public static final String LOG_FILE = "teku-validator.log";
+  public static final String LOG_PATTERN = "teku-validator_%d{yyyy-MM-dd}.log";
 
   @Mixin(name = "Validator")
   private ValidatorOptions validatorOptions;
@@ -99,38 +101,18 @@ public class ValidatorClientCommand implements Callable<Integer> {
     validatorOptions.configure(builder);
     validatorClientOptions.configure(builder);
     dataOptions.configure(builder);
+    loggingOptions.configure(builder, dataOptions.getDataBasePath(), LOG_FILE, LOG_PATTERN);
+    interopOptions.configure(builder);
     return builder.build();
   }
 
   private void buildGlobalConfiguration(final GlobalConfigurationBuilder builder) {
     builder
         .setNetwork(networkOptions.getNetwork())
-        .setInteropGenesisTime(interopOptions.getInteropGenesisTime())
-        .setInteropOwnedValidatorStartIndex(interopOptions.getInteropOwnerValidatorStartIndex())
-        .setInteropOwnedValidatorCount(interopOptions.getInteropOwnerValidatorCount())
-        .setInteropNumberOfValidators(interopOptions.getInteropNumberOfValidators())
-        .setInteropEnabled(interopOptions.isInteropEnabled())
-        .setLogColorEnabled(loggingOptions.isLogColorEnabled())
-        .setLogIncludeEventsEnabled(loggingOptions.isLogIncludeEventsEnabled())
-        .setLogIncludeValidatorDutiesEnabled(loggingOptions.isLogIncludeValidatorDutiesEnabled())
-        .setLogDestination(loggingOptions.getLogDestination())
-        .setLogFileNamePattern(loggingOptions.getLogFileNamePattern())
-        .setLogWireCipher(loggingOptions.isLogWireCipherEnabled())
-        .setLogWirePlain(loggingOptions.isLogWirePlainEnabled())
-        .setLogWireMuxFrames(loggingOptions.isLogWireMuxEnabled())
-        .setLogWireGossip(loggingOptions.isLogWireGossipEnabled())
         .setMetricsEnabled(metricsOptions.isMetricsEnabled())
         .setMetricsPort(metricsOptions.getMetricsPort())
         .setMetricsInterface(metricsOptions.getMetricsInterface())
         .setMetricsCategories(metricsOptions.getMetricsCategories())
         .setMetricsHostAllowlist(metricsOptions.getMetricsHostAllowlist());
-
-    String logFile =
-        loggingOptions
-            .getMaybeLogFile()
-            .orElse(
-                LoggingOptions.getDefaultLogFileGivenDataDir(
-                    dataOptions.getDataBasePath().toString(), true));
-    builder.setLogFile(logFile);
   }
 }
