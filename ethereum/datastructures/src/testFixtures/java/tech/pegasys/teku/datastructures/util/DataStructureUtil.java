@@ -45,6 +45,7 @@ import tech.pegasys.teku.datastructures.blocks.SignedBlockAndState;
 import tech.pegasys.teku.datastructures.blocks.SlotAndBlockRoot;
 import tech.pegasys.teku.datastructures.blocks.exec.Eth1Transaction;
 import tech.pegasys.teku.datastructures.blocks.exec.ExecutableData;
+import tech.pegasys.teku.datastructures.eth1.Eth1Address;
 import tech.pegasys.teku.datastructures.forkchoice.VoteTracker;
 import tech.pegasys.teku.datastructures.networking.libp2p.rpc.EnrForkId;
 import tech.pegasys.teku.datastructures.operations.AggregateAndProof;
@@ -79,7 +80,6 @@ import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableVector;
 import tech.pegasys.teku.ssz.SSZTypes.SSZVector;
 import tech.pegasys.teku.util.config.Constants;
-import tech.pegasys.teku.util.config.Eth1Address;
 
 public final class DataStructureUtil {
 
@@ -246,6 +246,11 @@ public final class DataStructureUtil {
 
   public Attestation randomAttestation() {
     return new Attestation(randomBitlist(), randomAttestationData(), randomSignature());
+  }
+
+  public Attestation randomAttestation(final long slot) {
+    return new Attestation(
+        randomBitlist(), randomAttestationData(UInt64.valueOf(slot)), randomSignature());
   }
 
   public AggregateAndProof randomAggregateAndProof() {

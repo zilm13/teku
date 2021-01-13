@@ -49,7 +49,7 @@ public class ExecutableData extends AbstractImmutableContainer
     implements Merkleizable, SimpleOffsetSerializable, SSZContainer {
 
   public static final ContainerViewType<ExecutableData> TYPE =
-      new ContainerViewType<>(
+      ContainerViewType.create(
           List.of(
               BasicViewTypes.BYTES32_TYPE,
               BasicViewTypes.BYTES32_TYPE,

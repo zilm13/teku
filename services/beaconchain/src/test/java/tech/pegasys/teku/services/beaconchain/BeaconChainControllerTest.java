@@ -30,11 +30,13 @@ import tech.pegasys.teku.exec.ExecutionConfig;
 import tech.pegasys.teku.infrastructure.events.EventChannels;
 import tech.pegasys.teku.infrastructure.logging.LoggingConfig;
 import tech.pegasys.teku.networking.eth2.P2PConfig;
+import tech.pegasys.teku.networks.Eth2NetworkConfiguration;
 import tech.pegasys.teku.service.serviceutils.ServiceConfig;
 import tech.pegasys.teku.service.serviceutils.layout.DataConfig;
 import tech.pegasys.teku.service.serviceutils.layout.DataDirLayout;
+import tech.pegasys.teku.services.powchain.PowchainConfiguration;
 import tech.pegasys.teku.storage.store.MemKeyValueStore;
-import tech.pegasys.teku.util.config.GlobalConfiguration;
+import tech.pegasys.teku.storage.store.StoreConfig;
 import tech.pegasys.teku.util.time.channels.SlotEventsChannel;
 import tech.pegasys.teku.validator.api.InteropConfig;
 import tech.pegasys.teku.validator.api.ValidatorConfig;
@@ -43,6 +45,8 @@ import tech.pegasys.teku.weaksubjectivity.config.WeakSubjectivityConfig;
 public class BeaconChainControllerTest {
 
   private final ServiceConfig serviceConfig = mock(ServiceConfig.class);
+  private final Eth2NetworkConfiguration eth2Config =
+      Eth2NetworkConfiguration.builder(Eth2NetworkConfiguration.MAINNET).build();
   private final EventChannels eventChannels = mock(EventChannels.class);
   private P2PConfig p2pConfig = P2PConfig.builder().build();
   private final BeaconRestApiConfig restApiConfig = BeaconRestApiConfig.builder().build();
@@ -53,7 +57,6 @@ public class BeaconChainControllerTest {
 
   @BeforeEach
   public void setup() {
-    when(serviceConfig.getConfig()).thenReturn(GlobalConfiguration.builder().build());
     when(eventChannels.getPublisher(any())).thenReturn(mock(SlotEventsChannel.class));
     when(serviceConfig.getEventChannels()).thenReturn(eventChannels);
     when(serviceConfig.getDataDirLayout())
@@ -64,12 +67,15 @@ public class BeaconChainControllerTest {
 
   private BeaconChainConfiguration beaconChainConfiguration() {
     return new BeaconChainConfiguration(
+        eth2Config,
         WeakSubjectivityConfig.builder().build(),
         ValidatorConfig.builder().build(),
         InteropConfig.builder().build(),
         p2pConfig,
         restApiConfig,
+        PowchainConfiguration.builder().build(),
         loggingConfig,
+        StoreConfig.builder().build(),
         executionConfig);
   }
 

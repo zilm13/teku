@@ -126,8 +126,10 @@ dependencyManagement {
     dependency 'org.mockito:mockito-core:3.3.3'
     dependency 'org.mockito:mockito-junit-jupiter:3.3.3'
 
-    dependency 'org.openjdk.jmh:jmh-core:1.21'
-    dependency 'org.openjdk.jmh:jmh-generator-annprocess:1.23'
+    dependencySet(group: "org.openjdk.jmh", version: "1.27") {
+      entry 'jmh-core'
+      entry 'jmh-generator-annprocess'
+    }
     dependency 'org.miracl.milagro.amcl:milagro-crypto-java:0.4.0'
     dependency 'org.quartz-scheduler:quartz:2.3.2'
     dependency 'org.rocksdb:rocksdbjni:6.11.4'
@@ -148,7 +150,7 @@ dependencyManagement {
     dependency "org.testcontainers:testcontainers:1.15.0-rc2"
     dependency "org.testcontainers:junit-jupiter:1.15.0-rc2"
 
-    dependency 'tech.pegasys.discovery:discovery:0.4.0-dev-1ff42f1e'
+    dependency 'tech.pegasys.discovery:discovery:0.4.2-dev-874de92f'
 
     dependency 'tech.pegasys.signers.internal:bls-keystore:1.0.13'
   }

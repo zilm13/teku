@@ -43,7 +43,7 @@ public class Eth1Transaction extends AbstractImmutableContainer
     implements Merkleizable, SimpleOffsetSerializable, SSZContainer {
 
   public static final ContainerViewType<Eth1Transaction> TYPE =
-      new ContainerViewType<>(
+      ContainerViewType.create(
           List.of(
               BasicViewTypes.UINT64_TYPE,
               BasicViewTypes.UINT256_TYPE,
