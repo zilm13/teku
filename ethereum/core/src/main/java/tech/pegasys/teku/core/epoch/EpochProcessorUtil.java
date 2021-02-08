@@ -13,6 +13,31 @@
 
 package tech.pegasys.teku.core.epoch;
 
+import org.apache.commons.lang3.tuple.Pair;
+import tech.pegasys.teku.core.Deltas;
+import tech.pegasys.teku.core.Deltas.Delta;
+import tech.pegasys.teku.core.epoch.status.ValidatorStatus;
+import tech.pegasys.teku.core.epoch.status.ValidatorStatuses;
+import tech.pegasys.teku.core.exceptions.EpochProcessingException;
+import tech.pegasys.teku.datastructures.state.Checkpoint;
+import tech.pegasys.teku.datastructures.state.HistoricalBatch;
+import tech.pegasys.teku.datastructures.state.MutableBeaconState;
+import tech.pegasys.teku.datastructures.state.PendingAttestation;
+import tech.pegasys.teku.datastructures.state.Validator;
+import tech.pegasys.teku.datastructures.state.Withdrawal;
+import tech.pegasys.teku.independent.TotalBalances;
+import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
+import tech.pegasys.teku.ssz.SSZTypes.SSZList;
+import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
+import tech.pegasys.teku.util.config.Constants;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.all;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_activation_exit_epoch;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_block_root;
@@ -37,26 +62,8 @@ import static tech.pegasys.teku.util.config.Constants.MAX_ATTESTATIONS;
 import static tech.pegasys.teku.util.config.Constants.MAX_EFFECTIVE_BALANCE;
 import static tech.pegasys.teku.util.config.Constants.SLOTS_PER_EPOCH;
 import static tech.pegasys.teku.util.config.Constants.SLOTS_PER_HISTORICAL_ROOT;
-
-import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import tech.pegasys.teku.core.Deltas;
-import tech.pegasys.teku.core.Deltas.Delta;
-import tech.pegasys.teku.core.epoch.status.ValidatorStatus;
-import tech.pegasys.teku.core.epoch.status.ValidatorStatuses;
-import tech.pegasys.teku.core.exceptions.EpochProcessingException;
-import tech.pegasys.teku.datastructures.state.Checkpoint;
-import tech.pegasys.teku.datastructures.state.HistoricalBatch;
-import tech.pegasys.teku.datastructures.state.MutableBeaconState;
-import tech.pegasys.teku.datastructures.state.PendingAttestation;
-import tech.pegasys.teku.datastructures.state.Validator;
-import tech.pegasys.teku.independent.TotalBalances;
-import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
-import tech.pegasys.teku.ssz.SSZTypes.SSZList;
-import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
-import tech.pegasys.teku.util.config.Constants;
+import static tech.pegasys.teku.util.config.Constants.WITHDRAWAL_ETH1;
+import static tech.pegasys.teku.util.config.Constants.WITHDRAWAL_ETH1_PREFIX;
 
 public final class EpochProcessorUtil {
 
@@ -340,5 +347,37 @@ public final class EpochProcessorUtil {
         .getCurrent_epoch_attestations()
         .setAll(
             SSZList.createMutable(PendingAttestation.class, MAX_ATTESTATIONS * SLOTS_PER_EPOCH));
+  }
+
+  /**
+   * - TODO: Move all withdrawal_epoch validators with non 00-withdrawal target to withdrawal tree, not list
+   * - When smth. like SetWithdrawalCredentials message introduced, if validator is already exited,
+   *    it should be moved to Withdrawals tree too
+   * - TODO: Withdrawals tree purge
+   */
+  public static void process_withdrawals(MutableBeaconState state) {
+    UInt64 current_epoch = get_current_epoch(state);
+    List<Pair<Integer, Validator>> withdrawal_validators = IntStream.range(0, state.getValidators().size())
+            .mapToObj(i -> Pair.of(i, state.getValidators().get(i)))
+            .filter(validatorPair -> validatorPair.getRight().getWithdrawable_epoch().isLessThanOrEqualTo(current_epoch))
+            .collect(Collectors.toList());
+    Map<Byte, List<Pair<Integer, Validator>>> validators_by_target =
+            withdrawal_validators.stream().collect(Collectors.groupingBy(validatorPair -> validatorPair.getRight().getWithdrawal_credentials().get(0),
+                    LinkedHashMap::new, Collectors.toList()));
+
+    // Only Eth1 withdrawals are currently supported
+    List<Pair<Integer, Validator>> eth1_withdrawal_validators = validators_by_target.get(WITHDRAWAL_ETH1_PREFIX);
+    for (Pair<Integer, Validator> validatorPair : eth1_withdrawal_validators) {
+      state.getValidators().set(validatorPair.getLeft(), Validator.NULL);
+      state.getWithdrawals().add(
+              Withdrawal.create(
+                      validatorPair.getRight().getPubkey(),
+                      WITHDRAWAL_ETH1,
+                      validatorPair.getRight().getWithdrawal_credentials(),
+                      validatorPair.getRight().getEffective_balance(),
+                      current_epoch
+              )
+      );
+    }
   }
 }

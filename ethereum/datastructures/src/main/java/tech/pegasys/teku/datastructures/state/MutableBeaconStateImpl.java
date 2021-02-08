@@ -44,6 +44,7 @@ class MutableBeaconStateImpl extends ContainerViewWriteImpl
   private SSZMutableList<Bytes32> historicalRoots;
   private SSZMutableList<Eth1Data> eth1DataVotes;
   private SSZMutableVector<Bytes32> randaoMixes;
+  private SSZMutableList<Withdrawal> withdrawals;
   private SSZMutableList<PendingAttestation> previousEpochAttestations;
   private SSZMutableList<PendingAttestation> currentEpochAttestations;
 
@@ -142,6 +143,13 @@ class MutableBeaconStateImpl extends ContainerViewWriteImpl
     return randaoMixes != null
         ? randaoMixes
         : (randaoMixes = MutableBeaconState.super.getRandao_mixes());
+  }
+
+  @Override
+  public SSZMutableList<Withdrawal> getWithdrawals() {
+    return withdrawals != null
+            ? withdrawals
+            : (withdrawals = MutableBeaconState.super.getWithdrawals());
   }
 
   @Override

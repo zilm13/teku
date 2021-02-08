@@ -14,8 +14,6 @@
 package tech.pegasys.teku.datastructures.state;
 
 import com.google.common.base.MoreObjects;
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.Bytes48;
@@ -38,6 +36,9 @@ import tech.pegasys.teku.ssz.backing.view.ViewUtils;
 import tech.pegasys.teku.ssz.sos.SimpleOffsetSerializable;
 import tech.pegasys.teku.ssz.sos.SszTypeDescriptor;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class Validator extends AbstractImmutableContainer
     implements ContainerViewRead, SimpleOffsetSerializable, Merkleizable, SSZContainer {
 
@@ -57,6 +58,18 @@ public class Validator extends AbstractImmutableContainer
               BasicViewTypes.UINT64_TYPE,
               BasicViewTypes.UINT64_TYPE),
           Validator::new);
+
+  // FIXME: Looks like sh!t
+  public static final Validator NULL = Validator.create(
+          Bytes48.ZERO,
+          Bytes32.ZERO,
+          UInt64.MAX_VALUE.decrement(),
+          false,
+          UInt64.MAX_VALUE.decrement(),
+          UInt64.MAX_VALUE.decrement(),
+          UInt64.MAX_VALUE.decrement(),
+          UInt64.MAX_VALUE.decrement()
+  );
 
   // BLS public key
   @SuppressWarnings("unused")

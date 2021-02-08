@@ -21,6 +21,7 @@ import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
 import tech.pegasys.teku.ssz.SSZTypes.SSZBackingList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZBackingVector;
+import tech.pegasys.teku.ssz.SSZTypes.SSZList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableVector;
 import tech.pegasys.teku.ssz.backing.ContainerViewWriteRef;
@@ -110,41 +111,48 @@ public interface MutableBeaconState extends BeaconState, ContainerViewWriteRef {
         Bytes32.class, getAnyByRef(13), Bytes32View::new, AbstractBasicView::get);
   }
 
+  // Withdrawals
+  @Override
+  default SSZMutableList<Withdrawal> getWithdrawals() {
+    return new SSZBackingList<>(
+            Withdrawal.class, getAnyByRef(14), Function.identity(), Function.identity());
+  }
+
   // Slashings
   @Override
   default SSZMutableVector<UInt64> getSlashings() {
     return new SSZBackingVector<>(
-        UInt64.class, getAnyByRef(14), UInt64View::new, AbstractBasicView::get);
+        UInt64.class, getAnyByRef(15), UInt64View::new, AbstractBasicView::get);
   }
 
   // Attestations
   @Override
   default SSZMutableList<PendingAttestation> getPrevious_epoch_attestations() {
     return new SSZBackingList<>(
-        PendingAttestation.class, getAnyByRef(15), Function.identity(), Function.identity());
+        PendingAttestation.class, getAnyByRef(16), Function.identity(), Function.identity());
   }
 
   @Override
   default SSZMutableList<PendingAttestation> getCurrent_epoch_attestations() {
     return new SSZBackingList<>(
-        PendingAttestation.class, getAnyByRef(16), Function.identity(), Function.identity());
+        PendingAttestation.class, getAnyByRef(17), Function.identity(), Function.identity());
   }
 
   // Finality
   default void setJustification_bits(Bitvector justification_bits) {
-    set(17, ViewUtils.createBitvectorView(justification_bits));
+    set(18, ViewUtils.createBitvectorView(justification_bits));
   }
 
   default void setPrevious_justified_checkpoint(Checkpoint previous_justified_checkpoint) {
-    set(18, previous_justified_checkpoint);
+    set(19, previous_justified_checkpoint);
   }
 
   default void setCurrent_justified_checkpoint(Checkpoint current_justified_checkpoint) {
-    set(19, current_justified_checkpoint);
+    set(20, current_justified_checkpoint);
   }
 
   default void setFinalized_checkpoint(Checkpoint finalized_checkpoint) {
-    set(20, finalized_checkpoint);
+    set(21, finalized_checkpoint);
   }
 
   @Override

@@ -90,31 +90,38 @@ public interface BeaconState
           () ->
               new VectorViewType<>(
                   BasicViewTypes.BYTES32_TYPE, Constants.EPOCHS_PER_HISTORICAL_VECTOR));
+  // TODO: should be tree
+  Field WITHDRAWALS_FIELD =
+          new Field(
+                  14,
+                  () ->
+                          new ListViewType<>(
+                                  Withdrawal.TYPE, Constants.VALIDATOR_REGISTRY_LIMIT, TypeHints.sszSuperNode(5)));
   Field SLASHINGS_FIELD =
       new Field(
-          14,
+          15,
           () ->
               new VectorViewType<>(
                   BasicViewTypes.UINT64_TYPE, Constants.EPOCHS_PER_SLASHINGS_VECTOR));
   Field PREVIOUS_EPOCH_ATTESTATIONS_FIELD =
       new Field(
-          15,
+          16,
           () ->
               new ListViewType<>(
                   PendingAttestation.TYPE, Constants.MAX_ATTESTATIONS * Constants.SLOTS_PER_EPOCH));
   Field CURRENT_EPOCH_ATTESTATIONS_FIELD =
       new Field(
-          16,
+          17,
           () ->
               new ListViewType<>(
                   PendingAttestation.TYPE, Constants.MAX_ATTESTATIONS * Constants.SLOTS_PER_EPOCH));
   Field JUSTIFICATION_BITS_FIELD =
       new Field(
-          17,
+          18,
           () -> new VectorViewType<>(BasicViewTypes.BIT_TYPE, Constants.JUSTIFICATION_BITS_LENGTH));
-  Field PREVIOUS_JUSTIFIED_CHECKPOINT_FIELD = new Field(18, Checkpoint.TYPE);
-  Field CURRENT_JUSTIFIED_CHECKPOINT_FIELD = new Field(19, Checkpoint.TYPE);
-  Field FINALIZED_CHECKPOINT_FIELD = new Field(20, Checkpoint.TYPE);
+  Field PREVIOUS_JUSTIFIED_CHECKPOINT_FIELD = new Field(19, Checkpoint.TYPE);
+  Field CURRENT_JUSTIFIED_CHECKPOINT_FIELD = new Field(20, Checkpoint.TYPE);
+  Field FINALIZED_CHECKPOINT_FIELD = new Field(21, Checkpoint.TYPE);
 
   @SszTypeDescriptor
   static ContainerViewType<BeaconState> getSSZType() {
@@ -155,6 +162,9 @@ public interface BeaconState
       // Randomness
       SSZVector<Bytes32> randao_mixes,
 
+      // Withdrawals
+      SSZList<Withdrawal> withdrawals,
+
       // Slashings
       SSZVector<UInt64> slashings,
 
@@ -185,6 +195,7 @@ public interface BeaconState
               state.getValidators().setAll(validators);
               state.getBalances().setAll(balances);
               state.getRandao_mixes().setAll(randao_mixes);
+              state.getWithdrawals().setAll(withdrawals);
               state.getSlashings().setAll(slashings);
               state.getPrevious_epoch_attestations().setAll(previous_epoch_attestations);
               state.getCurrent_epoch_attestations().setAll(current_epoch_attestations);
@@ -282,6 +293,15 @@ public interface BeaconState
         getAny(RANDAO_MIXES_FIELD.getIndex()),
         Bytes32View::new,
         AbstractBasicView::get);
+  }
+
+  // Withdrawals
+  default SSZList<Withdrawal> getWithdrawals() {
+    return new SSZBackingList<>(
+            Withdrawal.class,
+            getAny(WITHDRAWALS_FIELD.getIndex()),
+            Function.identity(),
+            Function.identity());
   }
 
   // Slashings

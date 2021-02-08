@@ -113,6 +113,10 @@ public class Constants {
   @Deprecated public static Bytes4 DOMAIN_SELECTION_PROOF;
   @Deprecated public static Bytes4 DOMAIN_AGGREGATE_AND_PROOF;
 
+  // Withdrawal
+  @Deprecated public static Byte WITHDRAWAL_ETH1_PREFIX = 1;
+  @Deprecated public static Bytes4 WITHDRAWAL_ETH1 = new Bytes4(Bytes.fromHexString("0x01000000"));
+
   // Validator
   @Deprecated public static int TARGET_AGGREGATORS_PER_COMMITTEE = 16;
   @Deprecated public static UInt64 SECONDS_PER_ETH1_BLOCK = UInt64.valueOf(14L);
