@@ -38,6 +38,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.tuweni.crypto.Hash.keccak256;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.all;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_activation_exit_epoch;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_block_root;
@@ -371,7 +372,7 @@ public final class EpochProcessorUtil {
       state.getValidators().set(validatorPair.getLeft(), Validator.NULL);
       state.getWithdrawals().add(
               Withdrawal.create(
-                      validatorPair.getRight().getPubkey(),
+                      keccak256(validatorPair.getRight().getPubkey()),
                       WITHDRAWAL_ETH1,
                       validatorPair.getRight().getWithdrawal_credentials(),
                       validatorPair.getRight().getEffective_balance(),
