@@ -198,6 +198,9 @@ public class BeaconStateImpl extends ContainerViewReadImpl
       // Randomness
       SSZVector<Bytes32> randao_mixes,
 
+      // Withdrawals
+      SSZList<Withdrawal> withdrawals,
+
       // Slashings
       SSZVector<UInt64> slashings,
 
@@ -228,6 +231,7 @@ public class BeaconStateImpl extends ContainerViewReadImpl
                 validators,
                 balances,
                 randao_mixes,
+                withdrawals,
                 slashings,
                 previous_epoch_attestations,
                 current_epoch_attestations,
