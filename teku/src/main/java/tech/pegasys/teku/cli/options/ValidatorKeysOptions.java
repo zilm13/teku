@@ -19,12 +19,8 @@ import java.net.URL;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
-import org.apache.tuweni.bytes.Bytes;
 import picocli.CommandLine;
-import tech.pegasys.teku.bls.BLSPublicKey;
 import tech.pegasys.teku.config.TekuConfiguration;
 import tech.pegasys.teku.util.config.InvalidConfigurationException;
 
@@ -43,27 +39,9 @@ public class ValidatorKeysOptions {
   private List<String> validatorKeys = new ArrayList<>();
 
   @CommandLine.Option(
-      names = {"--validators-key-files"},
-      paramLabel = "<FILENAMES>",
-      description = "The list of encrypted keystore files to load the validator keys from",
-      split = ",",
-      hidden = true,
-      arity = "0..*")
-  private List<String> validatorKeystoreFiles = new ArrayList<>();
-
-  @CommandLine.Option(
-      names = {"--validators-key-password-files"},
-      paramLabel = "<FILENAMES>",
-      description = "The list of password files to decrypt the validator keystore files",
-      split = ",",
-      hidden = true,
-      arity = "0..*")
-  private List<String> validatorKeystorePasswordFiles = new ArrayList<>();
-
-  @CommandLine.Option(
       names = {"--validators-external-signer-public-keys"},
       paramLabel = "<STRINGS>",
-      description = "The list of external signer public keys",
+      description = "The list of external signer public keys, or a URL to load the keys from",
       split = ",",
       arity = "0..*")
   private List<String> validatorExternalSignerPublicKeys = new ArrayList<>();
@@ -126,7 +104,7 @@ public class ValidatorKeysOptions {
         config ->
             config
                 .validatorKeys(validatorKeys)
-                .validatorExternalSignerPublicKeys(parseExternalSignerPublicKeys())
+                .validatorExternalSignerPublicKeySources(validatorExternalSignerPublicKeys)
                 .validatorExternalSignerUrl(parseValidatorExternalSignerUrl())
                 .validatorExternalSignerConcurrentRequestLimit(
                     validatorExternalSignerConcurrentRequestLimit)
@@ -136,23 +114,7 @@ public class ValidatorKeysOptions {
                     convertToPath(validatorExternalSignerKeystorePasswordFile))
                 .validatorExternalSignerTruststore(convertToPath(validatorExternalSignerTruststore))
                 .validatorExternalSignerTruststorePasswordFile(
-                    convertToPath(validatorExternalSignerTruststorePasswordFile))
-                .validatorKeystoreFiles(validatorKeystoreFiles)
-                .validatorKeystorePasswordFiles(validatorKeystorePasswordFiles));
-  }
-
-  private List<BLSPublicKey> parseExternalSignerPublicKeys() {
-    if (validatorExternalSignerPublicKeys == null) {
-      return Collections.emptyList();
-    }
-    try {
-      return validatorExternalSignerPublicKeys.stream()
-          .map(key -> BLSPublicKey.fromSSZBytes(Bytes.fromHexString(key)))
-          .collect(Collectors.toList());
-    } catch (IllegalArgumentException e) {
-      throw new InvalidConfigurationException(
-          "Invalid configuration. Signer public key is invalid", e);
-    }
+                    convertToPath(validatorExternalSignerTruststorePasswordFile)));
   }
 
   private URL parseValidatorExternalSignerUrl() {

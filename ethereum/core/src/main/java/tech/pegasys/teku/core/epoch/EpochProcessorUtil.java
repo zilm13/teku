@@ -13,31 +13,6 @@
 
 package tech.pegasys.teku.core.epoch;
 
-import org.apache.commons.lang3.tuple.Pair;
-import tech.pegasys.teku.core.Deltas;
-import tech.pegasys.teku.core.Deltas.Delta;
-import tech.pegasys.teku.core.epoch.status.ValidatorStatus;
-import tech.pegasys.teku.core.epoch.status.ValidatorStatuses;
-import tech.pegasys.teku.core.exceptions.EpochProcessingException;
-import tech.pegasys.teku.datastructures.state.Checkpoint;
-import tech.pegasys.teku.datastructures.state.HistoricalBatch;
-import tech.pegasys.teku.datastructures.state.MutableBeaconState;
-import tech.pegasys.teku.datastructures.state.PendingAttestation;
-import tech.pegasys.teku.datastructures.state.Validator;
-import tech.pegasys.teku.datastructures.state.Withdrawal;
-import tech.pegasys.teku.independent.TotalBalances;
-import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
-import tech.pegasys.teku.ssz.SSZTypes.SSZList;
-import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
-import tech.pegasys.teku.util.config.Constants;
-
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
 import static org.apache.tuweni.crypto.Hash.keccak256;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.all;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_activation_exit_epoch;
@@ -66,6 +41,31 @@ import static tech.pegasys.teku.util.config.Constants.SLOTS_PER_HISTORICAL_ROOT;
 import static tech.pegasys.teku.util.config.Constants.WITHDRAWAL_ETH1;
 import static tech.pegasys.teku.util.config.Constants.WITHDRAWAL_ETH1_PREFIX;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import org.apache.commons.lang3.tuple.Pair;
+import tech.pegasys.teku.core.Deltas;
+import tech.pegasys.teku.core.Deltas.Delta;
+import tech.pegasys.teku.core.epoch.status.ValidatorStatus;
+import tech.pegasys.teku.core.epoch.status.ValidatorStatuses;
+import tech.pegasys.teku.core.exceptions.EpochProcessingException;
+import tech.pegasys.teku.datastructures.state.Checkpoint;
+import tech.pegasys.teku.datastructures.state.HistoricalBatch;
+import tech.pegasys.teku.datastructures.state.MutableBeaconState;
+import tech.pegasys.teku.datastructures.state.PendingAttestation;
+import tech.pegasys.teku.datastructures.state.Validator;
+import tech.pegasys.teku.datastructures.state.Withdrawal;
+import tech.pegasys.teku.independent.TotalBalances;
+import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.ssz.SSZTypes.SSZList;
+import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
+import tech.pegasys.teku.ssz.backing.collections.SszBitvector;
+import tech.pegasys.teku.util.config.Constants;
+
+@Deprecated
 public final class EpochProcessorUtil {
 
   // State Transition Helper Functions
@@ -77,6 +77,7 @@ public final class EpochProcessorUtil {
    * @param totalBalances
    * @throws EpochProcessingException
    */
+  @Deprecated
   public static void process_justification_and_finalization(
       MutableBeaconState state, TotalBalances totalBalances) throws EpochProcessingException {
     try {
@@ -90,7 +91,7 @@ public final class EpochProcessorUtil {
 
       // Process justifications
       state.setPrevious_justified_checkpoint(state.getCurrent_justified_checkpoint());
-      Bitvector justificationBits = state.getJustification_bits().rightShift(1);
+      SszBitvector justificationBits = state.getJustification_bits().rightShift(1);
 
       if (totalBalances
           .getPreviousEpochTargetAttesters()
@@ -100,7 +101,7 @@ public final class EpochProcessorUtil {
         Checkpoint newCheckpoint =
             new Checkpoint(previous_epoch, get_block_root(state, previous_epoch));
         state.setCurrent_justified_checkpoint(newCheckpoint);
-        justificationBits.setBit(1);
+        justificationBits = justificationBits.withBit(1);
       }
 
       if (totalBalances
@@ -110,7 +111,7 @@ public final class EpochProcessorUtil {
         Checkpoint newCheckpoint =
             new Checkpoint(current_epoch, get_block_root(state, current_epoch));
         state.setCurrent_justified_checkpoint(newCheckpoint);
-        justificationBits.setBit(0);
+        justificationBits = justificationBits.withBit(0);
       }
 
       state.setJustification_bits(justificationBits);
@@ -144,6 +145,7 @@ public final class EpochProcessorUtil {
   }
 
   /** Processes rewards and penalties */
+  @Deprecated
   public static void process_rewards_and_penalties(
       MutableBeaconState state, ValidatorStatuses validatorStatuses)
       throws EpochProcessingException {
@@ -153,7 +155,7 @@ public final class EpochProcessorUtil {
       }
 
       Deltas attestation_deltas =
-          new RewardsAndPenaltiesCalculator(state, validatorStatuses).getAttestationDeltas();
+          new RewardsAndPenaltiesCalculatorImpl(state, validatorStatuses).getAttestationDeltas();
 
       applyDeltas(state, attestation_deltas);
     } catch (IllegalArgumentException e) {
@@ -177,6 +179,7 @@ public final class EpochProcessorUtil {
    * @see
    *     <a>https://github.com/ethereum/eth2.0-specs/blob/v0.8.0/specs/core/0_beacon-chain.md#registry-updates</a>
    */
+  @Deprecated
   public static void process_registry_updates(
       MutableBeaconState state, List<ValidatorStatus> statuses) throws EpochProcessingException {
     try {
@@ -260,6 +263,7 @@ public final class EpochProcessorUtil {
    * @see
    *     <a>https://github.com/ethereum/eth2.0-specs/blob/v0.8.0/specs/core/0_beacon-chain.md#slashings</a>
    */
+  @Deprecated
   public static void process_slashings(MutableBeaconState state, final UInt64 total_balance) {
     UInt64 epoch = get_current_epoch(state);
     UInt64 adjusted_total_slashing_balance =
@@ -294,6 +298,7 @@ public final class EpochProcessorUtil {
    * @see
    *     <a>https://github.com/ethereum/eth2.0-specs/blob/v0.8.0/specs/core/0_beacon-chain.md#final-updates</a>
    */
+  @Deprecated
   public static void process_final_updates(MutableBeaconState state) {
     UInt64 current_epoch = get_current_epoch(state);
     UInt64 next_epoch = current_epoch.plus(UInt64.ONE);
@@ -339,7 +344,7 @@ public final class EpochProcessorUtil {
     if (next_epoch.mod(SLOTS_PER_HISTORICAL_ROOT / SLOTS_PER_EPOCH).equals(UInt64.ZERO)) {
       HistoricalBatch historical_batch =
           new HistoricalBatch(state.getBlock_roots(), state.getState_roots());
-      state.getHistorical_roots().add(historical_batch.hash_tree_root());
+      state.getHistorical_roots().add(historical_batch.hashTreeRoot());
     }
 
     // Rotate current/previous epoch attestations
@@ -351,34 +356,44 @@ public final class EpochProcessorUtil {
   }
 
   /**
-   * - TODO: Move all withdrawal_epoch validators with non 00-withdrawal target to withdrawal tree, not list
-   * - When smth. like SetWithdrawalCredentials message introduced, if validator is already exited,
-   *    it should be moved to Withdrawals tree too
-   * - TODO: Withdrawals tree purge
+   * - TODO: Move all withdrawal_epoch validators with non 00-withdrawal target to withdrawal tree,
+   * not list - When smth. like SetWithdrawalCredentials message introduced, if validator is already
+   * exited, it should be moved to Withdrawals tree too - TODO: Withdrawals tree purge
    */
   public static void process_withdrawals(MutableBeaconState state) {
     UInt64 current_epoch = get_current_epoch(state);
-    List<Pair<Integer, Validator>> withdrawal_validators = IntStream.range(0, state.getValidators().size())
+    List<Pair<Integer, Validator>> withdrawal_validators =
+        IntStream.range(0, state.getValidators().size())
             .mapToObj(i -> Pair.of(i, state.getValidators().get(i)))
-            .filter(validatorPair -> validatorPair.getRight().getWithdrawable_epoch().isLessThanOrEqualTo(current_epoch))
+            .filter(
+                validatorPair ->
+                    validatorPair
+                        .getRight()
+                        .getWithdrawable_epoch()
+                        .isLessThanOrEqualTo(current_epoch))
             .collect(Collectors.toList());
     Map<Byte, List<Pair<Integer, Validator>>> validators_by_target =
-            withdrawal_validators.stream().collect(Collectors.groupingBy(validatorPair -> validatorPair.getRight().getWithdrawal_credentials().get(0),
-                    LinkedHashMap::new, Collectors.toList()));
+        withdrawal_validators.stream()
+            .collect(
+                Collectors.groupingBy(
+                    validatorPair -> validatorPair.getRight().getWithdrawal_credentials().get(0),
+                    LinkedHashMap::new,
+                    Collectors.toList()));
 
     // Only Eth1 withdrawals are currently supported
-    List<Pair<Integer, Validator>> eth1_withdrawal_validators = validators_by_target.get(WITHDRAWAL_ETH1_PREFIX);
+    List<Pair<Integer, Validator>> eth1_withdrawal_validators =
+        validators_by_target.get(WITHDRAWAL_ETH1_PREFIX);
     for (Pair<Integer, Validator> validatorPair : eth1_withdrawal_validators) {
       state.getValidators().set(validatorPair.getLeft(), Validator.NULL);
-      state.getWithdrawals().add(
-              Withdrawal.create(
-                      keccak256(validatorPair.getRight().getPubkey()),
-                      WITHDRAWAL_ETH1,
-                      validatorPair.getRight().getWithdrawal_credentials(),
-                      validatorPair.getRight().getEffective_balance(),
-                      current_epoch
-              )
-      );
+      state
+          .getWithdrawals()
+          .add(
+              new Withdrawal(
+                  keccak256(validatorPair.getRight().getPubkey()),
+                  WITHDRAWAL_ETH1,
+                  validatorPair.getRight().getWithdrawal_credentials(),
+                  validatorPair.getRight().getEffective_balance(),
+                  current_epoch));
     }
   }
 }

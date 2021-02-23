@@ -103,7 +103,7 @@ public class Eth1Transaction {
     this.nonce = eth1Transaction.getNonce();
     this.gas_price = eth1Transaction.getGas_price();
     this.gas_limit = eth1Transaction.getGas_limit();
-    this.recipient = eth1Transaction.getRecipient();
+    this.recipient = new Bytes20(eth1Transaction.getRecipient());
     this.value = eth1Transaction.getValue();
     this.input = eth1Transaction.getInput();
     this.v = eth1Transaction.getV();
@@ -113,7 +113,7 @@ public class Eth1Transaction {
 
   public tech.pegasys.teku.datastructures.blocks.exec.Eth1Transaction asInternalEth1Transaction() {
     return new tech.pegasys.teku.datastructures.blocks.exec.Eth1Transaction(
-        nonce, gas_price, gas_limit, recipient, value, input, v, r, s);
+        nonce, gas_price, gas_limit, recipient.getWrappedBytes(), value, input, v, r, s);
   }
 
   @Override

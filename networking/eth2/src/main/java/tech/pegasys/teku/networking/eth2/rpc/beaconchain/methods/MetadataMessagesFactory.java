@@ -18,20 +18,20 @@ import tech.pegasys.teku.datastructures.networking.libp2p.rpc.MetadataMessage;
 import tech.pegasys.teku.datastructures.networking.libp2p.rpc.PingMessage;
 import tech.pegasys.teku.infrastructure.subscribers.ValueObserver;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
+import tech.pegasys.teku.ssz.backing.schema.collections.SszBitvectorSchema;
 import tech.pegasys.teku.util.config.Constants;
 
 public class MetadataMessagesFactory implements ValueObserver<Iterable<Integer>> {
 
   private final AtomicLong seqNumberGenerator = new AtomicLong();
-  private volatile MetadataMessage currentMessage = MetadataMessage.createDefault();
+  private volatile MetadataMessage currentMessage = MetadataMessage.DEFAULT;
 
   @Override
   public void onValueChanged(Iterable<Integer> subnetIds) {
     currentMessage =
         new MetadataMessage(
             UInt64.valueOf(seqNumberGenerator.incrementAndGet()),
-            new Bitvector(subnetIds, Constants.ATTESTATION_SUBNET_COUNT));
+            SszBitvectorSchema.create(Constants.ATTESTATION_SUBNET_COUNT).ofBits(subnetIds));
   }
 
   public MetadataMessage createMetadataMessage() {

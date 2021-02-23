@@ -30,8 +30,7 @@ import tech.pegasys.teku.datastructures.operations.AttesterSlashing;
 import tech.pegasys.teku.datastructures.operations.Deposit;
 import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
 import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
-import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
 
@@ -227,8 +226,7 @@ class BeaconBlockBodyTest {
   void roundTripsViaSsz() {
     BeaconBlockBody beaconBlockBody = dataStructureUtil.randomBeaconBlockBody();
     BeaconBlockBody newBeaconBlockBody =
-        SimpleOffsetSerializer.deserialize(
-            SimpleOffsetSerializer.serialize(beaconBlockBody), BeaconBlockBody.class);
+        BeaconBlockBody.SSZ_SCHEMA.get().sszDeserialize(beaconBlockBody.sszSerialize());
     assertEquals(beaconBlockBody, newBeaconBlockBody);
   }
 }

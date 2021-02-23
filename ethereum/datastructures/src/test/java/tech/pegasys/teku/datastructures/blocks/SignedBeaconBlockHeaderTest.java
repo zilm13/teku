@@ -19,9 +19,8 @@ import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.bls.BLSSignature;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
-import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 
 class SignedBeaconBlockHeaderTest {
   private final DataStructureUtil dataStructureUtil = new DataStructureUtil();
@@ -40,9 +39,8 @@ class SignedBeaconBlockHeaderTest {
 
   @Test
   public void shouldRoundTripViaSsz() {
-    final Bytes ssz = SimpleOffsetSerializer.serialize(signedBlockHeader);
-    final SignedBeaconBlockHeader result =
-        SimpleOffsetSerializer.deserialize(ssz, SignedBeaconBlockHeader.class);
+    final Bytes ssz = signedBlockHeader.sszSerialize();
+    final SignedBeaconBlockHeader result = SignedBeaconBlockHeader.SSZ_SCHEMA.sszDeserialize(ssz);
 
     assertThat(result).isEqualTo(signedBlockHeader);
   }

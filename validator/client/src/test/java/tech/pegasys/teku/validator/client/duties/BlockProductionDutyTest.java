@@ -34,10 +34,10 @@ import tech.pegasys.teku.core.signatures.Signer;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.datastructures.state.ForkInfo;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.logging.ValidatorLogger;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.validator.api.FileBackedGraffitiProvider;
 import tech.pegasys.teku.validator.api.SendSignedBlockResult;
 import tech.pegasys.teku.validator.api.ValidatorApiChannel;
@@ -91,7 +91,7 @@ class BlockProductionDutyTest {
 
     verify(validatorApiChannel).sendSignedBlock(signedBlock);
     verify(validatorLogger)
-        .dutyCompleted(duty.getProducedType(), SLOT, 1, Set.of(unsignedBlock.hash_tree_root()));
+        .dutyCompleted(duty.getProducedType(), SLOT, 1, Set.of(unsignedBlock.hashTreeRoot()));
     verifyNoMoreInteractions(validatorLogger);
   }
 

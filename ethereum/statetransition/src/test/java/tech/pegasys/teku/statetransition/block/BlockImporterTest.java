@@ -35,7 +35,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.bls.BLSKeyGenerator;
 import tech.pegasys.teku.bls.BLSKeyPair;
-import tech.pegasys.teku.bls.BLSSignature;
+import tech.pegasys.teku.bls.BLSTestUtil;
 import tech.pegasys.teku.core.AttestationGenerator;
 import tech.pegasys.teku.core.ForkChoiceAttestationValidator;
 import tech.pegasys.teku.core.ForkChoiceBlockTasks;
@@ -52,10 +52,12 @@ import tech.pegasys.teku.datastructures.state.Checkpoint;
 import tech.pegasys.teku.datastructures.state.CheckpointState;
 import tech.pegasys.teku.datastructures.util.BeaconStateUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
+import tech.pegasys.teku.infrastructure.async.eventthread.InlineEventThread;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.networks.SpecProviderFactory;
+import tech.pegasys.teku.spec.SpecProvider;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
 import tech.pegasys.teku.statetransition.forkchoice.ForkChoice;
-import tech.pegasys.teku.statetransition.forkchoice.SyncForkChoiceExecutor;
 import tech.pegasys.teku.storage.client.MemoryOnlyRecentChainData;
 import tech.pegasys.teku.storage.client.RecentChainData;
 import tech.pegasys.teku.storage.storageSystem.InMemoryStorageSystemBuilder;
@@ -75,7 +77,7 @@ public class BlockImporterTest {
       new ForkChoice(
           new ForkChoiceAttestationValidator(),
           new ForkChoiceBlockTasks(),
-          new SyncForkChoiceExecutor(),
+          new InlineEventThread(),
           recentChainData,
           new StateTransition());
   private final BeaconChainUtil localChain =
@@ -185,9 +187,11 @@ public class BlockImporterTest {
         AttestationGenerator.groupAndAggregateAttestations(attestations);
 
     // make one attestation signature invalid
-    aggregatedAttestations
-        .get(aggregatedAttestations.size() / 2)
-        .setAggregate_signature(BLSSignature.random(1));
+    int invalidAttIdx = aggregatedAttestations.size() / 2;
+    Attestation att = aggregatedAttestations.get(invalidAttIdx);
+    Attestation invalidAtt =
+        new Attestation(att.getAggregation_bits(), att.getData(), BLSTestUtil.randomSignature(1));
+    aggregatedAttestations.set(invalidAttIdx, invalidAtt);
 
     UInt64 currentSlotFinal = currentSlot.plus(UInt64.ONE);
 
@@ -263,7 +267,7 @@ public class BlockImporterTest {
         new BeaconBlock(
             block.getSlot(),
             block.getMessage().getProposerIndex(),
-            block.getMessage().hash_tree_root(),
+            block.getMessage().hashTreeRoot(),
             block.getMessage().getStateRoot(),
             block.getMessage().getBody());
     final Signer signer = localChain.getSigner(block.getMessage().getProposerIndex().intValue());
@@ -335,8 +339,7 @@ public class BlockImporterTest {
   public void importBlock_invalidStateTransition() throws Exception {
     final SignedBeaconBlock block = otherChain.createBlockAtSlot(UInt64.ONE);
     SignedBeaconBlock newBlock =
-        new SignedBeaconBlock(
-            new BeaconBlock(block.getMessage(), Bytes32.ZERO), block.getSignature());
+        new SignedBeaconBlock(block.getMessage().withStateRoot(Bytes32.ZERO), block.getSignature());
     localChain.setSlot(block.getSlot());
 
     final BlockImportResult result = blockImporter.importBlock(newBlock).get();
@@ -350,9 +353,13 @@ public class BlockImporterTest {
     final SignedBeaconBlock wsBlock = localChain.createBlockAtSlot(wsEpochSlot);
     final SignedBeaconBlock otherBlock = otherChain.createBlockAtSlot(wsEpochSlot.plus(1));
 
+    final SpecProvider specProvider = SpecProviderFactory.createMinimal();
     final Checkpoint wsCheckpoint = new Checkpoint(wsEpoch, wsBlock.getRoot());
     final WeakSubjectivityConfig wsConfig =
-        WeakSubjectivityConfig.builder().weakSubjectivityCheckpoint(wsCheckpoint).build();
+        WeakSubjectivityConfig.builder()
+            .specProvider(specProvider)
+            .weakSubjectivityCheckpoint(wsCheckpoint)
+            .build();
     final WeakSubjectivityValidator weakSubjectivityValidator =
         WeakSubjectivityValidator.lenient(wsConfig);
     final BlockImporter blockImporter =
@@ -370,9 +377,13 @@ public class BlockImporterTest {
     final SignedBeaconBlock nextBlock = localChain.createAndImportBlockAtSlot(wsEpochSlot.plus(1));
     localChain.setSlot(wsEpochSlot.plus(1));
 
+    final SpecProvider specProvider = SpecProviderFactory.createMinimal();
     final Checkpoint wsCheckpoint = new Checkpoint(wsEpoch, wsBlock.getRoot());
     final WeakSubjectivityConfig wsConfig =
-        WeakSubjectivityConfig.builder().weakSubjectivityCheckpoint(wsCheckpoint).build();
+        WeakSubjectivityConfig.builder()
+            .specProvider(specProvider)
+            .weakSubjectivityCheckpoint(wsCheckpoint)
+            .build();
     final WeakSubjectivityValidator weakSubjectivityValidator =
         WeakSubjectivityValidator.lenient(wsConfig);
     final BlockImporter blockImporter =
@@ -394,7 +405,7 @@ public class BlockImporterTest {
         new ForkChoice(
             new ForkChoiceAttestationValidator(),
             new ForkChoiceBlockTasks(),
-            new SyncForkChoiceExecutor(),
+            new InlineEventThread(),
             storageSystem.recentChainData(),
             new StateTransition());
     final BlockImporter blockImporter =
@@ -432,7 +443,7 @@ public class BlockImporterTest {
         new ForkChoice(
             new ForkChoiceAttestationValidator(),
             new ForkChoiceBlockTasks(),
-            new SyncForkChoiceExecutor(),
+            new InlineEventThread(),
             storageSystem.recentChainData(),
             new StateTransition());
     final BlockImporter blockImporter =
@@ -478,7 +489,7 @@ public class BlockImporterTest {
         new ForkChoice(
             new ForkChoiceAttestationValidator(),
             new ForkChoiceBlockTasks(),
-            new SyncForkChoiceExecutor(),
+            new InlineEventThread(),
             storageSystem.recentChainData(),
             new StateTransition());
     final BlockImporter blockImporter =
@@ -519,7 +530,7 @@ public class BlockImporterTest {
         new ForkChoice(
             new ForkChoiceAttestationValidator(),
             new ForkChoiceBlockTasks(),
-            new SyncForkChoiceExecutor(),
+            new InlineEventThread(),
             storageSystem.recentChainData(),
             new StateTransition());
     final BlockImporter blockImporter =
@@ -548,7 +559,7 @@ public class BlockImporterTest {
         new ForkChoice(
             new ForkChoiceAttestationValidator(),
             new ForkChoiceBlockTasks(),
-            new SyncForkChoiceExecutor(),
+            new InlineEventThread(),
             storageSystem.recentChainData(),
             new StateTransition());
     final BlockImporter blockImporter =

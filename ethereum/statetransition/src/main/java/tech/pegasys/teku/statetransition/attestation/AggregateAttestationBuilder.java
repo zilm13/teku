@@ -23,7 +23,7 @@ import tech.pegasys.teku.bls.BLS;
 import tech.pegasys.teku.datastructures.attestation.ValidateableAttestation;
 import tech.pegasys.teku.datastructures.operations.Attestation;
 import tech.pegasys.teku.datastructures.operations.AttestationData;
-import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
+import tech.pegasys.teku.ssz.backing.collections.SszBitlist;
 
 /**
  * Builds an aggregate attestation, providing functions to test if an attestation can be added or is
@@ -32,7 +32,7 @@ import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
 class AggregateAttestationBuilder {
   private final Set<ValidateableAttestation> includedAttestations = new HashSet<>();
   private final AttestationData attestationData;
-  private Bitlist currentAggregateBits;
+  private SszBitlist currentAggregateBits;
 
   AggregateAttestationBuilder(final AttestationData attestationData) {
     this.attestationData = attestationData;
@@ -51,9 +51,10 @@ class AggregateAttestationBuilder {
   public void aggregate(final ValidateableAttestation attestation) {
     includedAttestations.add(attestation);
     if (currentAggregateBits == null) {
-      currentAggregateBits = attestation.getAttestation().getAggregation_bits().copy();
+      currentAggregateBits = attestation.getAttestation().getAggregation_bits();
     } else {
-      currentAggregateBits.setAllBits(attestation.getAttestation().getAggregation_bits());
+      currentAggregateBits =
+          currentAggregateBits.or(attestation.getAttestation().getAggregation_bits());
     }
   }
 

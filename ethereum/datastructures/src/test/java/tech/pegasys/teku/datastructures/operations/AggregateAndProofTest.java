@@ -16,8 +16,7 @@ package tech.pegasys.teku.datastructures.operations;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
-import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 
 class AggregateAndProofTest {
 
@@ -28,7 +27,6 @@ class AggregateAndProofTest {
     AggregateAndProof aggregateAndProof = dataStructureUtil.randomAggregateAndProof();
     assertEquals(
         aggregateAndProof,
-        SimpleOffsetSerializer.deserialize(
-            SimpleOffsetSerializer.serialize(aggregateAndProof), AggregateAndProof.class));
+        AggregateAndProof.SSZ_SCHEMA.sszDeserialize(aggregateAndProof.sszSerialize()));
   }
 }

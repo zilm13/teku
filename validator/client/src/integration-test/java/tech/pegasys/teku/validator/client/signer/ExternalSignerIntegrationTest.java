@@ -50,25 +50,26 @@ import org.mockserver.model.MediaType;
 import tech.pegasys.teku.api.schema.Fork;
 import tech.pegasys.teku.bls.BLSKeyPair;
 import tech.pegasys.teku.bls.BLSSignature;
+import tech.pegasys.teku.bls.BLSTestUtil;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.datastructures.operations.AggregateAndProof;
 import tech.pegasys.teku.datastructures.operations.AttestationData;
 import tech.pegasys.teku.datastructures.operations.VoluntaryExit;
 import tech.pegasys.teku.datastructures.state.ForkInfo;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.ThrottlingTaskQueue;
 import tech.pegasys.teku.infrastructure.metrics.StubMetricsSystem;
 import tech.pegasys.teku.infrastructure.metrics.TekuMetricCategory;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.provider.JsonProvider;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.validator.api.ValidatorConfig;
 import tech.pegasys.teku.validator.client.loader.HttpClientExternalSignerFactory;
 
 @ExtendWith(MockServerExtension.class)
 public class ExternalSignerIntegrationTest {
   private static final Duration TIMEOUT = Duration.ofMillis(500);
-  private static final BLSKeyPair KEYPAIR = BLSKeyPair.random(1234);
+  private static final BLSKeyPair KEYPAIR = BLSTestUtil.randomKeyPair(1234);
   private final DataStructureUtil dataStructureUtil = new DataStructureUtil();
   private final ForkInfo fork = dataStructureUtil.randomForkInfo();
   private final JsonProvider jsonProvider = new JsonProvider();
@@ -84,7 +85,7 @@ public class ExternalSignerIntegrationTest {
     this.client = client;
     final ValidatorConfig config =
         ValidatorConfig.builder()
-            .validatorExternalSignerPublicKeys(List.of(KEYPAIR.getPublicKey()))
+            .validatorExternalSignerPublicKeySources(List.of(KEYPAIR.getPublicKey().toString()))
             .validatorExternalSignerUrl(new URL("http://127.0.0.1:" + client.getLocalPort()))
             .validatorExternalSignerTimeout(TIMEOUT)
             .build();
@@ -95,7 +96,7 @@ public class ExternalSignerIntegrationTest {
         new ExternalSigner(
             httpClientExternalSignerFactory.get(),
             config.getValidatorExternalSignerUrl(),
-            config.getValidatorExternalSignerPublicKeys().get(0),
+            KEYPAIR.getPublicKey(),
             TIMEOUT,
             queue);
   }

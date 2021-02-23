@@ -34,6 +34,7 @@ import tech.pegasys.teku.statetransition.util.PendingPool;
 import tech.pegasys.teku.statetransition.validation.AggregateAttestationValidator;
 import tech.pegasys.teku.statetransition.validation.AttestationValidator;
 import tech.pegasys.teku.statetransition.validation.InternalValidationResult;
+import tech.pegasys.teku.statetransition.validation.ValidationResultCode;
 import tech.pegasys.teku.util.time.channels.SlotEventsChannel;
 
 public class AttestationManager extends Service implements SlotEventsChannel {
@@ -50,6 +51,8 @@ public class AttestationManager extends Service implements SlotEventsChannel {
   private final AggregatingAttestationPool aggregatingAttestationPool;
 
   private final Subscribers<ProcessedAttestationListener> attestationsToSendSubscribers =
+      Subscribers.create(true);
+  private final Subscribers<ProcessedAttestationListener> allValidAttestationsSubscribers =
       Subscribers.create(true);
 
   private final AttestationValidator attestationValidator;
@@ -90,9 +93,21 @@ public class AttestationManager extends Service implements SlotEventsChannel {
         aggregateValidator);
   }
 
+  public void subscribeToAllValidAttestations(ProcessedAttestationListener listener) {
+    allValidAttestationsSubscribers.subscribe(listener);
+  }
+
+  private void notifyAllValidAttestationsSubscribers(ValidateableAttestation attestation) {
+    allValidAttestationsSubscribers.forEach(s -> s.accept(attestation));
+  }
+
   public void subscribeToAttestationsToSend(
       ProcessedAttestationListener attestationsToSendListener) {
     attestationsToSendSubscribers.subscribe(attestationsToSendListener);
+  }
+
+  private void notifyAttestationsToSendSubscribers(ValidateableAttestation attestation) {
+    attestationsToSendSubscribers.forEach(s -> s.accept(attestation));
   }
 
   public SafeFuture<InternalValidationResult> addAttestation(ValidateableAttestation attestation) {
@@ -114,14 +129,15 @@ public class AttestationManager extends Service implements SlotEventsChannel {
       SafeFuture<InternalValidationResult> validationResult, ValidateableAttestation attestation) {
     validationResult.thenAccept(
         internalValidationResult -> {
-          if (internalValidationResult.equals(InternalValidationResult.ACCEPT)
-              || internalValidationResult.equals(InternalValidationResult.SAVE_FOR_FUTURE)) {
+          if (internalValidationResult.code().equals(ValidationResultCode.ACCEPT)
+              || internalValidationResult.code().equals(ValidationResultCode.SAVE_FOR_FUTURE)) {
             onAttestation(attestation)
                 .finish(
                     result ->
                         result.ifInvalid(
                             reason -> LOG.debug("Rejected received attestation: " + reason)),
                     err -> LOG.error("Failed to process received attestation.", err));
+            notifyAllValidAttestationsSubscribers(attestation);
           }
         });
   }
@@ -137,18 +153,18 @@ public class AttestationManager extends Service implements SlotEventsChannel {
     attestations.stream()
         .filter(ValidateableAttestation::isProducedLocally)
         .filter(a -> !a.isGossiped())
-        .forEach(this::notifyAttestationsToSendSubscribers);
-  }
-
-  private void notifyAttestationsToSendSubscribers(ValidateableAttestation attestation) {
-    attestationsToSendSubscribers.forEach(s -> s.accept(attestation));
+        .forEach(
+            a -> {
+              notifyAttestationsToSendSubscribers(a);
+              notifyAllValidAttestationsSubscribers(a);
+            });
   }
 
   @Subscribe
   @SuppressWarnings("unused")
   private void onBlockImported(final ImportedBlockEvent blockImportedEvent) {
     final SignedBeaconBlock block = blockImportedEvent.getBlock();
-    final Bytes32 blockRoot = block.getMessage().hash_tree_root();
+    final Bytes32 blockRoot = block.getMessage().hashTreeRoot();
     pendingAttestations
         .getItemsDependingOn(blockRoot, false)
         .forEach(
@@ -221,6 +237,7 @@ public class AttestationManager extends Service implements SlotEventsChannel {
     }
 
     notifyAttestationsToSendSubscribers(attestation);
+    notifyAllValidAttestationsSubscribers(attestation);
     attestation.markGossiped();
   }
 

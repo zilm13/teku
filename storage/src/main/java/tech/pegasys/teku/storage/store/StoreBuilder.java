@@ -15,15 +15,14 @@ package tech.pegasys.teku.storage.store;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
-import static tech.pegasys.teku.util.config.Constants.SECONDS_PER_SLOT;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import org.apache.tuweni.bytes.Bytes32;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
-import tech.pegasys.teku.core.lookup.BlockProvider;
-import tech.pegasys.teku.core.lookup.StateAndBlockSummaryProvider;
+import tech.pegasys.teku.dataproviders.lookup.BlockProvider;
+import tech.pegasys.teku.dataproviders.lookup.StateAndBlockSummaryProvider;
 import tech.pegasys.teku.datastructures.blocks.CheckpointEpochs;
 import tech.pegasys.teku.datastructures.forkchoice.VoteTracker;
 import tech.pegasys.teku.datastructures.state.AnchorPoint;
@@ -32,6 +31,7 @@ import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.protoarray.ProtoArrayStorageChannel;
 import tech.pegasys.teku.protoarray.StoredBlockMetadata;
+import tech.pegasys.teku.spec.SpecProvider;
 
 public class StoreBuilder {
   private AsyncRunner asyncRunner;
@@ -61,10 +61,13 @@ public class StoreBuilder {
       final MetricsSystem metricsSystem,
       final BlockProvider blockProvider,
       final StateAndBlockSummaryProvider stateAndBlockProvider,
-      final AnchorPoint anchor) {
+      final AnchorPoint anchor,
+      final UInt64 currentTime,
+      final SpecProvider specProvider) {
     final UInt64 genesisTime = anchor.getState().getGenesis_time();
     final UInt64 slot = anchor.getState().getSlot();
-    final UInt64 time = genesisTime.plus(slot.times(SECONDS_PER_SLOT));
+    final UInt64 time =
+        genesisTime.plus(slot.times(specProvider.getSecondsPerSlot(slot))).max(currentTime);
 
     Map<Bytes32, StoredBlockMetadata> blockInfo = new HashMap<>();
     blockInfo.put(

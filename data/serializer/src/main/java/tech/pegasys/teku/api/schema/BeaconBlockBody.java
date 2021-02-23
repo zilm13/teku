@@ -96,8 +96,8 @@ public class BeaconBlockBody {
         randao_reveal.asInternalBLSSignature(),
         new tech.pegasys.teku.datastructures.blocks.Eth1Data(
             eth1_data.deposit_root, eth1_data.deposit_count, eth1_data.block_hash),
-        graffiti,
         executable_data.asInternalExecutableData(),
+        graffiti,
         SSZList.createMutable(
             proposer_slashings.stream().map(ProposerSlashing::asInternalProposerSlashing),
             MAX_PROPOSER_SLASHINGS,

@@ -24,7 +24,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static tech.pegasys.teku.util.config.Constants.ATTESTATION_SUBNET_COUNT;
 
-import com.google.common.primitives.Ints;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.Arrays;
@@ -50,7 +49,7 @@ import tech.pegasys.teku.networking.p2p.network.P2PNetwork;
 import tech.pegasys.teku.networking.p2p.network.PeerAddress;
 import tech.pegasys.teku.networking.p2p.peer.Peer;
 import tech.pegasys.teku.networking.p2p.peer.PeerConnectedSubscriber;
-import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
+import tech.pegasys.teku.ssz.backing.schema.collections.SszBitvectorSchema;
 
 class ConnectionManagerTest {
 
@@ -423,6 +422,6 @@ class ConnectionManagerTest {
         peerId,
         new InetSocketAddress(InetAddress.getLoopbackAddress(), peerId.trimLeadingZeros().toInt()),
         ENR_FORK_ID,
-        new Bitvector(Ints.asList(subnetIds), ATTESTATION_SUBNET_COUNT));
+        SszBitvectorSchema.create(ATTESTATION_SUBNET_COUNT).ofBits(subnetIds));
   }
 }

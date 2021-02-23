@@ -13,6 +13,11 @@
 
 package tech.pegasys.teku.statetransition.block;
 
+import static tech.pegasys.teku.util.config.Constants.MAX_ATTESTATIONS;
+import static tech.pegasys.teku.util.config.Constants.MAX_ATTESTER_SLASHINGS;
+import static tech.pegasys.teku.util.config.Constants.MAX_PROPOSER_SLASHINGS;
+import static tech.pegasys.teku.util.config.Constants.MAX_VOLUNTARY_EXITS;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.eventbus.EventBus;
 import java.util.Objects;
@@ -34,6 +39,7 @@ import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.logging.LogFormatter;
 import tech.pegasys.teku.infrastructure.subscribers.Subscribers;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.ssz.SSZTypes.SSZList;
 import tech.pegasys.teku.statetransition.events.block.ImportedBlockEvent;
 import tech.pegasys.teku.statetransition.forkchoice.ForkChoice;
 import tech.pegasys.teku.storage.client.RecentChainData;
@@ -72,7 +78,7 @@ public class BlockImporter {
 
   @CheckReturnValue
   public SafeFuture<BlockImportResult> importBlock(SignedBeaconBlock block) {
-    if (recentChainData.containsBlock(block.getMessage().hash_tree_root())) {
+    if (recentChainData.containsBlock(block.getMessage().hashTreeRoot())) {
       LOG.trace(
           "Importing known block {}.  Return successful result without re-processing.",
           () -> formatBlock(block));
@@ -165,16 +171,28 @@ public class BlockImporter {
   private void notifyBlockOperationSubscribers(SignedBeaconBlock block) {
     attestationSubscribers.deliver(
         VerifiedBlockOperationsListener::onOperationsFromBlock,
-        block.getMessage().getBody().getAttestations());
+        SSZList.createMutable(
+            block.getMessage().getBody().getAttestations().stream(),
+            MAX_ATTESTATIONS,
+            tech.pegasys.teku.datastructures.operations.Attestation.class));
     attesterSlashingSubscribers.deliver(
         VerifiedBlockOperationsListener::onOperationsFromBlock,
-        block.getMessage().getBody().getAttester_slashings());
+        SSZList.createMutable(
+            block.getMessage().getBody().getAttester_slashings().stream(),
+            MAX_ATTESTER_SLASHINGS,
+            tech.pegasys.teku.datastructures.operations.AttesterSlashing.class));
     proposerSlashingSubscribers.deliver(
         VerifiedBlockOperationsListener::onOperationsFromBlock,
-        block.getMessage().getBody().getProposer_slashings());
+        SSZList.createMutable(
+            block.getMessage().getBody().getProposer_slashings().stream(),
+            MAX_PROPOSER_SLASHINGS,
+            tech.pegasys.teku.datastructures.operations.ProposerSlashing.class));
     voluntaryExitSubscribers.deliver(
         VerifiedBlockOperationsListener::onOperationsFromBlock,
-        block.getMessage().getBody().getVoluntary_exits());
+        SSZList.createMutable(
+            block.getMessage().getBody().getVoluntary_exits().stream(),
+            MAX_VOLUNTARY_EXITS,
+            tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit.class));
   }
 
   public void subscribeToVerifiedBlockAttestations(

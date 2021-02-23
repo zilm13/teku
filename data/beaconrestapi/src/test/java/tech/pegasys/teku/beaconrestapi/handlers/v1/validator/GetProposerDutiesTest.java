@@ -17,7 +17,6 @@ import static javax.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_start_slot_at_epoch;
 
 import java.util.List;
 import java.util.Map;
@@ -29,14 +28,18 @@ import tech.pegasys.teku.api.response.v1.validator.GetProposerDutiesResponse;
 import tech.pegasys.teku.api.response.v1.validator.ProposerDuty;
 import tech.pegasys.teku.api.schema.BLSPubKey;
 import tech.pegasys.teku.beaconrestapi.schema.BadRequest;
-import tech.pegasys.teku.bls.BLSPublicKey;
+import tech.pegasys.teku.bls.BLSTestUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.util.BeaconStateUtil;
 
 public class GetProposerDutiesTest extends AbstractValidatorApiTest {
+  private BeaconStateUtil beaconStateUtil;
+
   @BeforeEach
   public void setup() {
     handler = new GetProposerDuties(syncDataProvider, validatorDataProvider, jsonProvider);
+    beaconStateUtil = specProvider.atSlot(UInt64.ZERO).getBeaconStateUtil();
   }
 
   @Test
@@ -48,7 +51,8 @@ public class GetProposerDutiesTest extends AbstractValidatorApiTest {
     GetProposerDutiesResponse duties =
         new GetProposerDutiesResponse(
             Bytes32.fromHexString("0x1234"),
-            List.of(getProposerDuty(2, compute_start_slot_at_epoch(UInt64.valueOf(100)))));
+            List.of(
+                getProposerDuty(2, beaconStateUtil.computeStartSlotAtEpoch(UInt64.valueOf(100)))));
     when(validatorDataProvider.getProposerDuties(eq(UInt64.valueOf(100))))
         .thenReturn(SafeFuture.completedFuture(Optional.of(duties)));
 
@@ -72,6 +76,6 @@ public class GetProposerDutiesTest extends AbstractValidatorApiTest {
   }
 
   private ProposerDuty getProposerDuty(final int validatorIndex, final UInt64 slot) {
-    return new ProposerDuty(new BLSPubKey(BLSPublicKey.random(1)), validatorIndex, slot);
+    return new ProposerDuty(new BLSPubKey(BLSTestUtil.randomPublicKey(1)), validatorIndex, slot);
   }
 }

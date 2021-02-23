@@ -19,33 +19,37 @@ import com.google.common.io.Resources;
 import java.net.URL;
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.Test;
-import tech.pegasys.teku.core.BlockProcessorUtil;
 import tech.pegasys.teku.core.exceptions.BlockProcessingException;
 import tech.pegasys.teku.datastructures.operations.AttesterSlashing;
 import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.datastructures.state.BeaconStateImpl;
-import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
+import tech.pegasys.teku.networks.SpecProviderFactory;
+import tech.pegasys.teku.spec.SpecProvider;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
+import tech.pegasys.teku.ssz.backing.SszData;
+import tech.pegasys.teku.ssz.backing.schema.SszSchema;
 
 public class FuzzRegressionTest {
+  private final SpecProvider specProvider = SpecProviderFactory.createMainnet();
+
   @Test
   void shouldRejectAttesterSlashingWithInvalidValidatorIndex() throws Exception {
-    final BeaconState state = load("issue2345/state.ssz", BeaconStateImpl.class);
+    final BeaconState state = load("issue2345/state.ssz", BeaconState.getSszSchema());
     final AttesterSlashing slashing =
-        load("issue2345/attester_slashing.ssz", AttesterSlashing.class);
+        load("issue2345/attester_slashing.ssz", AttesterSlashing.SSZ_SCHEMA);
 
     assertThatThrownBy(
             () ->
                 state.updated(
                     mutableState ->
-                        BlockProcessorUtil.process_attester_slashings(
+                        specProvider.processAttesterSlashings(
                             mutableState, SSZList.singleton(slashing))))
         .isInstanceOf(BlockProcessingException.class);
   }
 
-  private <T> T load(final String resource, final Class<T> type) throws Exception {
+  private <T extends SszData> T load(final String resource, final SszSchema<T> type)
+      throws Exception {
     final URL resourceUrl = FuzzRegressionTest.class.getResource(resource);
     final Bytes data = Bytes.wrap(Resources.toByteArray(resourceUrl));
-    return SimpleOffsetSerializer.deserialize(data, type);
+    return type.sszDeserialize(data);
   }
 }

@@ -50,10 +50,12 @@ public class CommitteeUtil {
    * @param index
    * @param index_count
    * @param seed
+   * @deprecated CommitteeUtil should be accessed via Spec.getCommitteeUtil().computeShuffledIndex()
    * @return
    * @see
    *     <a>https://github.com/ethereum/eth2.0-specs/blob/v0.8.0/specs/core/0_beacon-chain.md#is_valid_merkle_branch</a>
    */
+  @Deprecated
   public static int compute_shuffled_index(int index, int index_count, Bytes32 seed) {
     checkArgument(index < index_count, "CommitteeUtil.get_shuffled_index1");
 
@@ -85,6 +87,7 @@ public class CommitteeUtil {
     return indexRet;
   }
 
+  @Deprecated
   private static List<Integer> shuffle_list(List<Integer> input, Bytes32 seed) {
     int[] indexes = input.stream().mapToInt(i -> i).toArray();
     shuffle_list(indexes, seed);
@@ -104,6 +107,7 @@ public class CommitteeUtil {
    * @param input The list to be shuffled.
    * @param seed Initial seed value used for randomization.
    */
+  @Deprecated
   public static void shuffle_list(int[] input, Bytes32 seed) {
 
     int listSize = input.length;
@@ -160,6 +164,7 @@ public class CommitteeUtil {
    * @param seed
    * @return
    */
+  @Deprecated
   public static int compute_proposer_index(BeaconState state, List<Integer> indices, Bytes32 seed) {
     checkArgument(!indices.isEmpty(), "compute_proposer_index indices must not be empty");
     UInt64 MAX_RANDOM_BYTE = UInt64.valueOf(255); // Math.pow(2, 8) - 1;
@@ -182,6 +187,7 @@ public class CommitteeUtil {
     }
   }
 
+  @Deprecated
   private static List<Integer> compute_committee_shuffle(
       BeaconState state, List<Integer> indices, Bytes32 seed, int fromIndex, int toIndex) {
     if (fromIndex < toIndex) {
@@ -206,7 +212,8 @@ public class CommitteeUtil {
    * @see
    *     <a>https://github.com/ethereum/eth2.0-specs/blob/v0.8.0/specs/core/0_beacon-chain.md#is_valid_merkle_branch</a>
    */
-  public static List<Integer> compute_committee(
+  @Deprecated
+  private static List<Integer> compute_committee(
       BeaconState state, List<Integer> indices, Bytes32 seed, int index, int count) {
     int start = Math.floorDiv(indices.size() * index, count);
     int end = Math.floorDiv(indices.size() * (index + 1), count);
@@ -221,6 +228,8 @@ public class CommitteeUtil {
    * @param index
    * @return
    */
+  /* note: now in BeaconStateUtil */
+  @Deprecated
   public static List<Integer> get_beacon_committee(BeaconState state, UInt64 slot, UInt64 index) {
     // Make sure state is within range of the slot being queried
     validateStateForCommitteeQuery(state, slot);
@@ -244,6 +253,8 @@ public class CommitteeUtil {
             });
   }
 
+  /* note: now in BeaconStateUtil */
+  @Deprecated
   private static void validateStateForCommitteeQuery(BeaconState state, UInt64 slot) {
     final UInt64 oldestQueryableSlot = getEarliestQueryableSlotForTargetSlot(slot);
     checkArgument(
@@ -259,6 +270,8 @@ public class CommitteeUtil {
    * @param slot The slot for which we want to retrieve committee information
    * @return The earliest slot from which we can query committee assignments
    */
+  /* note: now in BeaconStateUtil */
+  @Deprecated
   public static UInt64 getEarliestQueryableSlotForTargetSlot(final UInt64 slot) {
     final UInt64 epoch = compute_epoch_at_slot(slot);
     return getEarliestQueryableSlotForTargetEpoch(epoch);
@@ -270,17 +283,25 @@ public class CommitteeUtil {
    * @param epoch The epoch for which we want to retrieve committee information
    * @return The earliest slot from which we can query committee assignments
    */
+  /* note: now in BeaconStateUtil */
+  @Deprecated
   public static UInt64 getEarliestQueryableSlotForTargetEpoch(final UInt64 epoch) {
     final UInt64 previousEpoch = epoch.compareTo(UInt64.ZERO) > 0 ? epoch.minus(UInt64.ONE) : epoch;
     return compute_start_slot_at_epoch(previousEpoch);
   }
 
+  /**
+   * @deprecated CommitteeUtil should be accessed via Spec.getCommitteeUtil().getAggregatorModulo()
+   * @return The aggregator modulo
+   */
+  @Deprecated
   public static int getAggregatorModulo(final int committeeSize) {
     return TARGET_AGGREGATORS_PER_COMMITTEE == 0
         ? 1
         : Math.max(1, committeeSize / TARGET_AGGREGATORS_PER_COMMITTEE);
   }
 
+  @Deprecated
   public static boolean isAggregator(final BLSSignature slot_signature, final int modulo) {
     return bytes_to_int64(Hash.sha2_256(slot_signature.toSSZBytes()).slice(0, 8))
         .mod(modulo)
@@ -297,6 +318,8 @@ public class CommitteeUtil {
    * @param attestation
    * @return
    */
+  /* note: now in BeaconStateUtil */
+  @Deprecated
   public static int computeSubnetForAttestation(
       final BeaconState state, final Attestation attestation) {
     final UInt64 attestationSlot = attestation.getData().getSlot();
@@ -304,6 +327,8 @@ public class CommitteeUtil {
     return computeSubnetForCommittee(state, attestationSlot, committeeIndex);
   }
 
+  /* note: now in BeaconStateUtil */
+  @Deprecated
   public static int computeSubnetForCommittee(
       final BeaconState state, final UInt64 attestationSlot, final UInt64 committeeIndex) {
     return computeSubnetForCommittee(
@@ -312,6 +337,8 @@ public class CommitteeUtil {
         get_committee_count_per_slot(state, compute_epoch_at_slot(attestationSlot)));
   }
 
+  /* note: now in BeaconStateUtil */
+  @Deprecated
   public static int computeSubnetForCommittee(
       final UInt64 attestationSlot, final UInt64 committeeIndex, final UInt64 committeesPerSlot) {
     final UInt64 slotsSinceEpochStart = attestationSlot.mod(SLOTS_PER_EPOCH);

@@ -13,6 +13,8 @@
 
 package tech.pegasys.teku.api.schema;
 
+import static tech.pegasys.teku.util.config.Constants.MAX_ETH1_TRANSACTIONS;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
@@ -33,6 +35,7 @@ import tech.pegasys.teku.provider.Bytes32Serializer;
 import tech.pegasys.teku.provider.UInt64AsNumberSerializer;
 import tech.pegasys.teku.provider.UInt64Deserializer;
 import tech.pegasys.teku.ssz.SSZTypes.Bytes20;
+import tech.pegasys.teku.ssz.SSZTypes.SSZList;
 
 public class ExecutableData {
 
@@ -101,7 +104,7 @@ public class ExecutableData {
       tech.pegasys.teku.datastructures.blocks.exec.ExecutableData executableData) {
     this.parent_hash = executableData.getParent_hash();
     this.block_hash = executableData.getBlock_hash();
-    this.coinbase = executableData.getCoinbase();
+    this.coinbase = new Bytes20(executableData.getCoinbase());
     this.state_root = executableData.getState_root();
     this.gas_limit = executableData.getGas_limit();
     this.gas_used = executableData.getGas_used();
@@ -118,16 +121,17 @@ public class ExecutableData {
     return new tech.pegasys.teku.datastructures.blocks.exec.ExecutableData(
         parent_hash,
         block_hash,
-        coinbase,
+        coinbase.getWrappedBytes(),
         state_root,
         gas_limit,
         gas_used,
         receipt_root,
         logs_bloom,
         difficulty,
-        transactions.stream()
-            .map(Eth1Transaction::asInternalEth1Transaction)
-            .collect(Collectors.toList()));
+        SSZList.createMutable(
+            transactions.stream().map(Eth1Transaction::asInternalEth1Transaction),
+            MAX_ETH1_TRANSACTIONS,
+            tech.pegasys.teku.datastructures.blocks.exec.Eth1Transaction.class));
   }
 
   @Override

@@ -52,7 +52,8 @@ import tech.pegasys.teku.networking.eth2.rpc.core.RpcException;
 import tech.pegasys.teku.networking.p2p.peer.DelegatingPeer;
 import tech.pegasys.teku.networking.p2p.peer.DisconnectReason;
 import tech.pegasys.teku.networking.p2p.peer.Peer;
-import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
+import tech.pegasys.teku.ssz.backing.SszData;
+import tech.pegasys.teku.ssz.backing.collections.SszBitvector;
 
 class DefaultEth2Peer extends DelegatingPeer implements Eth2Peer {
   private static final Logger LOG = LogManager.getLogger();
@@ -63,7 +64,7 @@ class DefaultEth2Peer extends DelegatingPeer implements Eth2Peer {
   private final PeerChainValidator peerChainValidator;
   private volatile Optional<PeerStatus> remoteStatus = Optional.empty();
   private volatile Optional<UInt64> remoteMetadataSeqNumber = Optional.empty();
-  private volatile Optional<Bitvector> remoteAttSubnets = Optional.empty();
+  private volatile Optional<SszBitvector> remoteAttSubnets = Optional.empty();
   private final SafeFuture<PeerStatus> initialStatus = new SafeFuture<>();
   private final Subscribers<PeerStatusSubscriber> statusSubscribers = Subscribers.create(true);
   private final AtomicInteger outstandingRequests = new AtomicInteger(0);
@@ -139,7 +140,7 @@ class DefaultEth2Peer extends DelegatingPeer implements Eth2Peer {
   }
 
   @Override
-  public Optional<Bitvector> getRemoteAttestationSubnets() {
+  public Optional<SszBitvector> getRemoteAttestationSubnets() {
     return remoteAttSubnets;
   }
 
@@ -269,7 +270,7 @@ class DefaultEth2Peer extends DelegatingPeer implements Eth2Peer {
     return outstandingPings.get();
   }
 
-  private <I extends RpcRequest, O> SafeFuture<Void> sendMessage(
+  private <I extends RpcRequest, O extends SszData> SafeFuture<Void> sendMessage(
       final Eth2RpcMethod<I, O> method, final I request) {
     final Eth2OutgoingRequestHandler<I, O> handler =
         method.createOutgoingRequestHandler(request.getMaximumRequestChunks());
@@ -278,7 +279,7 @@ class DefaultEth2Peer extends DelegatingPeer implements Eth2Peer {
   }
 
   @Override
-  public <I extends RpcRequest, O> SafeFuture<O> requestSingleItem(
+  public <I extends RpcRequest, O extends SszData> SafeFuture<O> requestSingleItem(
       final Eth2RpcMethod<I, O> method, final I request) {
     final Eth2OutgoingRequestHandler<I, O> handler =
         method.createOutgoingRequestHandler(request.getMaximumRequestChunks());
@@ -286,7 +287,7 @@ class DefaultEth2Peer extends DelegatingPeer implements Eth2Peer {
     return sendRequest(method, request, handler).thenCompose(__ -> respFuture);
   }
 
-  private <I extends RpcRequest, O> SafeFuture<Optional<O>> requestOptionalItem(
+  private <I extends RpcRequest, O extends SszData> SafeFuture<Optional<O>> requestOptionalItem(
       final Eth2RpcMethod<I, O> method, final I request) {
     final Eth2OutgoingRequestHandler<I, O> handler =
         method.createOutgoingRequestHandler(request.getMaximumRequestChunks());
@@ -294,7 +295,7 @@ class DefaultEth2Peer extends DelegatingPeer implements Eth2Peer {
     return sendRequest(method, request, handler).thenCompose(__ -> respFuture);
   }
 
-  private <I extends RpcRequest, O> SafeFuture<Void> requestStream(
+  private <I extends RpcRequest, O extends SszData> SafeFuture<Void> requestStream(
       final Eth2RpcMethod<I, O> method, final I request, final ResponseStreamListener<O> listener) {
     final Eth2OutgoingRequestHandler<I, O> handler =
         method.createOutgoingRequestHandler(request.getMaximumRequestChunks());
@@ -302,7 +303,7 @@ class DefaultEth2Peer extends DelegatingPeer implements Eth2Peer {
     return sendRequest(method, request, handler).thenCompose(__ -> respFuture);
   }
 
-  private <I extends RpcRequest, O> SafeFuture<ResponseStream<O>> sendRequest(
+  private <I extends RpcRequest, O extends SszData> SafeFuture<ResponseStream<O>> sendRequest(
       final Eth2RpcMethod<I, O> method, final I request, Eth2OutgoingRequestHandler<I, O> handler) {
     Bytes payload = method.encodeRequest(request);
     return this.sendRequest(method, payload, handler)

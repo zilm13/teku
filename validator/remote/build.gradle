@@ -2,6 +2,7 @@ dependencies {
   implementation project(':bls')
   implementation project(':data:serializer')
   implementation project(':ethereum:datastructures')
+  implementation project(':ethereum:spec')
   implementation project(':infrastructure:async')
   implementation project(':infrastructure:events')
   implementation project(':infrastructure:http')
@@ -18,6 +19,7 @@ dependencies {
 
   testImplementation testFixtures(project(':ethereum:datastructures'))
   testImplementation testFixtures(project(':infrastructure:async'))
+  testImplementation testFixtures(project(':ssz'))
   testImplementation 'com.squareup.okhttp3:mockwebserver'
   testImplementation 'org.mockito:mockito-core'
 }

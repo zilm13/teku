@@ -23,13 +23,13 @@ import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.StubAsyncRunner;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.networking.eth2.gossip.BlockGossipManager;
 import tech.pegasys.teku.networking.eth2.gossip.encoding.GossipEncoding;
 import tech.pegasys.teku.networking.eth2.gossip.topics.topichandlers.Eth2TopicHandler;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
 import tech.pegasys.teku.statetransition.validation.InternalValidationResult;
@@ -54,7 +54,7 @@ public class BlockTopicHandlerTest {
           gossipEncoding,
           dataStructureUtil.randomForkInfo().getForkDigest(),
           BlockGossipManager.TOPIC_NAME,
-          SignedBeaconBlock.class);
+          SignedBeaconBlock.SSZ_SCHEMA.get());
 
   @BeforeEach
   public void setup() {
@@ -138,7 +138,7 @@ public class BlockTopicHandlerTest {
             gossipEncoding,
             forkDigest,
             BlockGossipManager.TOPIC_NAME,
-            SignedBeaconBlock.class);
+            SignedBeaconBlock.SSZ_SCHEMA.get());
     assertThat(topicHandler.getTopic()).isEqualTo("/eth2/11223344/beacon_block/ssz_snappy");
   }
 }

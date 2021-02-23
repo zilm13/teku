@@ -34,7 +34,6 @@ import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.SignedBlockAndState;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.Waiter;
 import tech.pegasys.teku.networking.eth2.peers.Eth2Peer;
@@ -43,11 +42,12 @@ import tech.pegasys.teku.networking.eth2.rpc.core.RpcException;
 import tech.pegasys.teku.networking.eth2.rpc.core.encodings.RpcEncoding;
 import tech.pegasys.teku.networking.p2p.peer.DisconnectReason;
 import tech.pegasys.teku.networking.p2p.peer.PeerDisconnectedException;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.storage.client.RecentChainData;
+import tech.pegasys.teku.storage.server.StateStorageMode;
 import tech.pegasys.teku.storage.storageSystem.InMemoryStorageSystemBuilder;
 import tech.pegasys.teku.storage.storageSystem.StorageSystem;
 import tech.pegasys.teku.storage.store.UpdatableStore.StoreTransaction;
-import tech.pegasys.teku.util.config.StateStorageMode;
 
 public class BeaconBlocksByRootIntegrationTest {
   protected final StorageSystem storageSystem1 =
@@ -55,7 +55,7 @@ public class BeaconBlocksByRootIntegrationTest {
   protected final StorageSystem storageSystem2 =
       InMemoryStorageSystemBuilder.buildDefault(StateStorageMode.ARCHIVE);
 
-  private final Eth2NetworkFactory networkFactory = new Eth2NetworkFactory();
+  private final Eth2P2PNetworkFactory networkFactory = new Eth2P2PNetworkFactory();
   private Eth2Peer peer1;
   private RecentChainData storageClient1;
 
@@ -67,7 +67,7 @@ public class BeaconBlocksByRootIntegrationTest {
     storageSystem2.chainUpdater().initializeGenesis();
 
     storageClient1 = storageSystem1.recentChainData();
-    final Eth2Network network1 =
+    final Eth2P2PNetwork network1 =
         networkFactory
             .builder()
             .rpcEncoding(rpcEncoding)
@@ -75,7 +75,7 @@ public class BeaconBlocksByRootIntegrationTest {
             .recentChainData(storageClient1)
             .startNetwork();
 
-    final Eth2Network network2 =
+    final Eth2P2PNetwork network2 =
         networkFactory
             .builder()
             .rpcEncoding(rpcEncoding)
@@ -103,14 +103,14 @@ public class BeaconBlocksByRootIntegrationTest {
     final SignedBeaconBlock block = addBlock();
 
     final List<SignedBeaconBlock> response =
-        requestBlocks(singletonList(block.getMessage().hash_tree_root()));
+        requestBlocks(singletonList(block.getMessage().hashTreeRoot()));
     assertThat(response).containsExactly(block);
   }
 
   @Test
   public void requestBlocksByRootAfterPeerDisconnectedImmediately() throws RpcException {
     final SignedBeaconBlock block = addBlock();
-    final Bytes32 blockHash = block.getMessage().hash_tree_root();
+    final Bytes32 blockHash = block.getMessage().hashTreeRoot();
 
     peer1.disconnectImmediately(Optional.empty(), false);
     final List<SignedBeaconBlock> blocks = new ArrayList<>();
@@ -127,7 +127,7 @@ public class BeaconBlocksByRootIntegrationTest {
   public void requestBlocksByRootAfterPeerDisconnected()
       throws RpcException, InterruptedException, ExecutionException, TimeoutException {
     final SignedBeaconBlock block = addBlock();
-    final Bytes32 blockHash = block.getMessage().hash_tree_root();
+    final Bytes32 blockHash = block.getMessage().hashTreeRoot();
 
     Waiter.waitFor(peer1.disconnectCleanly(DisconnectReason.TOO_MANY_PEERS));
     final List<SignedBeaconBlock> blocks = new ArrayList<>();
@@ -143,7 +143,7 @@ public class BeaconBlocksByRootIntegrationTest {
   @Test
   public void requestBlockByRootAfterPeerDisconnectedImmediately() {
     final SignedBeaconBlock block = addBlock();
-    final Bytes32 blockHash = block.getMessage().hash_tree_root();
+    final Bytes32 blockHash = block.getMessage().hashTreeRoot();
 
     peer1.disconnectImmediately(Optional.empty(), false);
     final SafeFuture<Optional<SignedBeaconBlock>> res = peer1.requestBlockByRoot(blockHash);
@@ -157,7 +157,7 @@ public class BeaconBlocksByRootIntegrationTest {
   public void requestBlockByRootAfterPeerDisconnected()
       throws InterruptedException, ExecutionException, TimeoutException {
     final SignedBeaconBlock block = addBlock();
-    final Bytes32 blockHash = block.getMessage().hash_tree_root();
+    final Bytes32 blockHash = block.getMessage().hashTreeRoot();
 
     Waiter.waitFor(peer1.disconnectCleanly(DisconnectReason.TOO_MANY_PEERS));
     final SafeFuture<Optional<SignedBeaconBlock>> res = peer1.requestBlockByRoot(blockHash);
@@ -173,7 +173,7 @@ public class BeaconBlocksByRootIntegrationTest {
     final List<Bytes32> blockRoots =
         blocks.stream()
             .map(SignedBeaconBlock::getMessage)
-            .map(BeaconBlock::hash_tree_root)
+            .map(BeaconBlock::hashTreeRoot)
             .collect(toList());
     final List<SignedBeaconBlock> response = requestBlocks(blockRoots);
     assertThat(response).containsExactlyElementsOf(blocks);
@@ -196,7 +196,7 @@ public class BeaconBlocksByRootIntegrationTest {
     final List<Bytes32> blockRoots =
         blocks.stream()
             .map(SignedBeaconBlock::getMessage)
-            .map(BeaconBlock::hash_tree_root)
+            .map(BeaconBlock::hashTreeRoot)
             .flatMap(hash -> Stream.of(Bytes32.fromHexStringLenient("0x123456789"), hash))
             .collect(toList());
 

@@ -15,82 +15,42 @@ package tech.pegasys.teku.datastructures.blocks.exec;
 
 import static tech.pegasys.teku.util.config.Constants.MAX_BYTES_PER_TRANSACTION_PAYLOAD;
 
-import com.google.common.base.MoreObjects;
-import java.util.List;
 import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
-import tech.pegasys.teku.datastructures.util.Merkleizable;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bytes20;
-import tech.pegasys.teku.ssz.SSZTypes.SSZContainer;
-import tech.pegasys.teku.ssz.SSZTypes.SSZList;
-import tech.pegasys.teku.ssz.backing.ListViewRead;
-import tech.pegasys.teku.ssz.backing.ListViewWrite;
+import tech.pegasys.teku.ssz.backing.SszList;
+import tech.pegasys.teku.ssz.backing.SszVector;
+import tech.pegasys.teku.ssz.backing.containers.Container9;
+import tech.pegasys.teku.ssz.backing.containers.ContainerSchema9;
+import tech.pegasys.teku.ssz.backing.schema.SszComplexSchemas;
+import tech.pegasys.teku.ssz.backing.schema.SszPrimitiveSchemas;
+import tech.pegasys.teku.ssz.backing.schema.SszVectorSchema;
 import tech.pegasys.teku.ssz.backing.tree.TreeNode;
-import tech.pegasys.teku.ssz.backing.type.BasicViewTypes;
-import tech.pegasys.teku.ssz.backing.type.ContainerViewType;
-import tech.pegasys.teku.ssz.backing.type.ListViewType;
-import tech.pegasys.teku.ssz.backing.type.VectorViewType;
-import tech.pegasys.teku.ssz.backing.view.AbstractImmutableContainer;
-import tech.pegasys.teku.ssz.backing.view.BasicViews.ByteView;
-import tech.pegasys.teku.ssz.backing.view.BasicViews.UInt256View;
-import tech.pegasys.teku.ssz.backing.view.BasicViews.UInt64View;
-import tech.pegasys.teku.ssz.backing.view.ViewUtils;
-import tech.pegasys.teku.ssz.sos.SimpleOffsetSerializable;
+import tech.pegasys.teku.ssz.backing.view.SszPrimitives;
+import tech.pegasys.teku.ssz.backing.view.SszUtils;
 
-public class Eth1Transaction extends AbstractImmutableContainer
-    implements Merkleizable, SimpleOffsetSerializable, SSZContainer {
+public class Eth1Transaction
+    extends Container9<
+        Eth1Transaction,
+        SszPrimitives.SszUInt64,
+        SszPrimitives.SszUInt256,
+        SszPrimitives.SszUInt64,
+        SszVector<SszPrimitives.SszByte>,
+        SszPrimitives.SszUInt256,
+        SszList<SszPrimitives.SszByte>,
+        SszPrimitives.SszUInt256,
+        SszPrimitives.SszUInt256,
+        SszPrimitives.SszUInt256> {
 
-  public static final ContainerViewType<Eth1Transaction> TYPE =
-      ContainerViewType.create(
-          List.of(
-              BasicViewTypes.UINT64_TYPE,
-              BasicViewTypes.UINT256_TYPE,
-              BasicViewTypes.UINT64_TYPE,
-              new VectorViewType<ByteView>(BasicViewTypes.BYTE_TYPE, Bytes20.SIZE),
-              BasicViewTypes.UINT256_TYPE,
-              new ListViewType<ByteView>(
-                  BasicViewTypes.BYTE_TYPE, MAX_BYTES_PER_TRANSACTION_PAYLOAD),
-              BasicViewTypes.UINT256_TYPE,
-              BasicViewTypes.UINT256_TYPE,
-              BasicViewTypes.UINT256_TYPE),
-          Eth1Transaction::new);
-
-  @SuppressWarnings("unused")
-  private final UInt64 nonce = null;
-
-  @SuppressWarnings("unused")
-  private final UInt256 gas_price = null;
-
-  @SuppressWarnings("unused")
-  private final UInt64 gas_limit = null;
-
-  @SuppressWarnings("unused")
-  private final Bytes20 recipient = null;
-
-  @SuppressWarnings("unused")
-  private final UInt256 value = null;
-
-  @SuppressWarnings("unused")
-  private final SSZList<Byte> input =
-      SSZList.createMutable(Byte.class, MAX_BYTES_PER_TRANSACTION_PAYLOAD);
-
-  @SuppressWarnings("unused")
-  private final UInt256 v = null;
-
-  @SuppressWarnings("unused")
-  private final UInt256 r = null;
-
-  @SuppressWarnings("unused")
-  private final UInt256 s = null;
+  static final SszComplexSchemas.SszByteListSchema TRANSACTION_INPUT_SCHEMA =
+      new SszComplexSchemas.SszByteListSchema(MAX_BYTES_PER_TRANSACTION_PAYLOAD);
+  public static final Eth1TransactionSchema SSZ_SCHEMA = new Eth1TransactionSchema();
 
   public Eth1Transaction() {
-    super(TYPE);
+    super(SSZ_SCHEMA);
   }
 
-  public Eth1Transaction(
-      ContainerViewType<? extends AbstractImmutableContainer> type, TreeNode backingNode) {
+  public Eth1Transaction(Eth1TransactionSchema type, TreeNode backingNode) {
     super(type, backingNode);
   }
 
@@ -98,116 +58,91 @@ public class Eth1Transaction extends AbstractImmutableContainer
       UInt64 nonce,
       UInt256 gas_price,
       UInt64 gas_limit,
-      Bytes20 recipient,
+      Bytes recipient,
       UInt256 value,
       Bytes input,
       UInt256 v,
       UInt256 r,
       UInt256 s) {
     super(
-        TYPE,
-        new UInt64View(nonce),
-        new UInt256View(gas_price),
-        new UInt64View(gas_limit),
-        ViewUtils.createVectorFromBytes(recipient.getWrappedBytes()),
-        new UInt256View(value),
-        ViewUtils.createListFromBytes(input, MAX_BYTES_PER_TRANSACTION_PAYLOAD),
-        new UInt256View(v),
-        new UInt256View(r),
-        new UInt256View(s));
-  }
-
-  public Eth1Transaction(
-      UInt64 nonce,
-      UInt256 gas_price,
-      UInt64 gas_limit,
-      Bytes20 recipient,
-      UInt256 value,
-      SSZList<Byte> input,
-      UInt256 v,
-      UInt256 r,
-      UInt256 s) {
-    super(
-        TYPE,
-        new UInt64View(nonce),
-        new UInt256View(gas_price),
-        new UInt64View(gas_limit),
-        ViewUtils.createVectorFromBytes(recipient.getWrappedBytes()),
-        new UInt256View(value),
-        createInputView(input),
-        new UInt256View(v),
-        new UInt256View(r),
-        new UInt256View(s));
-  }
-
-  private static ListViewRead<ByteView> createInputView(SSZList<Byte> list) {
-    ListViewType<ByteView> type =
-        new ListViewType<>(BasicViewTypes.BYTE_TYPE, MAX_BYTES_PER_TRANSACTION_PAYLOAD);
-    ListViewWrite<ByteView> view = type.getDefault().createWritableCopy();
-    for (int i = 0; i < list.size(); i++) {
-      view.set(i, new ByteView(list.get(i)));
-    }
-    return view.commitChanges();
-  }
-
-  @Override
-  public int getSSZFieldCount() {
-    return 0;
+        SSZ_SCHEMA,
+        new SszPrimitives.SszUInt64(nonce),
+        new SszPrimitives.SszUInt256(gas_price),
+        new SszPrimitives.SszUInt64(gas_limit),
+        SszUtils.toSszByteVector(recipient),
+        new SszPrimitives.SszUInt256(value),
+        SszUtils.toSszByteList(TRANSACTION_INPUT_SCHEMA, input),
+        new SszPrimitives.SszUInt256(v),
+        new SszPrimitives.SszUInt256(r),
+        new SszPrimitives.SszUInt256(s));
   }
 
   public UInt64 getNonce() {
-    return ((UInt64View) get(0)).get();
+    return getField0().get();
   }
 
   public UInt256 getGas_price() {
-    return ((UInt256View) get(1)).get();
+    return getField1().get();
   }
 
   public UInt64 getGas_limit() {
-    return ((UInt64View) get(2)).get();
+    return getField2().get();
   }
 
-  public Bytes20 getRecipient() {
-    return new Bytes20(ViewUtils.getAllBytes(getAny(3)));
+  public Bytes getRecipient() {
+    return getField3().sszSerialize();
   }
 
   public UInt256 getValue() {
-    return ((UInt256View) get(4)).get();
+    return getField4().get();
   }
 
   public Bytes getInput() {
-    return ViewUtils.getListBytes(getAny(5));
+    return getField5().sszSerialize();
   }
 
   public UInt256 getV() {
-    return ((UInt256View) get(6)).get();
+    return getField6().get();
   }
 
   public UInt256 getR() {
-    return ((UInt256View) get(7)).get();
+    return getField7().get();
   }
 
   public UInt256 getS() {
-    return ((UInt256View) get(8)).get();
+    return getField8().get();
   }
 
-  @Override
-  public Bytes32 hash_tree_root() {
-    return hashTreeRoot();
-  }
+  public static class Eth1TransactionSchema
+      extends ContainerSchema9<
+          Eth1Transaction,
+          SszPrimitives.SszUInt64,
+          SszPrimitives.SszUInt256,
+          SszPrimitives.SszUInt64,
+          SszVector<SszPrimitives.SszByte>,
+          SszPrimitives.SszUInt256,
+          SszList<SszPrimitives.SszByte>,
+          SszPrimitives.SszUInt256,
+          SszPrimitives.SszUInt256,
+          SszPrimitives.SszUInt256> {
 
-  @Override
-  public String toString() {
-    return MoreObjects.toStringHelper(this)
-        .add("nonce", getNonce())
-        .add("gas_price", getGas_price())
-        .add("gas", getGas_limit())
-        .add("to", getRecipient())
-        .add("value", getValue())
-        .add("input", getInput())
-        .add("v", getV())
-        .add("r", getR())
-        .add("s", getS())
-        .toString();
+    public Eth1TransactionSchema() {
+      super(
+          "Eth1Transaction",
+          namedSchema("nonce", SszPrimitiveSchemas.UINT64_SCHEMA),
+          namedSchema("gas_price", SszPrimitiveSchemas.UINT256_SCHEMA),
+          namedSchema("gas_limit", SszPrimitiveSchemas.UINT64_SCHEMA),
+          namedSchema("recipient", SszVectorSchema.create(SszPrimitiveSchemas.BYTE_SCHEMA, 20)),
+          namedSchema("value", SszPrimitiveSchemas.UINT256_SCHEMA),
+          namedSchema("input", TRANSACTION_INPUT_SCHEMA),
+          namedSchema("v", SszPrimitiveSchemas.UINT256_SCHEMA),
+          namedSchema("r", SszPrimitiveSchemas.UINT256_SCHEMA),
+          namedSchema("s", SszPrimitiveSchemas.UINT256_SCHEMA));
+    }
+
+    @Override
+    public Eth1Transaction createFromBackingNode(TreeNode node) {
+      return new Eth1Transaction(this, node);
+    }
   }
 }

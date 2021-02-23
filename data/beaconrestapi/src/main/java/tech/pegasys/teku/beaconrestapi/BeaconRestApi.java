@@ -82,9 +82,9 @@ import tech.pegasys.teku.datastructures.eth1.Eth1Address;
 import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.infrastructure.async.ExceptionThrowingSupplier;
 import tech.pegasys.teku.infrastructure.events.EventChannels;
+import tech.pegasys.teku.infrastructure.version.VersionProvider;
 import tech.pegasys.teku.provider.JsonProvider;
 import tech.pegasys.teku.storage.client.ChainDataUnavailableException;
-import tech.pegasys.teku.util.cli.VersionProvider;
 import tech.pegasys.teku.util.config.InvalidConfigurationException;
 import tech.pegasys.teku.validator.api.NodeSyncingException;
 
@@ -94,7 +94,6 @@ public class BeaconRestApi {
   private final Javalin app;
   private final JsonProvider jsonProvider = new JsonProvider();
   private static final Logger LOG = LogManager.getLogger();
-  public static final String FILE_NOT_FOUND_HTML = "404.html";
 
   private void initialize(
       final DataProvider dataProvider,
@@ -117,7 +116,7 @@ public class BeaconRestApi {
     addExceptionHandlers();
     // standard api endpoint inclusion
     addV1BeaconHandlers(dataProvider);
-    addEventHandler(dataProvider, eventChannels, asyncRunner);
+    addEventHandler(dataProvider, eventChannels, asyncRunner, configuration);
     addV1NodeHandlers(dataProvider);
     addV1ValidatorHandlers(dataProvider);
     addV1ConfigHandlers(dataProvider, configuration.getEth1DepositContractAddress());
@@ -129,7 +128,9 @@ public class BeaconRestApi {
 
   private void addV1ConfigHandlers(
       final DataProvider dataProvider, final Optional<Eth1Address> depositAddress) {
-    app.get(GetDepositContract.ROUTE, new GetDepositContract(depositAddress, jsonProvider));
+    app.get(
+        GetDepositContract.ROUTE,
+        new GetDepositContract(depositAddress, jsonProvider, dataProvider.getConfigProvider()));
     app.get(GetForkSchedule.ROUTE, new GetForkSchedule(dataProvider, jsonProvider));
     app.get(GetSpec.ROUTE, new GetSpec(dataProvider, jsonProvider));
   }
@@ -335,8 +336,16 @@ public class BeaconRestApi {
   private void addEventHandler(
       final DataProvider dataProvider,
       final EventChannels eventChannels,
-      final AsyncRunner asyncRunner) {
-    app.get(GetEvents.ROUTE, new GetEvents(dataProvider, jsonProvider, eventChannels, asyncRunner));
+      final AsyncRunner asyncRunner,
+      final BeaconRestApiConfig configuration) {
+    app.get(
+        GetEvents.ROUTE,
+        new GetEvents(
+            dataProvider,
+            jsonProvider,
+            eventChannels,
+            asyncRunner,
+            configuration.getMaxPendingEvents()));
   }
 
   public void stop() {

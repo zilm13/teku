@@ -22,10 +22,10 @@ import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.ssz.SSZ;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.protoarray.BlockInformation;
 import tech.pegasys.teku.protoarray.ProtoArraySnapshot;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 
 public class ProtoArraySnapshotSerializerTest {
   private final ProtoArraySnapshotSerializer serializer = new ProtoArraySnapshotSerializer();
@@ -95,7 +95,7 @@ public class ProtoArraySnapshotSerializerTest {
     list.add(
         new BlockInformation(
             block.getSlot(),
-            block.hash_tree_root(),
+            block.hashTreeRoot(),
             block.getParentRoot(),
             block.getStateRoot(),
             UInt64.valueOf(101),

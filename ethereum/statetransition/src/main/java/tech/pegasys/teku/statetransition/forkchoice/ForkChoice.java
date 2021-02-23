@@ -31,14 +31,17 @@ import tech.pegasys.teku.datastructures.attestation.ValidateableAttestation;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.datastructures.forkchoice.InvalidCheckpointException;
 import tech.pegasys.teku.datastructures.forkchoice.ReadOnlyForkChoiceStrategy;
+import tech.pegasys.teku.datastructures.forkchoice.VoteUpdater;
 import tech.pegasys.teku.datastructures.operations.IndexedAttestation;
 import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.datastructures.state.Checkpoint;
 import tech.pegasys.teku.datastructures.util.AttestationProcessingResult;
+import tech.pegasys.teku.infrastructure.async.ExceptionThrowingRunnable;
+import tech.pegasys.teku.infrastructure.async.ExceptionThrowingSupplier;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
+import tech.pegasys.teku.infrastructure.async.eventthread.EventThread;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.protoarray.ForkChoiceStrategy;
-import tech.pegasys.teku.statetransition.forkchoice.ForkChoiceExecutor.ForkChoiceTask;
 import tech.pegasys.teku.storage.client.RecentChainData;
 import tech.pegasys.teku.storage.store.UpdatableStore;
 import tech.pegasys.teku.storage.store.UpdatableStore.StoreTransaction;
@@ -47,7 +50,7 @@ public class ForkChoice {
   private static final Logger LOG = LogManager.getLogger();
 
   private final ForkChoiceAttestationValidator attestationValidator;
-  private final ForkChoiceExecutor forkChoiceExecutor;
+  private final EventThread forkChoiceExecutor;
   private final RecentChainData recentChainData;
   private final StateTransition stateTransition;
   private final ForkChoiceBlockTasks forkChoiceBlockTasks;
@@ -55,7 +58,7 @@ public class ForkChoice {
   public ForkChoice(
       final ForkChoiceAttestationValidator attestationValidator,
       final ForkChoiceBlockTasks forkChoiceBlockTasks,
-      final ForkChoiceExecutor forkChoiceExecutor,
+      final EventThread forkChoiceExecutor,
       final RecentChainData recentChainData,
       final StateTransition stateTransition) {
     this.attestationValidator = attestationValidator;
@@ -98,9 +101,9 @@ public class ForkChoice {
                             retrievedJustifiedCheckpoint.getRoot(),
                             justifiedCheckpoint.getEpoch(),
                             justifiedCheckpoint.getRoot());
-                        return SafeFuture.COMPLETE;
+                        return;
                       }
-                      final StoreTransaction transaction = recentChainData.startStoreTransaction();
+                      final VoteUpdater transaction = recentChainData.startVoteUpdate();
                       final ReadOnlyForkChoiceStrategy forkChoiceStrategy = getForkChoiceStrategy();
                       Bytes32 headBlockRoot =
                           transaction.applyForkChoiceScoreChanges(
@@ -118,7 +121,7 @@ public class ForkChoice {
                                           new IllegalStateException(
                                               "Unable to retrieve the slot of fork choice head: "
                                                   + headBlockRoot))));
-                      return transaction.commit();
+                      transaction.commit();
                     }))
         .join();
   }
@@ -155,20 +158,28 @@ public class ForkChoice {
                   indexedAttestationProvider);
 
           if (!result.isSuccessful()) {
-            return SafeFuture.completedFuture(result);
+            return result;
           }
-          indexedAttestationProvider.getIndexedAttestations().stream()
-              .filter(
-                  attestation ->
-                      forkChoiceStrategy.contains(attestation.getData().getBeacon_block_root()))
-              .forEach(
-                  indexedAttestation ->
-                      forkChoiceStrategy.onAttestation(transaction, indexedAttestation));
-          return transaction
-              .commit()
-              .thenRun(() -> updateForkChoiceForImportedBlock(block, result))
-              .thenApply(__ -> result);
+          // Note: not using thenRun here because we want to ensure each step is on the event thread
+          transaction.commit().join();
+          updateForkChoiceForImportedBlock(block, result);
+          applyVotesFromBlock(forkChoiceStrategy, indexedAttestationProvider);
+          return result;
         });
+  }
+
+  private void applyVotesFromBlock(
+      final ForkChoiceStrategy forkChoiceStrategy,
+      final CapturingIndexedAttestationProvider indexedAttestationProvider) {
+    final VoteUpdater voteUpdater = recentChainData.startVoteUpdate();
+    indexedAttestationProvider.getIndexedAttestations().stream()
+        .filter(
+            attestation ->
+                forkChoiceStrategy.contains(attestation.getData().getBeacon_block_root()))
+        .forEach(
+            indexedAttestation ->
+                forkChoiceStrategy.onAttestation(voteUpdater, indexedAttestation));
+    voteUpdater.commit();
   }
 
   private void updateForkChoiceForImportedBlock(
@@ -205,11 +216,10 @@ public class ForkChoice {
               }
               return onForkChoiceThread(
                       () -> {
-                        final StoreTransaction transaction =
-                            recentChainData.startStoreTransaction();
+                        final VoteUpdater transaction = recentChainData.startVoteUpdate();
                         getForkChoiceStrategy()
                             .onAttestation(transaction, getIndexedAttestation(attestation));
-                        return transaction.commit();
+                        transaction.commit();
                       })
                   .thenApply(__ -> validationResult);
             })
@@ -227,13 +237,13 @@ public class ForkChoice {
   public void applyIndexedAttestations(final List<ValidateableAttestation> attestations) {
     onForkChoiceThread(
             () -> {
-              final StoreTransaction transaction = recentChainData.startStoreTransaction();
+              final VoteUpdater transaction = recentChainData.startVoteUpdate();
               final ForkChoiceStrategy forkChoiceStrategy = getForkChoiceStrategy();
               attestations.stream()
                   .map(this::getIndexedAttestation)
                   .forEach(
                       attestation -> forkChoiceStrategy.onAttestation(transaction, attestation));
-              return transaction.commit();
+              transaction.commit();
             })
         .reportExceptions();
   }
@@ -256,7 +266,15 @@ public class ForkChoice {
                     "ValidateableAttestation does not have an IndexedAttestation."));
   }
 
-  private <T> SafeFuture<T> onForkChoiceThread(final ForkChoiceTask<T> task) {
-    return forkChoiceExecutor.performTask(task);
+  private SafeFuture<Void> onForkChoiceThread(final ExceptionThrowingRunnable task) {
+    return onForkChoiceThread(
+        () -> {
+          task.run();
+          return null;
+        });
+  }
+
+  private <T> SafeFuture<T> onForkChoiceThread(final ExceptionThrowingSupplier<T> task) {
+    return forkChoiceExecutor.execute(task);
   }
 }

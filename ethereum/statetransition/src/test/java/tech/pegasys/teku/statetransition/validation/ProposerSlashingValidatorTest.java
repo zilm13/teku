@@ -18,9 +18,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static tech.pegasys.teku.statetransition.validation.InternalValidationResult.ACCEPT;
-import static tech.pegasys.teku.statetransition.validation.InternalValidationResult.IGNORE;
-import static tech.pegasys.teku.statetransition.validation.InternalValidationResult.REJECT;
+import static tech.pegasys.teku.statetransition.validation.ValidationResultCode.ACCEPT;
+import static tech.pegasys.teku.statetransition.validation.ValidationResultCode.IGNORE;
+import static tech.pegasys.teku.statetransition.validation.ValidationResultCode.REJECT;
 
 import com.google.common.eventbus.EventBus;
 import java.util.List;
@@ -28,14 +28,14 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.bls.BLSKeyPair;
-import tech.pegasys.teku.bls.BLSSignature;
 import tech.pegasys.teku.bls.BLSSignatureVerifier;
+import tech.pegasys.teku.bls.BLSTestUtil;
 import tech.pegasys.teku.core.operationsignatureverifiers.ProposerSlashingSignatureVerifier;
 import tech.pegasys.teku.core.operationvalidators.ProposerSlashingStateTransitionValidator;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlockHeader;
 import tech.pegasys.teku.datastructures.interop.MockStartValidatorKeyPairFactory;
 import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
 import tech.pegasys.teku.storage.client.MemoryOnlyRecentChainData;
 import tech.pegasys.teku.storage.client.RecentChainData;
@@ -70,7 +70,7 @@ public class ProposerSlashingValidatorTest {
     when(signatureVerifier.verifySignature(
             recentChainData.getBestState().orElseThrow(), slashing, BLSSignatureVerifier.SIMPLE))
         .thenReturn(true);
-    assertThat(proposerSlashingValidator.validateFully(slashing)).isEqualTo(ACCEPT);
+    assertThat(proposerSlashingValidator.validateFully(slashing).code()).isEqualTo(ACCEPT);
   }
 
   @Test
@@ -86,7 +86,7 @@ public class ProposerSlashingValidatorTest {
     when(signatureVerifier.verifySignature(
             recentChainData.getBestState().orElseThrow(), slashing, BLSSignatureVerifier.SIMPLE))
         .thenReturn(true);
-    assertThat(proposerSlashingValidator.validateFully(slashing)).isEqualTo(REJECT);
+    assertThat(proposerSlashingValidator.validateFully(slashing).code()).isEqualTo(REJECT);
   }
 
   @Test
@@ -99,7 +99,7 @@ public class ProposerSlashingValidatorTest {
     when(signatureVerifier.verifySignature(
             recentChainData.getBestState().orElseThrow(), slashing, BLSSignatureVerifier.SIMPLE))
         .thenReturn(false);
-    assertThat(proposerSlashingValidator.validateFully(slashing)).isEqualTo(REJECT);
+    assertThat(proposerSlashingValidator.validateFully(slashing).code()).isEqualTo(REJECT);
   }
 
   @Test
@@ -116,8 +116,8 @@ public class ProposerSlashingValidatorTest {
             any(),
             eq(BLSSignatureVerifier.SIMPLE)))
         .thenReturn(true);
-    assertThat(proposerSlashingValidator.validateFully(slashing1)).isEqualTo(ACCEPT);
-    assertThat(proposerSlashingValidator.validateFully(slashing2)).isEqualTo(IGNORE);
+    assertThat(proposerSlashingValidator.validateFully(slashing1).code()).isEqualTo(ACCEPT);
+    assertThat(proposerSlashingValidator.validateFully(slashing2).code()).isEqualTo(IGNORE);
   }
 
   @Test
@@ -128,7 +128,7 @@ public class ProposerSlashingValidatorTest {
     stateTransitionValidator = new ProposerSlashingStateTransitionValidator();
     SignedBeaconBlockHeader header1 = dataStructureUtil.randomSignedBeaconBlockHeader();
     SignedBeaconBlockHeader header2 =
-        new SignedBeaconBlockHeader(header1.getMessage(), BLSSignature.random(100));
+        new SignedBeaconBlockHeader(header1.getMessage(), BLSTestUtil.randomSignature(100));
     assertThat(header2).isNotEqualTo(header1);
     ProposerSlashing slashing = new ProposerSlashing(header1, header2);
     assertThat(

@@ -18,7 +18,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static tech.pegasys.teku.datastructures.blocks.BeaconBlockBodyLists.createAttesterSlashings;
+import static tech.pegasys.teku.datastructures.util.BeaconBlockBodyLists.createAttesterSlashings;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -27,7 +27,7 @@ import tech.pegasys.teku.datastructures.operations.AttesterSlashing;
 import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
 import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
 import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
 import tech.pegasys.teku.statetransition.validation.InternalValidationResult;
 import tech.pegasys.teku.statetransition.validation.OperationValidator;
@@ -121,8 +121,8 @@ public class OperationPoolTest {
 
     assertThat(addedSlashings.size()).isEqualTo(2);
     assertThat(addedSlashings).containsKey(slashing1);
-    assertThat(addedSlashings.get(slashing1)).isEqualTo(InternalValidationResult.ACCEPT);
+    assertThat(addedSlashings.get(slashing1).isAccept()).isTrue();
     assertThat(addedSlashings).containsKey(slashing2);
-    assertThat(addedSlashings.get(slashing2)).isEqualTo(InternalValidationResult.SAVE_FOR_FUTURE);
+    assertThat(addedSlashings.get(slashing2).isSaveForFuture()).isTrue();
   }
 }

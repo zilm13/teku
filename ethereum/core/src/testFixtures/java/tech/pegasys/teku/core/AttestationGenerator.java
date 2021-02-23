@@ -17,9 +17,7 @@ import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_epoc
 import static tech.pegasys.teku.infrastructure.async.SyncAsyncRunner.SYNC_RUNNER;
 
 import com.google.common.base.Preconditions;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -33,6 +31,7 @@ import java.util.stream.StreamSupport;
 import tech.pegasys.teku.bls.BLS;
 import tech.pegasys.teku.bls.BLSKeyPair;
 import tech.pegasys.teku.bls.BLSSignature;
+import tech.pegasys.teku.bls.BLSTestUtil;
 import tech.pegasys.teku.core.exceptions.EpochProcessingException;
 import tech.pegasys.teku.core.exceptions.SlotProcessingException;
 import tech.pegasys.teku.core.signatures.LocalSigner;
@@ -45,12 +44,11 @@ import tech.pegasys.teku.datastructures.state.Committee;
 import tech.pegasys.teku.datastructures.state.CommitteeAssignment;
 import tech.pegasys.teku.datastructures.util.AttestationUtil;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
-import tech.pegasys.teku.util.config.Constants;
+import tech.pegasys.teku.ssz.backing.collections.SszBitlist;
 
 public class AttestationGenerator {
   private final List<BLSKeyPair> validatorKeys;
-  private final BLSKeyPair randomKeyPair = BLSKeyPair.random(12345);
+  private final BLSKeyPair randomKeyPair = BLSTestUtil.randomKeyPair(12345);
 
   public AttestationGenerator(final List<BLSKeyPair> validatorKeys) {
     this.validatorKeys = validatorKeys;
@@ -63,26 +61,6 @@ public class AttestationGenerator {
   public static AttestationData diffSlotAttestationData(UInt64 slot, AttestationData data) {
     return new AttestationData(
         slot, data.getIndex(), data.getBeacon_block_root(), data.getSource(), data.getTarget());
-  }
-
-  public static Attestation withNewSingleAttesterBit(Attestation oldAttestation) {
-    Attestation attestation = new Attestation(oldAttestation);
-    Bitlist newBitlist =
-        new Bitlist(
-            attestation.getAggregation_bits().getCurrentSize(),
-            attestation.getAggregation_bits().getMaxSize());
-    List<Integer> unsetBits = new ArrayList<>();
-    for (int i = 0; i < attestation.getAggregation_bits().getCurrentSize(); i++) {
-      if (!attestation.getAggregation_bits().getBit(i)) {
-        unsetBits.add(i);
-      }
-    }
-
-    Collections.shuffle(unsetBits);
-    newBitlist.setBit(unsetBits.get(0));
-
-    attestation.setAggregation_bits(newBitlist);
-    return attestation;
   }
 
   /**
@@ -110,12 +88,14 @@ public class AttestationGenerator {
     Preconditions.checkArgument(!srcAttestations.isEmpty(), "Expected at least one attestation");
 
     int targetBitlistSize =
+        srcAttestations.stream().mapToInt(a -> a.getAggregation_bits().size()).max().getAsInt();
+    SszBitlist targetBitlist =
         srcAttestations.stream()
-            .mapToInt(a -> a.getAggregation_bits().getCurrentSize())
-            .max()
-            .getAsInt();
-    Bitlist targetBitlist = new Bitlist(targetBitlistSize, Constants.MAX_VALIDATORS_PER_COMMITTEE);
-    srcAttestations.forEach(a -> targetBitlist.setAllBits(a.getAggregation_bits()));
+            .map(Attestation::getAggregation_bits)
+            .reduce(
+                Attestation.SSZ_SCHEMA.getAggregationBitsSchema().ofBits(targetBitlistSize),
+                SszBitlist::or,
+                SszBitlist::or);
     BLSSignature targetSig =
         BLS.aggregate(
             srcAttestations.stream()
@@ -331,14 +311,20 @@ public class AttestationGenerator {
         Committee committee,
         AttestationData attestationData) {
       int committeSize = committee.getCommitteeSize();
-      Bitlist aggregationBitfield =
-          AttestationUtil.getAggregationBits(committeSize, indexIntoCommittee);
+      SszBitlist aggregationBitfield = getAggregationBits(committeSize, indexIntoCommittee);
 
       BLSSignature signature =
           new LocalSigner(attesterKeyPair, SYNC_RUNNER)
               .signAttestationData(attestationData, state.getForkInfo())
               .join();
       return new Attestation(aggregationBitfield, attestationData, signature);
+    }
+
+    public static SszBitlist getAggregationBits(int committeeSize, int indexIntoCommittee) {
+      // Create aggregation bitfield
+      return Attestation.SSZ_SCHEMA
+          .getAggregationBitsSchema()
+          .ofBits(committeeSize, indexIntoCommittee);
     }
   }
 }

@@ -24,6 +24,7 @@ import tech.pegasys.teku.service.serviceutils.ServiceConfig;
 import tech.pegasys.teku.storage.api.Eth1DepositStorageChannel;
 import tech.pegasys.teku.storage.api.StorageQueryChannel;
 import tech.pegasys.teku.storage.api.StorageUpdateChannel;
+import tech.pegasys.teku.storage.api.VoteUpdateChannel;
 import tech.pegasys.teku.storage.server.ChainStorage;
 import tech.pegasys.teku.storage.server.Database;
 import tech.pegasys.teku.storage.server.DepositStorage;
@@ -55,10 +56,12 @@ public class StorageService extends Service {
                   config.getDataStorageMode(),
                   config.getDataStorageCreateDbVersion(),
                   config.getDataStorageFrequency(),
-                  config.getEth1DepositContract());
+                  config.getEth1DepositContract(),
+                  config.getSpecProvider());
           database = dbFactory.createDatabase();
 
-          chainStorage = ChainStorage.create(serviceConfig.getEventBus(), database);
+          chainStorage =
+              ChainStorage.create(serviceConfig.getEventBus(), database, config.getSpecProvider());
           final DepositStorage depositStorage =
               DepositStorage.create(
                   serviceConfig.getEventChannels().getPublisher(Eth1EventsChannel.class), database);
@@ -69,6 +72,7 @@ public class StorageService extends Service {
               .subscribe(Eth1DepositStorageChannel.class, depositStorage)
               .subscribe(Eth1EventsChannel.class, depositStorage)
               .subscribe(StorageUpdateChannel.class, chainStorage)
+              .subscribe(VoteUpdateChannel.class, chainStorage)
               .subscribe(ProtoArrayStorageChannel.class, protoArrayStorage)
               .subscribeMultithreaded(
                   StorageQueryChannel.class, chainStorage, STORAGE_QUERY_CHANNEL_PARALLELISM);

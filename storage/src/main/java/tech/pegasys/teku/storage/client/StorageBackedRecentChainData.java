@@ -19,20 +19,21 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 import com.google.common.eventbus.EventBus;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
-import tech.pegasys.teku.core.lookup.BlockProvider;
-import tech.pegasys.teku.core.lookup.StateAndBlockSummaryProvider;
+import tech.pegasys.teku.dataproviders.lookup.BlockProvider;
+import tech.pegasys.teku.dataproviders.lookup.StateAndBlockSummaryProvider;
 import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.protoarray.ProtoArrayStorageChannel;
+import tech.pegasys.teku.spec.SpecProvider;
 import tech.pegasys.teku.storage.api.ChainHeadChannel;
 import tech.pegasys.teku.storage.api.FinalizedCheckpointChannel;
 import tech.pegasys.teku.storage.api.StorageQueryChannel;
 import tech.pegasys.teku.storage.api.StorageUpdateChannel;
+import tech.pegasys.teku.storage.api.VoteUpdateChannel;
 import tech.pegasys.teku.storage.store.StoreBuilder;
 import tech.pegasys.teku.storage.store.StoreConfig;
 import tech.pegasys.teku.storage.store.UpdatableStore;
@@ -51,10 +52,12 @@ public class StorageBackedRecentChainData extends RecentChainData {
       final StoreConfig storeConfig,
       final StorageQueryChannel storageQueryChannel,
       final StorageUpdateChannel storageUpdateChannel,
+      final VoteUpdateChannel voteUpdateChannel,
       final ProtoArrayStorageChannel protoArrayStorageChannel,
       final FinalizedCheckpointChannel finalizedCheckpointChannel,
       final ChainHeadChannel chainHeadChannel,
-      final EventBus eventBus) {
+      final EventBus eventBus,
+      final SpecProvider specProvider) {
     super(
         asyncRunner,
         metricsSystem,
@@ -62,10 +65,12 @@ public class StorageBackedRecentChainData extends RecentChainData {
         storageQueryChannel::getHotBlocksByRoot,
         storageQueryChannel::getHotStateAndBlockSummaryByBlockRoot,
         storageUpdateChannel,
+        voteUpdateChannel,
         protoArrayStorageChannel,
         finalizedCheckpointChannel,
         chainHeadChannel,
-        eventBus);
+        eventBus,
+        specProvider);
     this.storeConfig = storeConfig;
     this.storageQueryChannel = storageQueryChannel;
     this.blockProvider = storageQueryChannel::getHotBlocksByRoot;
@@ -79,10 +84,12 @@ public class StorageBackedRecentChainData extends RecentChainData {
       final AsyncRunner asyncRunner,
       final StorageQueryChannel storageQueryChannel,
       final StorageUpdateChannel storageUpdateChannel,
+      final VoteUpdateChannel voteUpdateChannel,
       final ProtoArrayStorageChannel protoArrayStorageChannel,
       final FinalizedCheckpointChannel finalizedCheckpointChannel,
       final ChainHeadChannel chainHeadChannel,
-      final EventBus eventBus) {
+      final EventBus eventBus,
+      final SpecProvider specProvider) {
     StorageBackedRecentChainData client =
         new StorageBackedRecentChainData(
             asyncRunner,
@@ -90,10 +97,12 @@ public class StorageBackedRecentChainData extends RecentChainData {
             storeConfig,
             storageQueryChannel,
             storageUpdateChannel,
+            voteUpdateChannel,
             protoArrayStorageChannel,
             finalizedCheckpointChannel,
             chainHeadChannel,
-            eventBus);
+            eventBus,
+            specProvider);
 
     return client.initializeFromStorageWithRetry(asyncRunner);
   }
@@ -105,10 +114,12 @@ public class StorageBackedRecentChainData extends RecentChainData {
       final StoreConfig storeConfig,
       final StorageQueryChannel storageQueryChannel,
       final StorageUpdateChannel storageUpdateChannel,
+      final VoteUpdateChannel voteUpdateChannel,
       final ProtoArrayStorageChannel protoArrayStorageChannel,
       final FinalizedCheckpointChannel finalizedCheckpointChannel,
       final ChainHeadChannel chainHeadChannel,
-      final EventBus eventBus) {
+      final EventBus eventBus,
+      final SpecProvider specProvider) {
     StorageBackedRecentChainData client =
         new StorageBackedRecentChainData(
             asyncRunner,
@@ -116,10 +127,12 @@ public class StorageBackedRecentChainData extends RecentChainData {
             storeConfig,
             storageQueryChannel,
             storageUpdateChannel,
+            voteUpdateChannel,
             protoArrayStorageChannel,
             finalizedCheckpointChannel,
             chainHeadChannel,
-            eventBus);
+            eventBus,
+            specProvider);
 
     return client.initializeFromStorage().join();
   }
@@ -160,9 +173,7 @@ public class StorageBackedRecentChainData extends RecentChainData {
   }
 
   private SafeFuture<Optional<StoreBuilder>> requestInitialStore() {
-    return storageQueryChannel
-        .onStoreRequest()
-        .orTimeout(Constants.STORAGE_REQUEST_TIMEOUT, TimeUnit.SECONDS);
+    return storageQueryChannel.onStoreRequest().orTimeout(Constants.STORAGE_REQUEST_TIMEOUT);
   }
 
   private SafeFuture<Optional<StoreBuilder>> requestInitialStoreWithRetry(
@@ -174,8 +185,7 @@ public class StorageBackedRecentChainData extends RecentChainData {
                 LOG.trace("Storage initialization timed out, will retry.");
                 return asyncRunner.runAfterDelay(
                     () -> requestInitialStoreWithRetry(asyncRunner),
-                    Constants.STORAGE_REQUEST_TIMEOUT,
-                    TimeUnit.SECONDS);
+                    Constants.STORAGE_REQUEST_TIMEOUT);
               } else {
                 STATUS_LOG.fatalErrorInitialisingStorage(err);
                 return SafeFuture.failedFuture(err);

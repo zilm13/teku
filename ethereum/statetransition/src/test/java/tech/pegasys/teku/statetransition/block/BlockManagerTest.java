@@ -34,19 +34,19 @@ import tech.pegasys.teku.core.ForkChoiceBlockTasks;
 import tech.pegasys.teku.core.StateTransition;
 import tech.pegasys.teku.core.results.BlockImportResult;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
+import tech.pegasys.teku.infrastructure.async.eventthread.InlineEventThread;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
 import tech.pegasys.teku.statetransition.forkchoice.ForkChoice;
-import tech.pegasys.teku.statetransition.forkchoice.SyncForkChoiceExecutor;
 import tech.pegasys.teku.statetransition.util.FutureItems;
 import tech.pegasys.teku.statetransition.util.PendingPool;
 import tech.pegasys.teku.statetransition.validation.BlockValidator;
 import tech.pegasys.teku.storage.client.MemoryOnlyRecentChainData;
 import tech.pegasys.teku.storage.client.RecentChainData;
 import tech.pegasys.teku.util.config.Constants;
-import tech.pegasys.teku.weaksubjectivity.WeakSubjectivityValidator;
+import tech.pegasys.teku.weaksubjectivity.WeakSubjectivityFactory;
 
 @SuppressWarnings("FutureReturnValueIgnored")
 public class BlockManagerTest {
@@ -74,13 +74,16 @@ public class BlockManagerTest {
       new ForkChoice(
           new ForkChoiceAttestationValidator(),
           new ForkChoiceBlockTasks(),
-          new SyncForkChoiceExecutor(),
+          new InlineEventThread(),
           localRecentChainData,
           new StateTransition());
 
   private final BlockImporter blockImporter =
       new BlockImporter(
-          localRecentChainData, forkChoice, WeakSubjectivityValidator.lenient(), localEventBus);
+          localRecentChainData,
+          forkChoice,
+          WeakSubjectivityFactory.lenientValidator(),
+          localEventBus);
   private final BlockManager blockManager =
       new BlockManager(
           localEventBus,
@@ -244,13 +247,13 @@ public class BlockManagerTest {
 
     final SignedBeaconBlock invalidBlock =
         remoteChain.createBlockAtSlotFromInvalidProposer(incrementSlot());
-    Bytes32 parentBlockRoot = invalidBlock.getMessage().hash_tree_root();
+    Bytes32 parentBlockRoot = invalidBlock.getMessage().hashTreeRoot();
     for (int i = 0; i < invalidChainDepth; i++) {
       final UInt64 nextSlot = incrementSlot();
       final SignedBeaconBlock block =
           dataStructureUtil.randomSignedBeaconBlock(nextSlot.longValue(), parentBlockRoot);
       invalidBlockDescendants.add(block);
-      parentBlockRoot = block.getMessage().hash_tree_root();
+      parentBlockRoot = block.getMessage().hashTreeRoot();
     }
 
     // Gossip all blocks except the first
@@ -273,13 +276,13 @@ public class BlockManagerTest {
 
     final SignedBeaconBlock invalidBlock =
         remoteChain.createBlockAtSlotFromInvalidProposer(incrementSlot());
-    Bytes32 parentBlockRoot = invalidBlock.getMessage().hash_tree_root();
+    Bytes32 parentBlockRoot = invalidBlock.getMessage().hashTreeRoot();
     for (int i = 0; i < invalidChainDepth; i++) {
       final UInt64 nextSlot = incrementSlot();
       final SignedBeaconBlock block =
           dataStructureUtil.randomSignedBeaconBlock(nextSlot.longValue(), parentBlockRoot);
       invalidBlockDescendants.add(block);
-      parentBlockRoot = block.getMessage().hash_tree_root();
+      parentBlockRoot = block.getMessage().hashTreeRoot();
     }
 
     // Gossip all blocks except the first two

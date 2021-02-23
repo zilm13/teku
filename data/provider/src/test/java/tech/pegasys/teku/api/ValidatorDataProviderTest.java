@@ -27,6 +27,7 @@ import static tech.pegasys.teku.core.results.BlockImportResult.FailureReason;
 import static tech.pegasys.teku.infrastructure.async.SafeFuture.completedFuture;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ONE;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ZERO;
+import static tech.pegasys.teku.ssz.backing.SszDataAssert.assertThatSszData;
 
 import java.util.List;
 import java.util.Optional;
@@ -42,16 +43,17 @@ import tech.pegasys.teku.api.schema.BLSPubKey;
 import tech.pegasys.teku.api.schema.BLSSignature;
 import tech.pegasys.teku.api.schema.BeaconBlock;
 import tech.pegasys.teku.api.schema.ValidatorBlockResult;
-import tech.pegasys.teku.bls.BLSPublicKey;
+import tech.pegasys.teku.bls.BLSTestUtil;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.datastructures.operations.AttestationData;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
+import tech.pegasys.teku.networks.SpecProviderFactory;
+import tech.pegasys.teku.spec.SpecProvider;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
+import tech.pegasys.teku.ssz.backing.schema.collections.SszBitlistSchema;
 import tech.pegasys.teku.storage.client.ChainDataUnavailableException;
 import tech.pegasys.teku.storage.client.CombinedChainDataClient;
-import tech.pegasys.teku.util.config.Constants;
 import tech.pegasys.teku.validator.api.AttesterDuties;
 import tech.pegasys.teku.validator.api.AttesterDuty;
 import tech.pegasys.teku.validator.api.SendSignedBlockResult;
@@ -63,16 +65,17 @@ public class ValidatorDataProviderTest {
       ArgumentCaptor.forClass(tech.pegasys.teku.datastructures.operations.Attestation.class);
 
   private final DataStructureUtil dataStructureUtil = new DataStructureUtil();
+  private final SpecProvider specProvider = SpecProviderFactory.createMinimal();
   private final CombinedChainDataClient combinedChainDataClient =
       mock(CombinedChainDataClient.class);
   private final ValidatorApiChannel validatorApiChannel = mock(ValidatorApiChannel.class);
   private final ValidatorDataProvider provider =
-      new ValidatorDataProvider(validatorApiChannel, combinedChainDataClient);
+      new ValidatorDataProvider(specProvider, validatorApiChannel, combinedChainDataClient);
   private final tech.pegasys.teku.datastructures.blocks.BeaconBlock blockInternal =
       dataStructureUtil.randomBeaconBlock(123);
   private final BeaconBlock block = new BeaconBlock(blockInternal);
   private final tech.pegasys.teku.bls.BLSSignature signatureInternal =
-      tech.pegasys.teku.bls.BLSSignature.random(1234);
+      BLSTestUtil.randomSignature(1234);
   private final BLSSignature signature = new BLSSignature(signatureInternal);
 
   @Test
@@ -170,15 +173,20 @@ public class ValidatorDataProviderTest {
     provider.submitAttestation(attestation);
 
     verify(validatorApiChannel).sendSignedAttestation(args.capture());
-    assertThat(args.getValue()).usingRecursiveComparison().isEqualTo(internalAttestation);
+    assertThatSszData(args.getValue()).isEqualByAllMeansTo(internalAttestation);
   }
 
   @Test
   public void submitAttestation_shouldThrowIllegalArgumentExceptionWhenSignatureIsEmpty() {
     final AttestationData attestationData = dataStructureUtil.randomAttestationData();
+    final int maxValidatorsPerCommittee =
+        specProvider
+            .atSlot(attestationData.getSlot())
+            .getConstants()
+            .getMaxValidatorsPerCommittee();
     final tech.pegasys.teku.datastructures.operations.Attestation internalAttestation =
         new tech.pegasys.teku.datastructures.operations.Attestation(
-            new Bitlist(4, Constants.MAX_VALIDATORS_PER_COMMITTEE),
+            SszBitlistSchema.create(maxValidatorsPerCommittee).ofBits(4),
             attestationData,
             tech.pegasys.teku.bls.BLSSignature.empty());
 
@@ -278,8 +286,8 @@ public class ValidatorDataProviderTest {
 
   @Test
   public void getAttesterDuties_shouldReturnDutiesForKnownValidator() {
-    AttesterDuty v1 = new AttesterDuty(BLSPublicKey.random(0), 1, 2, 3, 15, 4, ONE);
-    AttesterDuty v2 = new AttesterDuty(BLSPublicKey.random(1), 11, 12, 13, 15, 14, ZERO);
+    AttesterDuty v1 = new AttesterDuty(BLSTestUtil.randomPublicKey(0), 1, 2, 3, 15, 4, ONE);
+    AttesterDuty v2 = new AttesterDuty(BLSTestUtil.randomPublicKey(1), 11, 12, 13, 15, 14, ZERO);
     when(validatorApiChannel.getAttestationDuties(eq(ONE), any()))
         .thenReturn(
             completedFuture(

@@ -49,28 +49,34 @@ import tech.pegasys.teku.datastructures.operations.AttesterSlashing;
 import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
 import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
 import tech.pegasys.teku.infrastructure.async.SyncAsyncRunner;
+import tech.pegasys.teku.infrastructure.async.eventthread.InlineEventThread;
 import tech.pegasys.teku.infrastructure.events.EventChannels;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.networking.eth2.Eth2Network;
+import tech.pegasys.teku.networking.eth2.Eth2P2PNetwork;
+import tech.pegasys.teku.networks.SpecProviderFactory;
 import tech.pegasys.teku.provider.JsonProvider;
-import tech.pegasys.teku.spec.StubSpecProvider;
+import tech.pegasys.teku.spec.SpecProvider;
+import tech.pegasys.teku.spec.constants.SpecConstants;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
 import tech.pegasys.teku.statetransition.OperationPool;
 import tech.pegasys.teku.statetransition.attestation.AggregatingAttestationPool;
+import tech.pegasys.teku.statetransition.attestation.AttestationManager;
+import tech.pegasys.teku.statetransition.block.BlockManager;
 import tech.pegasys.teku.statetransition.forkchoice.ForkChoice;
-import tech.pegasys.teku.statetransition.forkchoice.SyncForkChoiceExecutor;
 import tech.pegasys.teku.storage.client.ChainUpdater;
 import tech.pegasys.teku.storage.client.CombinedChainDataClient;
 import tech.pegasys.teku.storage.client.RecentChainData;
+import tech.pegasys.teku.storage.server.StateStorageMode;
 import tech.pegasys.teku.storage.storageSystem.InMemoryStorageSystemBuilder;
 import tech.pegasys.teku.storage.storageSystem.StorageSystem;
 import tech.pegasys.teku.sync.SyncService;
-import tech.pegasys.teku.util.config.StateStorageMode;
 import tech.pegasys.teku.validator.api.ValidatorApiChannel;
 
 @SuppressWarnings("unchecked")
 public abstract class AbstractDataBackedRestAPIIntegrationTest {
   protected static final List<BLSKeyPair> VALIDATOR_KEYS = BLSKeyGenerator.generateKeyPairs(16);
+  protected final SpecProvider specProvider = SpecProviderFactory.createMinimal();
+  protected final SpecConstants specConstants = specProvider.getGenesisSpecConstants();
   private static final okhttp3.MediaType JSON =
       okhttp3.MediaType.parse("application/json; charset=utf-8");
   private static final BeaconRestApiConfig CONFIG =
@@ -90,12 +96,14 @@ public abstract class AbstractDataBackedRestAPIIntegrationTest {
   protected static final UInt64 TEN = UInt64.valueOf(10);
 
   // Mocks
-  protected final Eth2Network eth2Network = mock(Eth2Network.class);
+  protected final Eth2P2PNetwork eth2P2PNetwork = mock(Eth2P2PNetwork.class);
   protected final SyncService syncService = mock(SyncService.class);
   protected final ValidatorApiChannel validatorApiChannel = mock(ValidatorApiChannel.class);
   protected final EventChannels eventChannels = mock(EventChannels.class);
   protected final AggregatingAttestationPool attestationPool =
       mock(AggregatingAttestationPool.class);
+  protected final BlockManager blockManager = mock(BlockManager.class);
+  private final AttestationManager attestationManager = mock(AttestationManager.class);
   protected final OperationPool<AttesterSlashing> attesterSlashingPool = mock(OperationPool.class);
   protected final OperationPool<ProposerSlashing> proposerSlashingPool = mock(OperationPool.class);
   protected final OperationPool<SignedVoluntaryExit> voluntaryExitPool = mock(OperationPool.class);
@@ -136,7 +144,7 @@ public abstract class AbstractDataBackedRestAPIIntegrationTest {
             : new ForkChoice(
                 new ForkChoiceAttestationValidator(),
                 new ForkChoiceBlockTasks(),
-                new SyncForkChoiceExecutor(),
+                new InlineEventThread(),
                 recentChainData,
                 stateTransition);
     beaconChainUtil =
@@ -147,13 +155,15 @@ public abstract class AbstractDataBackedRestAPIIntegrationTest {
     combinedChainDataClient = storageSystem.combinedChainDataClient();
     dataProvider =
         new DataProvider(
-            StubSpecProvider.create(),
+            specProvider,
             recentChainData,
             combinedChainDataClient,
-            eth2Network,
+            eth2P2PNetwork,
             syncService,
             validatorApiChannel,
             attestationPool,
+            blockManager,
+            attestationManager,
             attesterSlashingPool,
             proposerSlashingPool,
             voluntaryExitPool);

@@ -16,8 +16,7 @@ package tech.pegasys.teku.datastructures.operations;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
-import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 
 class IndexedAttestationTest {
 
@@ -27,8 +26,7 @@ class IndexedAttestationTest {
   void roundTripViaSsz() {
     IndexedAttestation indexedAttestation = dataStructureUtil.randomIndexedAttestation();
     IndexedAttestation newIndexedAttestation =
-        SimpleOffsetSerializer.deserialize(
-            SimpleOffsetSerializer.serialize(indexedAttestation), IndexedAttestation.class);
+        IndexedAttestation.SSZ_SCHEMA.sszDeserialize(indexedAttestation.sszSerialize());
     assertEquals(indexedAttestation, newIndexedAttestation);
   }
 }

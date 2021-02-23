@@ -47,16 +47,16 @@ import tech.pegasys.teku.datastructures.operations.IndexedAttestation;
 import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.datastructures.state.Checkpoint;
 import tech.pegasys.teku.datastructures.util.AttestationProcessingResult;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
+import tech.pegasys.teku.infrastructure.async.eventthread.InlineEventThread;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
 import tech.pegasys.teku.storage.api.TrackingChainHeadChannel.ReorgEvent;
 import tech.pegasys.teku.storage.client.RecentChainData;
+import tech.pegasys.teku.storage.server.StateStorageMode;
 import tech.pegasys.teku.storage.storageSystem.InMemoryStorageSystemBuilder;
 import tech.pegasys.teku.storage.storageSystem.StorageSystem;
-import tech.pegasys.teku.util.config.StateStorageMode;
 
 class ForkChoiceTest {
 
@@ -72,13 +72,13 @@ class ForkChoiceTest {
       new ForkChoice(
           new ForkChoiceAttestationValidator(),
           new ForkChoiceBlockTasks(),
-          new SyncForkChoiceExecutor(),
+          new InlineEventThread(),
           recentChainData,
           stateTransition);
 
   @BeforeEach
   public void setup() {
-    recentChainData.initializeFromGenesis(genesis.getState());
+    recentChainData.initializeFromGenesis(genesis.getState(), UInt64.ZERO);
 
     storageSystem
         .chainUpdater()
@@ -234,7 +234,7 @@ class ForkChoiceTest {
     final Checkpoint targetCheckpoint = new Checkpoint(ZERO, targetBlock.getRoot());
     final Attestation attestation =
         new Attestation(
-            new Bitlist(5, 5),
+            Attestation.SSZ_SCHEMA.getAggregationBitsSchema().ofBits(5),
             new AttestationData(
                 targetBlock.getSlot(),
                 compute_epoch_at_slot(targetBlock.getSlot()),
@@ -260,7 +260,7 @@ class ForkChoiceTest {
     final ValidateableAttestation updatedVote =
         ValidateableAttestation.from(
             new Attestation(
-                new Bitlist(16, 16),
+                Attestation.SSZ_SCHEMA.getAggregationBitsSchema().ofBits(16),
                 new AttestationData(
                     updatedAttestationSlot,
                     UInt64.ONE,

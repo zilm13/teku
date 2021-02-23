@@ -19,9 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.junit.jupiter.api.Test;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
-import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 
 class BeaconBlockHeaderTest {
   private final DataStructureUtil dataStructureUtil = new DataStructureUtil();
@@ -106,9 +105,9 @@ class BeaconBlockHeaderTest {
   @Test
   void roundtripSSZ() {
     BeaconBlockHeader beaconBlockHeader = dataStructureUtil.randomBeaconBlockHeader();
-    Bytes beaconBlockSerialized = SimpleOffsetSerializer.serialize(beaconBlockHeader);
+    Bytes beaconBlockSerialized = beaconBlockHeader.sszSerialize();
     BeaconBlockHeader newBeaconBlockHeader =
-        SimpleOffsetSerializer.deserialize(beaconBlockSerialized, BeaconBlockHeader.class);
+        BeaconBlockHeader.SSZ_SCHEMA.sszDeserialize(beaconBlockSerialized);
     assertEquals(beaconBlockHeader, newBeaconBlockHeader);
   }
 
@@ -121,7 +120,7 @@ class BeaconBlockHeaderTest {
             block.getProposerIndex(),
             block.getParentRoot(),
             block.getStateRoot(),
-            block.getBody().hash_tree_root());
-    assertEquals(block.hash_tree_root(), blockHeader.hash_tree_root());
+            block.getBody().hashTreeRoot());
+    assertEquals(block.hashTreeRoot(), blockHeader.hashTreeRoot());
   }
 }

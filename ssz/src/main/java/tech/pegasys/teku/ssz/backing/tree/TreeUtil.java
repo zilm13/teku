@@ -19,7 +19,6 @@ import com.google.common.annotations.VisibleForTesting;
 import java.util.List;
 import java.util.function.Consumer;
 import org.apache.tuweni.bytes.Bytes;
-import tech.pegasys.teku.ssz.backing.Utils;
 import tech.pegasys.teku.ssz.backing.tree.TreeNodeImpl.BranchNodeImpl;
 import tech.pegasys.teku.ssz.backing.tree.TreeNodeImpl.LeafNodeImpl;
 
@@ -51,7 +50,7 @@ public class TreeUtil {
     }
   }
 
-  @VisibleForTesting static final TreeNode[] ZERO_TREES;
+  @VisibleForTesting public static final TreeNode[] ZERO_TREES;
 
   static {
     ZERO_TREES = new TreeNode[64];
@@ -140,24 +139,12 @@ public class TreeUtil {
     }
   }
 
-  public static int treeDepth(long maxChunks) {
-    return Long.bitCount(Utils.nextPowerOf2(maxChunks) - 1);
+  public static long nextPowerOf2(long x) {
+    return x <= 1 ? 1 : Long.highestOneBit(x - 1) << 1;
   }
 
-  /** Estimates the number of 'non-default' tree nodes */
-  public static int estimateNonDefaultNodes(TreeNode node) {
-    if (node instanceof LeafNode) {
-      return 1;
-    } else {
-      BranchNode branchNode = (BranchNode) node;
-      if (branchNode.left() == branchNode.right()) {
-        return 0;
-      } else {
-        return estimateNonDefaultNodes(branchNode.left())
-            + estimateNonDefaultNodes(branchNode.right())
-            + 1;
-      }
-    }
+  public static int treeDepth(long maxChunks) {
+    return Long.bitCount(nextPowerOf2(maxChunks) - 1);
   }
 
   /**
@@ -191,38 +178,5 @@ public class TreeUtil {
           }
           return true;
         });
-  }
-
-  /** Dumps the tree to stdout */
-  public static String dumpBinaryTree(TreeNode node) {
-    StringBuilder ret = new StringBuilder();
-    dumpBinaryTreeRec(node, "", false, s -> ret.append(s).append('\n'));
-    return ret.toString();
-  }
-
-  private static void dumpBinaryTreeRec(
-      TreeNode node, String prefix, boolean printCommit, Consumer<String> linesConsumer) {
-    if (node instanceof LeafNode) {
-      LeafNode leafNode = (LeafNode) node;
-      linesConsumer.accept(prefix + leafNode);
-    } else {
-      BranchNode branchNode = (BranchNode) node;
-      String s = "├─┐";
-      if (printCommit) {
-        s += " " + branchNode;
-      }
-      if (branchNode.left() instanceof LeafNode) {
-        linesConsumer.accept(prefix + "├─" + branchNode.left());
-      } else {
-        linesConsumer.accept(prefix + s);
-        dumpBinaryTreeRec(branchNode.left(), prefix + "│ ", printCommit, linesConsumer);
-      }
-      if (branchNode.right() instanceof LeafNode) {
-        linesConsumer.accept(prefix + "└─" + branchNode.right());
-      } else {
-        linesConsumer.accept(prefix + "└─┐");
-        dumpBinaryTreeRec(branchNode.right(), prefix + "  ", printCommit, linesConsumer);
-      }
-    }
   }
 }

@@ -21,15 +21,15 @@ import java.util.Objects;
 import org.apache.tuweni.bytes.Bytes32;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.bls.BLSSignature;
+import tech.pegasys.teku.bls.BLSTestUtil;
 import tech.pegasys.teku.datastructures.state.Checkpoint;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
-import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
+import tech.pegasys.teku.ssz.backing.collections.SszBitlist;
 
 class AttestationTest {
   private final DataStructureUtil dataStructureUtil = new DataStructureUtil();
-  private Bitlist aggregationBitfield = dataStructureUtil.randomBitlist();
+  private SszBitlist aggregationBitfield = dataStructureUtil.randomBitlist();
   private AttestationData data = dataStructureUtil.randomAttestationData();
   private BLSSignature aggregateSignature = dataStructureUtil.randomSignature();
 
@@ -112,7 +112,7 @@ class AttestationTest {
 
   @Test
   void equalsReturnsFalseWhenAggregrateSignaturesAreDifferent() {
-    BLSSignature differentAggregateSignature = BLSSignature.random(99);
+    BLSSignature differentAggregateSignature = BLSTestUtil.randomSignature(99);
     Attestation testAttestation =
         new Attestation(aggregationBitfield, data, differentAggregateSignature);
 
@@ -123,9 +123,7 @@ class AttestationTest {
   @Test
   void roundtripViaSsz() {
     Attestation attestation = dataStructureUtil.randomAttestation();
-    Attestation newAttestation =
-        SimpleOffsetSerializer.deserialize(
-            SimpleOffsetSerializer.serialize(attestation), Attestation.class);
+    Attestation newAttestation = Attestation.SSZ_SCHEMA.sszDeserialize(attestation.sszSerialize());
     assertEquals(attestation, newAttestation);
   }
 }

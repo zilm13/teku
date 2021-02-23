@@ -23,9 +23,9 @@ import java.util.List;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.datastructures.blocks.SlotAndBlockRoot;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.async.eventthread.InlineEventThread;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.sync.forward.multipeer.batches.Batch;
 import tech.pegasys.teku.sync.forward.multipeer.batches.BatchChain;
 import tech.pegasys.teku.sync.forward.multipeer.batches.StubBatchFactory;
@@ -129,6 +129,21 @@ class BatchDataRequesterTest {
     assertThat(batches).hasSize(2);
     assertThatBatch(batches.get(0)).hasRange(440, 489);
     assertThatBatch(batches.get(1)).hasRange(490, targetChain.getChainHead().getSlot().longValue());
+  }
+
+  @Test
+  void shouldScheduleAdditionalBatchWhenThereIsOnlyOneBlockRemainingToFetch() {
+    final UInt64 firstBatchStart = targetChain.getChainHead().getSlot().minus(BATCH_SIZE);
+    final Batch batch = batchFactory.createBatch(targetChain, firstBatchStart, BATCH_SIZE);
+    batchChain.add(batch);
+
+    fillQueue(ZERO);
+
+    final List<Batch> batches = batchChain.stream().collect(toList());
+    assertThat(batches).hasSize(2);
+    final long targetSlot = targetChain.getChainHead().getSlot().longValue();
+    assertThatBatch(batches.get(0)).hasRange(firstBatchStart.intValue(), targetSlot - 1);
+    assertThatBatch(batches.get(1)).hasRange(targetSlot, targetSlot);
   }
 
   private void fillQueue(final UInt64 commonAncestorSlot) {

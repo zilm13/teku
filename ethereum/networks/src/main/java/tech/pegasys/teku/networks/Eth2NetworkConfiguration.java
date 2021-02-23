@@ -15,30 +15,30 @@ package tech.pegasys.teku.networks;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.util.Arrays.asList;
+import static tech.pegasys.teku.networks.Eth2Network.LESS_SWIFT;
+import static tech.pegasys.teku.networks.Eth2Network.MAINNET;
+import static tech.pegasys.teku.networks.Eth2Network.MEDALLA;
+import static tech.pegasys.teku.networks.Eth2Network.MINIMAL;
+import static tech.pegasys.teku.networks.Eth2Network.PYRMONT;
+import static tech.pegasys.teku.networks.Eth2Network.SWIFT;
+import static tech.pegasys.teku.networks.Eth2Network.TOLEDO;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import tech.pegasys.teku.datastructures.eth1.Eth1Address;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.Spec;
-import tech.pegasys.teku.spec.SpecConfiguration;
-import tech.pegasys.teku.spec.constants.SpecConstants;
+import tech.pegasys.teku.spec.SpecProvider;
 
 public class Eth2NetworkConfiguration {
-  public static final String MAINNET = "mainnet";
-  public static final String MINIMAL = "minimal";
-  public static final String MEDALLA = "medalla";
-  public static final String TOLEDO = "toledo";
-  public static final String PYRMONT = "pyrmont";
-
   private static final int DEFAULT_STARTUP_TARGET_PEER_COUNT = 5;
   private static final int DEFAULT_STARTUP_TIMEOUT_SECONDS = 30;
 
-  private final SpecConfiguration specConfig;
+  private final SpecProvider specProvider;
   private final String constants;
   private final Optional<String> initialState;
+  private final boolean usingCustomInitialState;
   private final int startupTargetPeerCount;
   private final int startupTimeoutSeconds;
   private final List<String> discoveryBootnodes;
@@ -46,17 +46,19 @@ public class Eth2NetworkConfiguration {
   private final Optional<UInt64> eth1DepositContractDeployBlock;
 
   private Eth2NetworkConfiguration(
-      final SpecConfiguration specConfig,
+      final SpecProvider specProvider,
       final String constants,
       final Optional<String> initialState,
+      final boolean usingCustomInitialState,
       final int startupTargetPeerCount,
       final int startupTimeoutSeconds,
       final List<String> discoveryBootnodes,
       final Optional<Eth1Address> eth1DepositContractAddress,
       final Optional<UInt64> eth1DepositContractDeployBlock) {
-    this.specConfig = specConfig;
+    this.specProvider = specProvider;
     this.constants = constants;
     this.initialState = initialState;
+    this.usingCustomInitialState = usingCustomInitialState;
     this.startupTargetPeerCount = startupTargetPeerCount;
     this.startupTimeoutSeconds = startupTimeoutSeconds;
     this.discoveryBootnodes = discoveryBootnodes;
@@ -68,12 +70,16 @@ public class Eth2NetworkConfiguration {
     return builder().applyNetworkDefaults(network);
   }
 
+  public static Eth2NetworkConfiguration.Builder builder(final Eth2Network network) {
+    return builder().applyNetworkDefaults(network);
+  }
+
   public static Eth2NetworkConfiguration.Builder builder() {
     return new Builder();
   }
 
-  public SpecConfiguration getSpecConfig() {
-    return specConfig;
+  public SpecProvider getSpecProvider() {
+    return specProvider;
   }
 
   /**
@@ -87,6 +93,10 @@ public class Eth2NetworkConfiguration {
 
   public Optional<String> getInitialState() {
     return initialState;
+  }
+
+  public boolean isUsingCustomInitialState() {
+    return usingCustomInitialState;
   }
 
   public Integer getStartupTargetPeerCount() {
@@ -117,6 +127,7 @@ public class Eth2NetworkConfiguration {
   public static class Builder {
     private String constants;
     private Optional<String> initialState = Optional.empty();
+    private boolean usingCustomInitialState = false;
     private int startupTargetPeerCount = DEFAULT_STARTUP_TARGET_PEER_COUNT;
     private int startupTimeoutSeconds = DEFAULT_STARTUP_TIMEOUT_SECONDS;
     private List<String> discoveryBootnodes = new ArrayList<>();
@@ -126,14 +137,11 @@ public class Eth2NetworkConfiguration {
     public Eth2NetworkConfiguration build() {
       checkNotNull(constants, "Missing constants");
 
-      final SpecConstants specConstants = ConstantsLoader.loadConstants(constants);
-      final SpecConfiguration specConfig =
-          SpecConfiguration.builder().constants(specConstants).build();
-
       return new Eth2NetworkConfiguration(
-          specConfig,
+          SpecProviderFactory.create(constants),
           constants,
           initialState,
+          usingCustomInitialState,
           startupTargetPeerCount,
           startupTimeoutSeconds,
           discoveryBootnodes,
@@ -148,6 +156,7 @@ public class Eth2NetworkConfiguration {
 
     public Builder initialState(final String initialState) {
       this.initialState = Optional.of(initialState);
+      this.usingCustomInitialState = true;
       return this;
     }
 
@@ -189,9 +198,14 @@ public class Eth2NetworkConfiguration {
       return this;
     }
 
-    public Builder applyNetworkDefaults(final String network) {
-      final String normalizedNetwork = network.toLowerCase(Locale.US).strip();
-      switch (normalizedNetwork) {
+    public Builder applyNetworkDefaults(final String networkName) {
+      Eth2Network.fromStringLenient(networkName)
+          .ifPresentOrElse(this::applyNetworkDefaults, () -> reset().constants(networkName));
+      return this;
+    }
+
+    public Builder applyNetworkDefaults(final Eth2Network network) {
+      switch (network) {
         case MAINNET:
           return applyMainnetNetworkDefaults();
         case MINIMAL:
@@ -202,8 +216,12 @@ public class Eth2NetworkConfiguration {
           return applyToledoNetworkDefaults();
         case PYRMONT:
           return applyPyrmontNetworkDefaults();
+        case SWIFT:
+          return applySwiftNetworkDefaults();
+        case LESS_SWIFT:
+          return applyLessSwiftNetworkDefaults();
         default:
-          return reset().constants(normalizedNetwork);
+          return reset().constants(network.constantsName());
       }
     }
 
@@ -220,12 +238,20 @@ public class Eth2NetworkConfiguration {
     }
 
     public Builder applyMinimalNetworkDefaults() {
-      return reset().constants(MINIMAL).startupTargetPeerCount(0);
+      return reset().constants(MINIMAL.constantsName()).startupTargetPeerCount(0);
+    }
+
+    public Builder applySwiftNetworkDefaults() {
+      return reset().constants(SWIFT.constantsName()).startupTargetPeerCount(0);
+    }
+
+    public Builder applyLessSwiftNetworkDefaults() {
+      return reset().constants(LESS_SWIFT.constantsName()).startupTargetPeerCount(0);
     }
 
     public Builder applyMainnetNetworkDefaults() {
       return reset()
-          .constants(MAINNET)
+          .constants(MAINNET.constantsName())
           .initialStateFromClasspath("mainnet-genesis.ssz")
           .startupTimeoutSeconds(120)
           .eth1DepositContractAddress("0x00000000219ab540356cBB839Cbe05303d7705Fa")
@@ -239,8 +265,8 @@ public class Eth2NetworkConfiguration {
               "enr:-Ku4QP2xDnEtUXIjzJ_DhlCRN9SN99RYQPJL92TMlSv7U5C1YnYLjwOQHgZIUXw6c-BvRg2Yc2QsZxxoS_pPRVe0yK8Bh2F0dG5ldHOIAAAAAAAAAACEZXRoMpD1pf1CAAAAAP__________gmlkgnY0gmlwhBLf22SJc2VjcDI1NmsxoQMeFF5GrS7UZpAH2Ly84aLK-TyvH-dRo0JM1i8yygH50YN1ZHCCJxA",
               "enr:-Ku4QPp9z1W4tAO8Ber_NQierYaOStqhDqQdOPY3bB3jDgkjcbk6YrEnVYIiCBbTxuar3CzS528d2iE7TdJsrL-dEKoBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpD1pf1CAAAAAP__________gmlkgnY0gmlwhBLf22SJc2VjcDI1NmsxoQMw5fqqkw2hHC4F5HZZDPsNmPdB1Gi8JPQK7pRc9XHh-oN1ZHCCKvg",
               // Sigp
-              "enr:-IS4QLkKqDMy_ExrpOEWa59NiClemOnor-krjp4qoeZwIw2QduPC-q7Kz4u1IOWf3DDbdxqQIgC4fejavBOuUPy-HE4BgmlkgnY0gmlwhCLzAHqJc2VjcDI1NmsxoQLQSJfEAHZApkm5edTCZ_4qps_1k_ub2CxHFxi-gr2JMIN1ZHCCIyg",
-              "enr:-IS4QDAyibHCzYZmIYZCjXwU9BqpotWmv2BsFlIq1V31BwDDMJPFEbox1ijT5c2Ou3kvieOKejxuaCqIcjxBjJ_3j_cBgmlkgnY0gmlwhAMaHiCJc2VjcDI1NmsxoQJIdpj_foZ02MXz4It8xKD7yUHTBx7lVFn3oeRP21KRV4N1ZHCCIyg",
+              "enr:-Jq4QFs9If3eUC8mHx6-BLVw0jRMbyEgXNn6sl7c77bBmji_afJ-0_X7Q4vttQ8SO8CYReudHsGVvgSybh1y96yyL-oChGV0aDKQtTA_KgAAAAD__________4JpZIJ2NIJpcIQ2_YtGiXNlY3AyNTZrMaECSHaY_36GdNjF8-CLfMSg-8lB0wce5VRZ96HkT9tSkVeDdWRwgiMo",
+              "enr:-Jq4QA4kNIdO1FkIHpl5iqEKjJEjCVfp77aFulytCEPvEQOdbTTf6ucNmWSuXjlwvgka86gkpnCTv-V7CfBn4AMBRvIChGV0aDKQtTA_KgAAAAD__________4JpZIJ2NIJpcIQ22Gh-iXNlY3AyNTZrMaEC0EiXxAB2QKZJuXnUwmf-KqbP9ZP7m9gsRxcYvoK9iTCDdWRwgiMo",
               // EF
               "enr:-Ku4QHqVeJ8PPICcWk1vSn_XcSkjOkNiTg6Fmii5j6vUQgvzMc9L1goFnLKgXqBJspJjIsB91LTOleFmyWWrFVATGngBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpC1MD8qAAAAAP__________gmlkgnY0gmlwhAMRHkWJc2VjcDI1NmsxoQKLVXFOhp2uX6jeT0DvvDpPcU8FWMjQdR4wMuORMhpX24N1ZHCCIyg",
               "enr:-Ku4QG-2_Md3sZIAUebGYT6g0SMskIml77l6yR-M_JXc-UdNHCmHQeOiMLbylPejyJsdAPsTHJyjJB2sYGDLe0dn8uYBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpC1MD8qAAAAAP__________gmlkgnY0gmlwhBLY-NyJc2VjcDI1NmsxoQORcM6e19T1T9gi7jxEZjk_sjVLGFscUNqAY9obgZaxbIN1ZHCCIyg",
@@ -248,13 +274,13 @@ public class Eth2NetworkConfiguration {
               "enr:-Ku4QEWzdnVtXc2Q0ZVigfCGggOVB2Vc1ZCPEc6j21NIFLODSJbvNaef1g4PxhPwl_3kax86YPheFUSLXPRs98vvYsoBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpC1MD8qAAAAAP__________gmlkgnY0gmlwhDZBrP2Jc2VjcDI1NmsxoQM6jr8Rb1ktLEsVcKAPa08wCsKUmvoQ8khiOl_SLozf9IN1ZHCCIyg",
 
               // Nimbus
-              "enr:-LK4QLU5_AeUzZEtpK8grqPo4EmX4el3ochu8vNNoXX1PrBjYfn8ksjeQ1eFtbL7ywMau9k_7BBQGmO26DHWgngkBCgBh2F0dG5ldHOI__________-EZXRoMpC1MD8qAAAAAP__________gmlkgnY0gmlwhAN7_O-Jc2VjcDI1NmsxoQKH1zg2Fge8Q6Zf-rLFbjGEtgvVbmDXqFVLxqquJcguFIN0Y3CCI4yDdWRwgiOM",
-              "enr:-LK4QLjSKc09WkFZ5Pa1UF3KPkt3ieTZ6B7F6iDL_chyniP5NVDl10aGIu-pL9mbwZ47GM3RN63eGHPsw-MTLSYcz74Bh2F0dG5ldHOI__________-EZXRoMpC1MD8qAAAAAP__________gmlkgnY0gmlwhDQ7fI6Jc2VjcDI1NmsxoQJDU6zzDlUDgUqFSzoIuP9bWu097k2d7X4eHoJTGhbphoN0Y3CCI4yDdWRwgiOM");
+              "enr:-LK4QA8FfhaAjlb_BXsXxSfiysR7R52Nhi9JBt4F8SPssu8hdE1BXQQEtVDC3qStCW60LSO7hEsVHv5zm8_6Vnjhcn0Bh2F0dG5ldHOIAAAAAAAAAACEZXRoMpC1MD8qAAAAAP__________gmlkgnY0gmlwhAN4aBKJc2VjcDI1NmsxoQJerDhsJ-KxZ8sHySMOCmTO6sHM3iCFQ6VMvLTe948MyYN0Y3CCI4yDdWRwgiOM",
+              "enr:-LK4QKWrXTpV9T78hNG6s8AM6IO4XH9kFT91uZtFg1GcsJ6dKovDOr1jtAAFPnS2lvNltkOGA9k29BUN7lFh_sjuc9QBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpC1MD8qAAAAAP__________gmlkgnY0gmlwhANAdd-Jc2VjcDI1NmsxoQLQa6ai7y9PMN5hpLe5HmiJSlYzMuzP7ZhwRiwHvqNXdoN0Y3CCI4yDdWRwgiOM");
     }
 
     public Builder applyMedallaNetworkDefaults() {
       return reset()
-          .constants(MEDALLA)
+          .constants(MEDALLA.constantsName())
           .initialStateFromClasspath("medalla-genesis.ssz")
           .startupTimeoutSeconds(120)
           .eth1DepositContractAddress("0x07b39F4fDE4A38bACe212b546dAc87C58DfE3fDC")
@@ -286,7 +312,7 @@ public class Eth2NetworkConfiguration {
 
     public Builder applyToledoNetworkDefaults() {
       return reset()
-          .constants(TOLEDO)
+          .constants(TOLEDO.constantsName())
           .startupTimeoutSeconds(120)
           .eth1DepositContractAddress("0x47709dC7a8c18688a1f051761fc34ac253970bC0")
           .eth1DepositContractDeployBlock(3702432)
@@ -309,7 +335,7 @@ public class Eth2NetworkConfiguration {
 
     public Builder applyPyrmontNetworkDefaults() {
       return reset()
-          .constants(PYRMONT)
+          .constants(PYRMONT.constantsName())
           .startupTimeoutSeconds(120)
           .eth1DepositContractAddress("0x8c5fecdC472E27Bc447696F431E425D02dd46a8c")
           .eth1DepositContractDeployBlock(3743587)

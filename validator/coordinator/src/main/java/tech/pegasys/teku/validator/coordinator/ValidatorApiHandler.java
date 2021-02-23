@@ -25,7 +25,6 @@ import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_current_
 import static tech.pegasys.teku.infrastructure.logging.LogFormatter.formatBlock;
 import static tech.pegasys.teku.infrastructure.logging.ValidatorLogger.VALIDATOR_LOGGER;
 import static tech.pegasys.teku.util.config.Constants.GENESIS_SLOT;
-import static tech.pegasys.teku.util.config.Constants.MAX_VALIDATORS_PER_COMMITTEE;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.eventbus.EventBus;
@@ -69,13 +68,12 @@ import tech.pegasys.teku.datastructures.validator.SubnetSubscription;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.networking.eth2.gossip.subnets.AttestationTopicSubscriber;
-import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
+import tech.pegasys.teku.ssz.backing.collections.SszBitlist;
 import tech.pegasys.teku.statetransition.attestation.AggregatingAttestationPool;
 import tech.pegasys.teku.statetransition.attestation.AttestationManager;
 import tech.pegasys.teku.statetransition.block.BlockImportChannel;
 import tech.pegasys.teku.statetransition.events.block.ProposedBlockEvent;
 import tech.pegasys.teku.storage.client.CombinedChainDataClient;
-import tech.pegasys.teku.sync.events.SyncState;
 import tech.pegasys.teku.sync.events.SyncStateProvider;
 import tech.pegasys.teku.util.config.Constants;
 import tech.pegasys.teku.validator.api.AttesterDuties;
@@ -152,7 +150,7 @@ public class ValidatorApiHandler implements ValidatorApiChannel {
 
   @Override
   public SafeFuture<Map<BLSPublicKey, Integer>> getValidatorIndices(
-      final List<BLSPublicKey> publicKeys) {
+      final Collection<BLSPublicKey> publicKeys) {
     return SafeFuture.of(
         () ->
             combinedChainDataClient
@@ -217,7 +215,7 @@ public class ValidatorApiHandler implements ValidatorApiChannel {
 
   @Override
   public SafeFuture<Optional<Map<BLSPublicKey, ValidatorStatus>>> getValidatorStatuses(
-      List<BLSPublicKey> validatorIdentifiers) {
+      Collection<BLSPublicKey> validatorIdentifiers) {
     return isSyncActive()
         ? SafeFuture.completedFuture(Optional.empty())
         : chainDataProvider
@@ -348,7 +346,8 @@ public class ValidatorApiHandler implements ValidatorApiChannel {
     final List<Integer> committee =
         CommitteeUtil.get_beacon_committee(state, slot, committeeIndexUnsigned);
 
-    final Bitlist aggregationBits = new Bitlist(committee.size(), MAX_VALIDATORS_PER_COMMITTEE);
+    SszBitlist aggregationBits =
+        Attestation.SSZ_SCHEMA.getAggregationBitsSchema().ofBits(committee.size());
     return new Attestation(aggregationBits, attestationData, BLSSignature.empty());
   }
 
@@ -396,12 +395,13 @@ public class ValidatorApiHandler implements ValidatorApiChannel {
         .onAttestation(ValidateableAttestation.fromValidator(attestation))
         .finish(
             result -> {
-              result.ifInvalid(
-                  reason ->
-                      VALIDATOR_LOGGER.producedInvalidAttestation(
-                          attestation.getData().getSlot(), reason));
-              dutyMetrics.onAttestationPublished(attestation.getData().getSlot());
-              performanceTracker.saveProducedAttestation(attestation);
+              if (!result.isInvalid()) {
+                dutyMetrics.onAttestationPublished(attestation.getData().getSlot());
+                performanceTracker.saveProducedAttestation(attestation);
+              } else {
+                VALIDATOR_LOGGER.producedInvalidAttestation(
+                    attestation.getData().getSlot(), result.getInvalidReason());
+              }
             },
             err ->
                 LOG.error(
@@ -465,14 +465,7 @@ public class ValidatorApiHandler implements ValidatorApiChannel {
 
   @VisibleForTesting
   boolean isSyncActive() {
-    final SyncState syncState = syncStateProvider.getCurrentSyncState();
-    return syncState.isStartingUp() || (syncState.isSyncing() && headBlockIsTooFarBehind());
-  }
-
-  private boolean headBlockIsTooFarBehind() {
-    final UInt64 currentEpoch = combinedChainDataClient.getCurrentEpoch();
-    final UInt64 headEpoch = combinedChainDataClient.getHeadEpoch();
-    return headEpoch.plus(1).isLessThan(currentEpoch);
+    return !syncStateProvider.getCurrentSyncState().isInSync();
   }
 
   private ProposerDuties getProposerDutiesFromIndexesAndState(

@@ -23,6 +23,7 @@ import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_next
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_signing_root;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_start_slot_at_epoch;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.initialize_beacon_state_from_eth1;
+import static tech.pegasys.teku.datastructures.util.CommitteeUtil.compute_shuffled_index;
 import static tech.pegasys.teku.util.config.Constants.GENESIS_SLOT;
 import static tech.pegasys.teku.util.config.Constants.SLOTS_PER_EPOCH;
 
@@ -42,6 +43,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import tech.pegasys.teku.bls.BLS;
 import tech.pegasys.teku.bls.BLSPublicKey;
 import tech.pegasys.teku.bls.BLSSignature;
+import tech.pegasys.teku.bls.BLSTestUtil;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.datastructures.operations.Deposit;
 import tech.pegasys.teku.datastructures.operations.DepositData;
@@ -52,6 +54,7 @@ import tech.pegasys.teku.datastructures.state.Committee;
 import tech.pegasys.teku.datastructures.state.Fork;
 import tech.pegasys.teku.datastructures.state.Validator;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
 import tech.pegasys.teku.util.config.Constants;
 
@@ -131,7 +134,7 @@ class BeaconStateUtilTest {
   @Test
   void validateProofOfPossessionReturnsFalseIfTheBLSSignatureIsNotValidForGivenDepositInputData() {
     Deposit deposit = dataStructureUtil.newDeposits(1).get(0);
-    BLSPublicKey pubkey = BLSPublicKey.random(42);
+    BLSPublicKey pubkey = BLSTestUtil.randomPublicKey(42);
     DepositData depositData = deposit.getData();
     DepositMessage depositMessage =
         new DepositMessage(
@@ -405,7 +408,7 @@ class BeaconStateUtilTest {
     int listSize = 1000;
     boolean[] done = new boolean[listSize]; // Initialized to false
     for (int i = 0; i < listSize; i++) {
-      int idx = CommitteeUtil.compute_shuffled_index(i, listSize, seed);
+      int idx = compute_shuffled_index(i, listSize, seed);
       assertFalse(done[idx]);
       done[idx] = true;
     }
@@ -416,7 +419,18 @@ class BeaconStateUtilTest {
   @Test
   void processDepositsShouldIgnoreInvalidSignedDeposits() {
     ArrayList<DepositWithIndex> deposits = dataStructureUtil.randomDeposits(3);
-    deposits.get(1).getData().setSignature(BLSSignature.empty());
+    DepositWithIndex deposit = deposits.get(1);
+    DepositData depositData = deposit.getData();
+    DepositWithIndex invalidSigDeposit =
+        new DepositWithIndex(
+            new DepositData(
+                depositData.getPubkey(),
+                depositData.getWithdrawal_credentials(),
+                depositData.getAmount(),
+                BLSSignature.empty()),
+            deposit.getIndex());
+    deposits.set(1, invalidSigDeposit);
+
     BeaconState state = initialize_beacon_state_from_eth1(Bytes32.ZERO, UInt64.ZERO, deposits);
     assertEquals(2, state.getValidators().size());
     assertEquals(
@@ -452,7 +466,7 @@ class BeaconStateUtilTest {
   void getCurrentDutyDependentRoot_genesisStateReturnsFinalizedCheckpointRoot() {
     final BeaconState state = dataStructureUtil.randomBeaconState(UInt64.valueOf(GENESIS_SLOT));
     assertThat(BeaconStateUtil.getCurrentDutyDependentRoot(state))
-        .isEqualTo(new BeaconBlock(state.hash_tree_root()).getRoot());
+        .isEqualTo(BeaconBlock.fromGenesisState(state).getRoot());
   }
 
   @Test
@@ -474,7 +488,7 @@ class BeaconStateUtilTest {
   void getPreviousDutyDependentRoot_genesisStateReturnsFinalizedCheckpointRoot() {
     final BeaconState state = dataStructureUtil.randomBeaconState(UInt64.valueOf(GENESIS_SLOT));
     assertThat(BeaconStateUtil.getPreviousDutyDependentRoot(state))
-        .isEqualTo(new BeaconBlock(state.hash_tree_root()).getRoot());
+        .isEqualTo(BeaconBlock.fromGenesisState(state).getRoot());
   }
 
   @Test

@@ -16,123 +16,77 @@ package tech.pegasys.teku.datastructures.blocks.exec;
 import static tech.pegasys.teku.util.config.Constants.BYTES_PER_LOGS_BLOOM;
 import static tech.pegasys.teku.util.config.Constants.MAX_ETH1_TRANSACTIONS;
 
-import com.google.common.base.MoreObjects;
 import java.util.List;
-import java.util.function.Function;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-import tech.pegasys.teku.datastructures.util.Merkleizable;
-import tech.pegasys.teku.infrastructure.logging.LogFormatter;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bytes20;
-import tech.pegasys.teku.ssz.SSZTypes.SSZBackingList;
-import tech.pegasys.teku.ssz.SSZTypes.SSZContainer;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
-import tech.pegasys.teku.ssz.SSZTypes.SSZVector;
-import tech.pegasys.teku.ssz.backing.ListViewRead;
-import tech.pegasys.teku.ssz.backing.ListViewWrite;
-import tech.pegasys.teku.ssz.backing.VectorViewRead;
-import tech.pegasys.teku.ssz.backing.VectorViewWrite;
+import tech.pegasys.teku.ssz.backing.SszList;
+import tech.pegasys.teku.ssz.backing.SszVector;
+import tech.pegasys.teku.ssz.backing.containers.Container10;
+import tech.pegasys.teku.ssz.backing.containers.ContainerSchema10;
+import tech.pegasys.teku.ssz.backing.schema.SszListSchema;
+import tech.pegasys.teku.ssz.backing.schema.SszPrimitiveSchemas;
+import tech.pegasys.teku.ssz.backing.schema.SszSchema;
+import tech.pegasys.teku.ssz.backing.schema.SszVectorSchema;
 import tech.pegasys.teku.ssz.backing.tree.TreeNode;
-import tech.pegasys.teku.ssz.backing.type.BasicViewTypes;
-import tech.pegasys.teku.ssz.backing.type.ContainerViewType;
-import tech.pegasys.teku.ssz.backing.type.ListViewType;
-import tech.pegasys.teku.ssz.backing.type.VectorViewType;
-import tech.pegasys.teku.ssz.backing.view.AbstractImmutableContainer;
-import tech.pegasys.teku.ssz.backing.view.BasicViews.ByteView;
-import tech.pegasys.teku.ssz.backing.view.BasicViews.Bytes32View;
-import tech.pegasys.teku.ssz.backing.view.BasicViews.UInt64View;
-import tech.pegasys.teku.ssz.backing.view.ViewUtils;
-import tech.pegasys.teku.ssz.sos.SimpleOffsetSerializable;
+import tech.pegasys.teku.ssz.backing.view.SszPrimitives;
+import tech.pegasys.teku.ssz.backing.view.SszUtils;
 
-public class ExecutableData extends AbstractImmutableContainer
-    implements Merkleizable, SimpleOffsetSerializable, SSZContainer {
+public class ExecutableData
+    extends Container10<
+        ExecutableData,
+        SszPrimitives.SszBytes32,
+        SszPrimitives.SszBytes32,
+        SszVector<SszPrimitives.SszByte>,
+        SszPrimitives.SszBytes32,
+        SszPrimitives.SszUInt64,
+        SszPrimitives.SszUInt64,
+        SszPrimitives.SszBytes32,
+        SszVector<SszPrimitives.SszByte>,
+        SszPrimitives.SszUInt64,
+        SszList<Eth1Transaction>> {
 
-  public static final ContainerViewType<ExecutableData> TYPE =
-      ContainerViewType.create(
-          List.of(
-              BasicViewTypes.BYTES32_TYPE,
-              BasicViewTypes.BYTES32_TYPE,
-              new VectorViewType<ByteView>(BasicViewTypes.BYTE_TYPE, Bytes20.SIZE),
-              BasicViewTypes.BYTES32_TYPE,
-              BasicViewTypes.UINT64_TYPE,
-              BasicViewTypes.UINT64_TYPE,
-              BasicViewTypes.BYTES32_TYPE,
-              new VectorViewType<ByteView>(BasicViewTypes.BYTE_TYPE, BYTES_PER_LOGS_BLOOM),
-              BasicViewTypes.UINT64_TYPE,
-              new ListViewType<Eth1Transaction>(Eth1Transaction.TYPE, MAX_ETH1_TRANSACTIONS)),
-          ExecutableData::new);
-
-  @SuppressWarnings("unused")
-  private final Bytes32 parent_hash = null;
-
-  @SuppressWarnings("unused")
-  private final Bytes32 block_hash = null;
-
-  @SuppressWarnings("unused")
-  private final Bytes20 coinbase = null;
-
-  @SuppressWarnings("unused")
-  private final Bytes32 state_root = null;
-
-  @SuppressWarnings("unused")
-  private final UInt64 gas_limit = null;
-
-  @SuppressWarnings("unused")
-  private final UInt64 gas_used = null;
-
-  @SuppressWarnings("unused")
-  private final Bytes32 receipt_root = null;
-
-  @SuppressWarnings("unused")
-  private final SSZVector<Byte> logs_bloom =
-      SSZVector.createMutable(Byte.class, BYTES_PER_LOGS_BLOOM);
-
-  @SuppressWarnings("unused")
-  private final UInt64 difficulty = null;
-
-  @SuppressWarnings("unused")
-  private final SSZList<Eth1Transaction> transactions =
-      SSZList.createMutable(Eth1Transaction.class, MAX_ETH1_TRANSACTIONS);
+  public static final ExecutableDataSchema SSZ_SCHEMA = new ExecutableDataSchema();
 
   public ExecutableData() {
-    super(TYPE);
+    super(SSZ_SCHEMA);
   }
 
-  public ExecutableData(
-      ContainerViewType<? extends AbstractImmutableContainer> type, TreeNode backingNode) {
+  public ExecutableData(ExecutableDataSchema type, TreeNode backingNode) {
     super(type, backingNode);
   }
 
+  @Deprecated
   public ExecutableData(
       Bytes32 parent_hash,
       Bytes32 block_hash,
-      Bytes20 coinbase,
+      Bytes coinbase,
       Bytes32 state_root,
       UInt64 gas_limit,
       UInt64 gas_used,
       Bytes32 receipt_root,
-      SSZVector<Byte> logs_bloom,
+      Bytes logs_bloom,
       UInt64 difficulty,
       SSZList<Eth1Transaction> transactions) {
     super(
-        TYPE,
-        new Bytes32View(parent_hash),
-        new Bytes32View(block_hash),
-        ViewUtils.createVectorFromBytes(coinbase.getWrappedBytes()),
-        new Bytes32View(state_root),
-        new UInt64View(gas_limit),
-        new UInt64View(gas_used),
-        new Bytes32View(receipt_root),
-        createLogsBloomView(logs_bloom),
-        new UInt64View(difficulty),
-        createTransactionListView(transactions));
+        SSZ_SCHEMA,
+        new SszPrimitives.SszBytes32(parent_hash),
+        new SszPrimitives.SszBytes32(block_hash),
+        SszUtils.toSszByteVector(coinbase),
+        new SszPrimitives.SszBytes32(state_root),
+        new SszPrimitives.SszUInt64(gas_limit),
+        new SszPrimitives.SszUInt64(gas_used),
+        new SszPrimitives.SszBytes32(receipt_root),
+        SszUtils.toSszByteVector(logs_bloom),
+        new SszPrimitives.SszUInt64(difficulty),
+        SszUtils.toSszList(SSZ_SCHEMA.getTransactionsSchema(), transactions));
   }
 
   public ExecutableData(
       Bytes32 parent_hash,
       Bytes32 block_hash,
-      Bytes20 coinbase,
+      Bytes coinbase,
       Bytes32 state_root,
       UInt64 gas_limit,
       UInt64 gas_used,
@@ -141,103 +95,99 @@ public class ExecutableData extends AbstractImmutableContainer
       UInt64 difficulty,
       List<Eth1Transaction> transactions) {
     super(
-        TYPE,
-        new Bytes32View(parent_hash),
-        new Bytes32View(block_hash),
-        ViewUtils.createVectorFromBytes(coinbase.getWrappedBytes()),
-        new Bytes32View(state_root),
-        new UInt64View(gas_limit),
-        new UInt64View(gas_used),
-        new Bytes32View(receipt_root),
-        ViewUtils.createVectorFromBytes(logs_bloom),
-        new UInt64View(difficulty),
-        createTransactionListView(transactions));
-  }
-
-  private static VectorViewRead<ByteView> createLogsBloomView(SSZVector<Byte> vector) {
-    VectorViewType<ByteView> type = new VectorViewType<>(BasicViewTypes.BYTE_TYPE, vector.size());
-    VectorViewWrite<ByteView> ret = type.getDefault().createWritableCopy();
-    for (int i = 0; i < ret.size(); i++) {
-      ret.set(i, new ByteView(vector.get(i)));
-    }
-
-    return ret.commitChanges();
-  }
-
-  private static ListViewRead<Eth1Transaction> createTransactionListView(
-      Iterable<Eth1Transaction> transactions) {
-    ListViewWrite<Eth1Transaction> mutableListView =
-        new ListViewType<Eth1Transaction>(Eth1Transaction.TYPE, MAX_ETH1_TRANSACTIONS)
-            .getDefault()
-            .createWritableCopy();
-    transactions.forEach(mutableListView::append);
-
-    return mutableListView.commitChanges();
-  }
-
-  @Override
-  public int getSSZFieldCount() {
-    return 0;
+        SSZ_SCHEMA,
+        new SszPrimitives.SszBytes32(parent_hash),
+        new SszPrimitives.SszBytes32(block_hash),
+        SszUtils.toSszByteVector(coinbase),
+        new SszPrimitives.SszBytes32(state_root),
+        new SszPrimitives.SszUInt64(gas_limit),
+        new SszPrimitives.SszUInt64(gas_used),
+        new SszPrimitives.SszBytes32(receipt_root),
+        SszUtils.toSszByteVector(logs_bloom),
+        new SszPrimitives.SszUInt64(difficulty),
+        SszUtils.toSszList(SSZ_SCHEMA.getTransactionsSchema(), transactions));
   }
 
   public Bytes32 getParent_hash() {
-    return ((Bytes32View) get(0)).get();
+    return getField0().get();
   }
 
   public Bytes32 getBlock_hash() {
-    return ((Bytes32View) get(1)).get();
+    return getField1().get();
   }
 
-  public Bytes20 getCoinbase() {
-    return new Bytes20(ViewUtils.getAllBytes(getAny(2)));
+  public Bytes getCoinbase() {
+    return getField2().sszSerialize();
   }
 
   public Bytes32 getState_root() {
-    return ((Bytes32View) get(3)).get();
+    return getField3().get();
   }
 
   public UInt64 getGas_limit() {
-    return ((UInt64View) get(4)).get();
+    return getField4().get();
   }
 
   public UInt64 getGas_used() {
-    return ((UInt64View) get(5)).get();
+    return getField5().get();
   }
 
   public Bytes32 getReceipt_root() {
-    return ((Bytes32View) get(6)).get();
+    return getField6().get();
   }
 
   public Bytes getLogs_bloom() {
-    return ViewUtils.getAllBytes(getAny(7));
+    return getField7().sszSerialize();
   }
 
   public UInt64 getDifficulty() {
-    return ((UInt64View) get(8)).get();
+    return getField8().get();
   }
 
-  public SSZList<Eth1Transaction> getTransactions() {
-    return new SSZBackingList<>(
-        Eth1Transaction.class, getAny(9), Function.identity(), Function.identity());
+  public SszList<Eth1Transaction> getTransactions() {
+    return getField9();
   }
 
-  @Override
-  public Bytes32 hash_tree_root() {
-    return hashTreeRoot();
-  }
+  public static class ExecutableDataSchema
+      extends ContainerSchema10<
+          ExecutableData,
+          SszPrimitives.SszBytes32,
+          SszPrimitives.SszBytes32,
+          SszVector<SszPrimitives.SszByte>,
+          SszPrimitives.SszBytes32,
+          SszPrimitives.SszUInt64,
+          SszPrimitives.SszUInt64,
+          SszPrimitives.SszBytes32,
+          SszVector<SszPrimitives.SszByte>,
+          SszPrimitives.SszUInt64,
+          SszList<Eth1Transaction>> {
 
-  @Override
-  public String toString() {
-    return MoreObjects.toStringHelper(this)
-        .add("parent_hash", LogFormatter.formatHashRoot(getParent_hash()))
-        .add("block_hash", LogFormatter.formatHashRoot(getBlock_hash()))
-        .add("coinbase", getCoinbase().getWrappedBytes().slice(0, 8))
-        .add("state_root", LogFormatter.formatHashRoot(getState_root()))
-        .add("gas_limit", getGas_limit())
-        .add("gas_used", getGas_used())
-        .add("receipt_root", LogFormatter.formatHashRoot(getReceipt_root()))
-        .add("logs_bloom", getLogs_bloom().slice(0, 8))
-        .add("difficulty", getDifficulty())
-        .toString();
+    public ExecutableDataSchema() {
+      super(
+          "ExecutableData",
+          namedSchema("parent_hash", SszPrimitiveSchemas.BYTES32_SCHEMA),
+          namedSchema("block_hash", SszPrimitiveSchemas.BYTES32_SCHEMA),
+          namedSchema("coinbase", SszVectorSchema.create(SszPrimitiveSchemas.BYTE_SCHEMA, 20)),
+          namedSchema("state_root", SszPrimitiveSchemas.BYTES32_SCHEMA),
+          namedSchema("gas_limit", SszPrimitiveSchemas.UINT64_SCHEMA),
+          namedSchema("gas_used", SszPrimitiveSchemas.UINT64_SCHEMA),
+          namedSchema("receipt_root", SszPrimitiveSchemas.BYTES32_SCHEMA),
+          namedSchema(
+              "logs_bloom",
+              SszVectorSchema.create(SszPrimitiveSchemas.BYTE_SCHEMA, BYTES_PER_LOGS_BLOOM)),
+          namedSchema("difficulty", SszPrimitiveSchemas.UINT64_SCHEMA),
+          namedSchema(
+              "transactions",
+              SszListSchema.create(Eth1Transaction.SSZ_SCHEMA, MAX_ETH1_TRANSACTIONS)));
+    }
+
+    public SszSchema<SszList<Eth1Transaction>> getTransactionsSchema() {
+      return getFieldSchema9();
+    }
+
+    @Override
+    public ExecutableData createFromBackingNode(TreeNode node) {
+      return new ExecutableData(this, node);
+    }
   }
 }

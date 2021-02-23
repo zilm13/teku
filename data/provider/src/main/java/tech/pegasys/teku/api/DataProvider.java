@@ -16,47 +16,57 @@ package tech.pegasys.teku.api;
 import tech.pegasys.teku.datastructures.operations.AttesterSlashing;
 import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
 import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
-import tech.pegasys.teku.networking.eth2.Eth2Network;
+import tech.pegasys.teku.networking.eth2.Eth2P2PNetwork;
 import tech.pegasys.teku.spec.SpecProvider;
 import tech.pegasys.teku.statetransition.OperationPool;
 import tech.pegasys.teku.statetransition.attestation.AggregatingAttestationPool;
+import tech.pegasys.teku.statetransition.attestation.AttestationManager;
+import tech.pegasys.teku.statetransition.block.BlockManager;
 import tech.pegasys.teku.storage.client.CombinedChainDataClient;
 import tech.pegasys.teku.storage.client.RecentChainData;
 import tech.pegasys.teku.sync.SyncService;
 import tech.pegasys.teku.validator.api.ValidatorApiChannel;
 
 public class DataProvider {
-  private final SpecProvider specProvider;
   private final NetworkDataProvider networkDataProvider;
   private final ChainDataProvider chainDataProvider;
   private final SyncDataProvider syncDataProvider;
   private final ValidatorDataProvider validatorDataProvider;
   private final NodeDataProvider nodeDataProvider;
+  private final ConfigProvider configProvider;
 
   public DataProvider(
       final SpecProvider specProvider,
       final RecentChainData recentChainData,
       final CombinedChainDataClient combinedChainDataClient,
-      final Eth2Network p2pNetwork,
+      final Eth2P2PNetwork p2pNetwork,
       final SyncService syncService,
       final ValidatorApiChannel validatorApiChannel,
       final AggregatingAttestationPool attestationPool,
+      final BlockManager blockManager,
+      final AttestationManager attestationManager,
       final OperationPool<AttesterSlashing> attesterSlashingPool,
       final OperationPool<ProposerSlashing> proposerSlashingPool,
       final OperationPool<SignedVoluntaryExit> voluntaryExitPool) {
-    this.specProvider = specProvider;
+    this.configProvider = new ConfigProvider(specProvider);
     networkDataProvider = new NetworkDataProvider(p2pNetwork);
     nodeDataProvider =
         new NodeDataProvider(
-            attestationPool, attesterSlashingPool, proposerSlashingPool, voluntaryExitPool);
-    chainDataProvider = new ChainDataProvider(recentChainData, combinedChainDataClient);
+            attestationPool,
+            attesterSlashingPool,
+            proposerSlashingPool,
+            voluntaryExitPool,
+            blockManager,
+            attestationManager);
+    chainDataProvider =
+        new ChainDataProvider(specProvider, recentChainData, combinedChainDataClient);
     syncDataProvider = new SyncDataProvider(syncService);
     this.validatorDataProvider =
-        new ValidatorDataProvider(validatorApiChannel, combinedChainDataClient);
+        new ValidatorDataProvider(specProvider, validatorApiChannel, combinedChainDataClient);
   }
 
-  public SpecProvider getSpecProvider() {
-    return specProvider;
+  public ConfigProvider getConfigProvider() {
+    return configProvider;
   }
 
   public NetworkDataProvider getNetworkDataProvider() {

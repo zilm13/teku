@@ -36,7 +36,6 @@ import tech.pegasys.teku.datastructures.operations.DepositData;
 import tech.pegasys.teku.datastructures.operations.DepositWithIndex;
 import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.datastructures.state.Checkpoint;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.datastructures.util.DepositUtil;
 import tech.pegasys.teku.datastructures.util.MerkleTree;
 import tech.pegasys.teku.datastructures.util.OptimizedMerkleTree;
@@ -44,6 +43,7 @@ import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.metrics.StubMetricsSystem;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.pow.event.DepositsFromBlockEvent;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
 import tech.pegasys.teku.storage.client.RecentChainData;
@@ -172,7 +172,7 @@ public class DepositProviderTest {
     depositProvider.onDepositsFromBlock(event);
 
     depositMerkleTree.add(
-        DepositUtil.convertDepositEventToOperationDeposit(deposit).getData().hash_tree_root());
+        DepositUtil.convertDepositEventToOperationDeposit(deposit).getData().hashTreeRoot());
     verify(eth1DataCache)
         .onBlockWithDeposit(
             event.getBlockTimestamp(),
@@ -243,7 +243,7 @@ public class DepositProviderTest {
         deposit ->
             assertThat(
                     is_valid_merkle_branch(
-                        deposit.getData().hash_tree_root(),
+                        deposit.getData().hashTreeRoot(),
                         deposit.getProof(),
                         Constants.DEPOSIT_CONTRACT_TREE_DEPTH + 1,
                         ((DepositWithIndex) deposit).getIndex().intValue(),
@@ -262,7 +262,7 @@ public class DepositProviderTest {
     allSeenDepositsList.subList(startIndex, n).stream()
         .map(DepositUtil::convertDepositEventToOperationDeposit)
         .map(Deposit::getData)
-        .map(DepositData::hash_tree_root)
+        .map(DepositData::hashTreeRoot)
         .forEachOrdered(depositMerkleTree::add);
 
     DepositsFromBlockEvent depositsFromBlockEvent = mock(DepositsFromBlockEvent.class);

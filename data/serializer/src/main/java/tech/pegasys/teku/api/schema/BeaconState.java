@@ -18,6 +18,7 @@ import static tech.pegasys.teku.api.schema.SchemaConstants.DESCRIPTION_BYTES_SSZ
 import static tech.pegasys.teku.util.config.Constants.EPOCHS_PER_ETH1_VOTING_PERIOD;
 import static tech.pegasys.teku.util.config.Constants.HISTORICAL_ROOTS_LIMIT;
 import static tech.pegasys.teku.util.config.Constants.MAX_ATTESTATIONS;
+import static tech.pegasys.teku.util.config.Constants.MAX_WITHDRAWALS;
 import static tech.pegasys.teku.util.config.Constants.VALIDATOR_REGISTRY_LIMIT;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -29,9 +30,9 @@ import java.util.stream.Collectors;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlockAndState;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZVector;
+import tech.pegasys.teku.ssz.backing.collections.SszBitvector;
 import tech.pegasys.teku.util.config.Constants;
 
 public class BeaconState {
@@ -73,6 +74,8 @@ public class BeaconState {
       schema = @Schema(type = "string", format = "byte", description = DESCRIPTION_BYTES32))
   public final List<Bytes32> randao_mixes;
 
+  public final List<Withdrawal> withdrawals;
+
   @ArraySchema(schema = @Schema(type = "string", format = "uint64"))
   public final List<UInt64> slashings;
 
@@ -80,7 +83,7 @@ public class BeaconState {
   public final List<PendingAttestation> current_epoch_attestations;
 
   @Schema(type = "string", format = "byte", description = DESCRIPTION_BYTES_SSZ)
-  public final Bitvector justification_bits;
+  public final SszBitvector justification_bits;
 
   public final Checkpoint previous_justified_checkpoint;
   public final Checkpoint current_justified_checkpoint;
@@ -102,12 +105,13 @@ public class BeaconState {
       @JsonProperty("validators") final List<Validator> validators,
       @JsonProperty("balances") final List<UInt64> balances,
       @JsonProperty("randao_mixes") final List<Bytes32> randao_mixes,
+      @JsonProperty("withdrawals") final List<Withdrawal> withdrawals,
       @JsonProperty("slashings") final List<UInt64> slashings,
       @JsonProperty("previous_epoch_attestations")
           final List<PendingAttestation> previous_epoch_attestations,
       @JsonProperty("current_epoch_attestations")
           final List<PendingAttestation> current_epoch_attestations,
-      @JsonProperty("justification_bits") final Bitvector justification_bits,
+      @JsonProperty("justification_bits") final SszBitvector justification_bits,
       @JsonProperty("previous_justified_checkpoint") final Checkpoint previous_justified_checkpoint,
       @JsonProperty("current_justified_checkpoint") final Checkpoint current_justified_checkpoint,
       @JsonProperty("finalized_checkpoint") final Checkpoint finalized_checkpoint) {
@@ -125,6 +129,7 @@ public class BeaconState {
     this.validators = validators;
     this.balances = balances;
     this.randao_mixes = randao_mixes;
+    this.withdrawals = withdrawals;
     this.slashings = slashings;
     this.previous_epoch_attestations = previous_epoch_attestations;
     this.current_epoch_attestations = current_epoch_attestations;
@@ -155,6 +160,8 @@ public class BeaconState {
         beaconState.getValidators().stream().map(Validator::new).collect(Collectors.toList());
     this.balances = beaconState.getBalances().stream().collect(Collectors.toList());
     this.randao_mixes = beaconState.getRandao_mixes().stream().collect(Collectors.toList());
+    this.withdrawals =
+        beaconState.getWithdrawals().stream().map(Withdrawal::new).collect(Collectors.toList());
     this.slashings = beaconState.getSlashings().stream().collect(Collectors.toList());
     this.previous_epoch_attestations =
         beaconState.getPrevious_epoch_attestations().stream()
@@ -194,6 +201,10 @@ public class BeaconState {
             tech.pegasys.teku.datastructures.state.Validator.class),
         SSZList.createMutable(balances, VALIDATOR_REGISTRY_LIMIT, UInt64.class),
         SSZVector.createMutable(randao_mixes, Bytes32.class),
+        SSZList.createMutable(
+            withdrawals.stream().map(Withdrawal::asInternalWithdrawal).collect(Collectors.toList()),
+            MAX_WITHDRAWALS,
+            tech.pegasys.teku.datastructures.state.Withdrawal.class),
         SSZVector.createMutable(slashings, UInt64.class),
         SSZList.createMutable(
             previous_epoch_attestations.stream()

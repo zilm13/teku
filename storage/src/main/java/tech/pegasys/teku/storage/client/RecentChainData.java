@@ -14,9 +14,6 @@
 package tech.pegasys.teku.storage.client;
 
 import static tech.pegasys.teku.core.ForkChoiceUtil.get_ancestor;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_epoch_at_slot;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.getCurrentDutyDependentRoot;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.getPreviousDutyDependentRoot;
 
 import com.google.common.eventbus.EventBus;
 import java.util.Collections;
@@ -31,13 +28,14 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import org.hyperledger.besu.plugin.services.metrics.Counter;
 import tech.pegasys.teku.core.ForkChoiceUtil;
-import tech.pegasys.teku.core.lookup.BlockProvider;
-import tech.pegasys.teku.core.lookup.StateAndBlockSummaryProvider;
+import tech.pegasys.teku.dataproviders.lookup.BlockProvider;
+import tech.pegasys.teku.dataproviders.lookup.StateAndBlockSummaryProvider;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.SlotAndBlockRoot;
 import tech.pegasys.teku.datastructures.blocks.StateAndBlockSummary;
 import tech.pegasys.teku.datastructures.forkchoice.ReadOnlyForkChoiceStrategy;
+import tech.pegasys.teku.datastructures.forkchoice.VoteUpdater;
 import tech.pegasys.teku.datastructures.genesis.GenesisData;
 import tech.pegasys.teku.datastructures.state.AnchorPoint;
 import tech.pegasys.teku.datastructures.state.BeaconState;
@@ -50,10 +48,13 @@ import tech.pegasys.teku.infrastructure.metrics.TekuMetricCategory;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.protoarray.ForkChoiceStrategy;
 import tech.pegasys.teku.protoarray.ProtoArrayStorageChannel;
+import tech.pegasys.teku.spec.SpecProvider;
+import tech.pegasys.teku.spec.util.BeaconStateUtil;
 import tech.pegasys.teku.storage.api.ChainHeadChannel;
 import tech.pegasys.teku.storage.api.FinalizedCheckpointChannel;
 import tech.pegasys.teku.storage.api.ReorgContext;
 import tech.pegasys.teku.storage.api.StorageUpdateChannel;
+import tech.pegasys.teku.storage.api.VoteUpdateChannel;
 import tech.pegasys.teku.storage.store.EmptyStoreResults;
 import tech.pegasys.teku.storage.store.StoreBuilder;
 import tech.pegasys.teku.storage.store.StoreConfig;
@@ -71,11 +72,13 @@ public abstract class RecentChainData implements StoreUpdateHandler {
   protected final EventBus eventBus;
   protected final FinalizedCheckpointChannel finalizedCheckpointChannel;
   protected final StorageUpdateChannel storageUpdateChannel;
+  protected final VoteUpdateChannel voteUpdateChannel;
   protected final ProtoArrayStorageChannel protoArrayStorageChannel;
   protected final AsyncRunner asyncRunner;
   protected final MetricsSystem metricsSystem;
   private final ChainHeadChannel chainHeadChannel;
   private final StoreConfig storeConfig;
+  private final SpecProvider specProvider;
 
   private final AtomicBoolean storeInitialized = new AtomicBoolean(false);
   private final SafeFuture<Void> storeInitializedFuture = new SafeFuture<>();
@@ -94,15 +97,18 @@ public abstract class RecentChainData implements StoreUpdateHandler {
       final BlockProvider blockProvider,
       final StateAndBlockSummaryProvider stateProvider,
       final StorageUpdateChannel storageUpdateChannel,
+      final VoteUpdateChannel voteUpdateChannel,
       final ProtoArrayStorageChannel protoArrayStorageChannel,
       final FinalizedCheckpointChannel finalizedCheckpointChannel,
       final ChainHeadChannel chainHeadChannel,
-      final EventBus eventBus) {
+      final EventBus eventBus,
+      final SpecProvider specProvider) {
     this.asyncRunner = asyncRunner;
     this.metricsSystem = metricsSystem;
     this.storeConfig = storeConfig;
     this.blockProvider = blockProvider;
     this.stateProvider = stateProvider;
+    this.voteUpdateChannel = voteUpdateChannel;
     this.chainHeadChannel = chainHeadChannel;
     this.eventBus = eventBus;
     this.storageUpdateChannel = storageUpdateChannel;
@@ -114,6 +120,7 @@ public abstract class RecentChainData implements StoreUpdateHandler {
             TekuMetricCategory.BEACON,
             "reorgs_total",
             "Total occurrences of reorganizations of the chain");
+    this.specProvider = specProvider;
   }
 
   public void subscribeStoreInitialized(Runnable runnable) {
@@ -124,15 +131,21 @@ public abstract class RecentChainData implements StoreUpdateHandler {
     bestBlockInitialized.always(runnable);
   }
 
-  public void initializeFromGenesis(final BeaconState genesisState) {
+  public void initializeFromGenesis(final BeaconState genesisState, final UInt64 currentTime) {
     final AnchorPoint genesis = AnchorPoint.fromGenesisState(genesisState);
-    initializeFromAnchorPoint(genesis);
+    initializeFromAnchorPoint(genesis, currentTime);
   }
 
-  public void initializeFromAnchorPoint(final AnchorPoint anchorPoint) {
+  public void initializeFromAnchorPoint(final AnchorPoint anchorPoint, final UInt64 currentTime) {
     final UpdatableStore store =
         StoreBuilder.forkChoiceStoreBuilder(
-                asyncRunner, metricsSystem, blockProvider, stateProvider, anchorPoint)
+                asyncRunner,
+                metricsSystem,
+                blockProvider,
+                stateProvider,
+                anchorPoint,
+                currentTime,
+                specProvider)
             .storeConfig(storeConfig)
             .build();
 
@@ -208,6 +221,10 @@ public abstract class RecentChainData implements StoreUpdateHandler {
     return store.startTransaction(storageUpdateChannel, this);
   }
 
+  public VoteUpdater startVoteUpdate() {
+    return store.startVoteUpdate(voteUpdateChannel);
+  }
+
   // NETWORKING RELATED INFORMATION METHODS:
 
   /**
@@ -227,7 +244,7 @@ public abstract class RecentChainData implements StoreUpdateHandler {
         .thenApply(
             headBlockAndState ->
                 headBlockAndState
-                    .map(head -> ChainHead.create(head, newForkChoiceSlot))
+                    .map(head -> ChainHead.create(head, newForkChoiceSlot, specProvider))
                     .orElseThrow(
                         () ->
                             new IllegalStateException(
@@ -272,16 +289,19 @@ public abstract class RecentChainData implements StoreUpdateHandler {
           originalHead
               .map(
                   previousChainHead ->
-                      compute_epoch_at_slot(previousChainHead.getForkChoiceSlot())
-                          .isLessThan(compute_epoch_at_slot(newChainHead.getForkChoiceSlot())))
+                      previousChainHead
+                          .getForkChoiceEpoch()
+                          .isLessThan(newChainHead.getForkChoiceEpoch()))
               .orElse(false);
+      final BeaconStateUtil beaconStateUtil =
+          specProvider.atSlot(newChainHead.getForkChoiceSlot()).getBeaconStateUtil();
       chainHeadChannel.chainHeadUpdated(
           newChainHead.getForkChoiceSlot(),
           newChainHead.getStateRoot(),
           newChainHead.getRoot(),
           epochTransition,
-          getPreviousDutyDependentRoot(newChainHead.getState()),
-          getCurrentDutyDependentRoot(newChainHead.getState()),
+          beaconStateUtil.getPreviousDutyDependentRoot(newChainHead.getState()),
+          beaconStateUtil.getCurrentDutyDependentRoot(newChainHead.getState()),
           optionalReorgContext);
     }
 
@@ -324,6 +344,17 @@ public abstract class RecentChainData implements StoreUpdateHandler {
     return Optional.of(ForkChoiceUtil.get_current_slot(store));
   }
 
+  public Optional<UInt64> getCurrentEpoch() {
+    return getCurrentSlot().map(slot -> specProvider.computeEpochAtSlot(slot));
+  }
+
+  /** @return The number of slots between our chainhead and the current slot by time */
+  public Optional<UInt64> getChainHeadSlotsBehind() {
+    return chainHead
+        .map(StateAndBlockSummary::getSlot)
+        .flatMap(headSlot -> getCurrentSlot().map(s -> s.minusMinZero(headSlot)));
+  }
+
   public Optional<ForkInfo> getHeadForkInfo() {
     return getBestState().map(BeaconState::getForkInfo);
   }
@@ -355,7 +386,9 @@ public abstract class RecentChainData implements StoreUpdateHandler {
 
   private boolean isForkActive(final Fork fork) {
     return getCurrentSlot()
-        .map(currentSlot -> compute_epoch_at_slot(currentSlot).compareTo(fork.getEpoch()) >= 0)
+        .map(
+            currentSlot ->
+                specProvider.computeEpochAtSlot(currentSlot).compareTo(fork.getEpoch()) >= 0)
         .orElse(false);
   }
 
@@ -398,6 +431,10 @@ public abstract class RecentChainData implements StoreUpdateHandler {
 
   public boolean containsBlock(final Bytes32 root) {
     return Optional.ofNullable(store).map(s -> s.containsBlock(root)).orElse(false);
+  }
+
+  public Optional<UInt64> getSlotForBlockRoot(final Bytes32 root) {
+    return getForkChoiceStrategy().flatMap(forkChoice -> forkChoice.blockSlot(root));
   }
 
   public SafeFuture<Optional<BeaconBlock>> retrieveBlockByRoot(final Bytes32 root) {

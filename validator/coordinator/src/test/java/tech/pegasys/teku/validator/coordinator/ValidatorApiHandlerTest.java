@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -55,12 +56,12 @@ import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.datastructures.state.Checkpoint;
 import tech.pegasys.teku.datastructures.state.CheckpointState;
 import tech.pegasys.teku.datastructures.state.Validator;
+import tech.pegasys.teku.datastructures.util.AttestationProcessingResult;
 import tech.pegasys.teku.datastructures.util.AttestationUtil;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.networking.eth2.gossip.subnets.AttestationTopicSubscriber;
-import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
 import tech.pegasys.teku.statetransition.attestation.AggregatingAttestationPool;
 import tech.pegasys.teku.statetransition.attestation.AttestationManager;
@@ -99,6 +100,7 @@ class ValidatorApiHandlerTest {
   private final DefaultPerformanceTracker performanceTracker =
       mock(DefaultPerformanceTracker.class);
   private final ChainDataProvider chainDataProvider = mock(ChainDataProvider.class);
+  private final DutyMetrics dutyMetrics = mock(DutyMetrics.class);
 
   private final ValidatorApiHandler validatorApiHandler =
       new ValidatorApiHandler(
@@ -112,7 +114,7 @@ class ValidatorApiHandlerTest {
           attestationTopicSubscriptions,
           activeValidatorTracker,
           eventBus,
-          mock(DutyMetrics.class),
+          dutyMetrics,
           performanceTracker);
 
   @BeforeEach
@@ -129,13 +131,13 @@ class ValidatorApiHandlerTest {
   @Test
   public void isSyncActive_syncIsActiveAndHeadALittleBehind() {
     setupSyncingState(SyncState.SYNCING, EPOCH, EPOCH.minus(1));
-    assertThat(validatorApiHandler.isSyncActive()).isFalse();
+    assertThat(validatorApiHandler.isSyncActive()).isTrue();
   }
 
   @Test
   public void isSyncActive_syncIsActiveAndHeadIsCaughtUp() {
     setupSyncingState(SyncState.SYNCING, EPOCH, EPOCH);
-    assertThat(validatorApiHandler.isSyncActive()).isFalse();
+    assertThat(validatorApiHandler.isSyncActive()).isTrue();
   }
 
   @Test
@@ -386,7 +388,7 @@ class ValidatorApiHandlerTest {
     assertThat(maybeAttestation).isPresent();
     final Attestation attestation = maybeAttestation.orElseThrow();
     assertThat(attestation.getAggregation_bits())
-        .isEqualTo(new Bitlist(4, Constants.MAX_VALIDATORS_PER_COMMITTEE));
+        .isEqualTo(Attestation.SSZ_SCHEMA.getAggregationBitsSchema().ofBits(4));
     assertThat(attestation.getData())
         .isEqualTo(
             AttestationUtil.getGenericAttestationData(
@@ -427,7 +429,7 @@ class ValidatorApiHandlerTest {
     assertThat(maybeAttestation).isPresent();
     final Attestation attestation = maybeAttestation.orElseThrow();
     assertThat(attestation.getAggregation_bits())
-        .isEqualTo(new Bitlist(4, Constants.MAX_VALIDATORS_PER_COMMITTEE));
+        .isEqualTo(Attestation.SSZ_SCHEMA.getAggregationBitsSchema().ofBits(4));
     assertThat(attestation.getData())
         .isEqualTo(
             AttestationUtil.getGenericAttestationData(
@@ -508,13 +510,35 @@ class ValidatorApiHandlerTest {
   }
 
   @Test
-  public void sendSignedAttestation_shouldAddAttestationToAggregatorAndEventBus() {
+  public void sendSignedAttestation_shouldAddAttestationToAttestationManager() {
     final Attestation attestation = dataStructureUtil.randomAttestation();
     when(attestationManager.onAttestation(any(ValidateableAttestation.class)))
         .thenReturn(completedFuture(SUCCESSFUL));
     validatorApiHandler.sendSignedAttestation(attestation);
 
     verify(attestationManager).onAttestation(ValidateableAttestation.from(attestation));
+  }
+
+  @Test
+  void sendSignedAttestations_shouldAddToDutyMetricsAndPerformanceTrackerWhenNotInvalid() {
+    final Attestation attestation = dataStructureUtil.randomAttestation();
+    when(attestationManager.onAttestation(any(ValidateableAttestation.class)))
+        .thenReturn(completedFuture(AttestationProcessingResult.SAVED_FOR_FUTURE));
+    validatorApiHandler.sendSignedAttestation(attestation);
+
+    verify(dutyMetrics).onAttestationPublished(attestation.getData().getSlot());
+    verify(performanceTracker).saveProducedAttestation(attestation);
+  }
+
+  @Test
+  void sendSignedAttestations_shouldNotAddToDutyMetricsAndPerformanceTrackerWhenInvalid() {
+    final Attestation attestation = dataStructureUtil.randomAttestation();
+    when(attestationManager.onAttestation(any(ValidateableAttestation.class)))
+        .thenReturn(completedFuture(AttestationProcessingResult.invalid("Bad juju")));
+    validatorApiHandler.sendSignedAttestation(attestation);
+
+    verify(dutyMetrics, never()).onAttestationPublished(attestation.getData().getSlot());
+    verify(performanceTracker, never()).saveProducedAttestation(attestation);
   }
 
   @Test

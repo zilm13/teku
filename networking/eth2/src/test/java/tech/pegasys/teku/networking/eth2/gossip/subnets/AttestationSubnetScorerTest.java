@@ -15,25 +15,27 @@ package tech.pegasys.teku.networking.eth2.gossip.subnets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
+import static tech.pegasys.teku.util.config.Constants.ATTESTATION_SUBNET_COUNT;
 
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.networking.eth2.peers.PeerScorer;
 import tech.pegasys.teku.networking.p2p.mock.MockNodeId;
 import tech.pegasys.teku.networking.p2p.peer.NodeId;
-import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
-import tech.pegasys.teku.util.config.Constants;
+import tech.pegasys.teku.ssz.backing.collections.SszBitvector;
+import tech.pegasys.teku.ssz.backing.schema.collections.SszBitvectorSchema;
 
 class AttestationSubnetScorerTest {
   @Test
   void shouldScoreCandidatePeerWithNoSubnetsAsZero() {
     final AttestationSubnetScorer scorer =
         AttestationSubnetScorer.create(new PeerSubnetSubscriptions.Builder().build());
-    assertThat(scorer.scoreCandidatePeer(new Bitvector(Constants.ATTESTATION_SUBNET_COUNT)))
+    assertThat(
+            scorer.scoreCandidatePeer(
+                SszBitvectorSchema.create(ATTESTATION_SUBNET_COUNT).getDefault()))
         .isZero();
   }
 
@@ -125,17 +127,15 @@ class AttestationSubnetScorerTest {
 
   @SafeVarargs
   private void assertCandidatePeerScores(
-      final PeerScorer scorer, final Map.Entry<Bitvector, Integer>... expected) {
-    final Map<Bitvector, Integer> actual =
+      final PeerScorer scorer, final Map.Entry<SszBitvector, Integer>... expected) {
+    final Map<SszBitvector, Integer> actual =
         Stream.of(expected)
             .map(Map.Entry::getKey)
             .collect(Collectors.toMap(Function.identity(), scorer::scoreCandidatePeer));
     assertThat(actual).contains(expected);
   }
 
-  private Bitvector candidateWithSubnets(final int... subnetIds) {
-    final Bitvector persistentSubnets = new Bitvector(Constants.ATTESTATION_SUBNET_COUNT);
-    IntStream.of(subnetIds).forEach(persistentSubnets::setBit);
-    return persistentSubnets;
+  private SszBitvector candidateWithSubnets(final int... subnetIds) {
+    return SszBitvectorSchema.create(ATTESTATION_SUBNET_COUNT).ofBits(subnetIds);
   }
 }

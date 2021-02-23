@@ -14,7 +14,6 @@
 package tech.pegasys.teku.beaconrestapi.handlers.v1.events;
 
 import static tech.pegasys.teku.beaconrestapi.RestApiConstants.TOPICS;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_epoch_at_slot;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import io.javalin.http.sse.SseClient;
@@ -26,18 +25,25 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.api.ChainDataProvider;
+import tech.pegasys.teku.api.ConfigProvider;
+import tech.pegasys.teku.api.NodeDataProvider;
 import tech.pegasys.teku.api.SyncDataProvider;
 import tech.pegasys.teku.api.response.v1.ChainReorgEvent;
 import tech.pegasys.teku.api.response.v1.EventType;
 import tech.pegasys.teku.api.response.v1.FinalizedCheckpointEvent;
 import tech.pegasys.teku.api.response.v1.HeadEvent;
 import tech.pegasys.teku.api.response.v1.SyncStateChangeEvent;
+import tech.pegasys.teku.api.schema.Attestation;
+import tech.pegasys.teku.api.schema.SignedBeaconBlock;
+import tech.pegasys.teku.api.schema.SignedVoluntaryExit;
 import tech.pegasys.teku.beaconrestapi.ListQueryParameterUtils;
+import tech.pegasys.teku.datastructures.attestation.ValidateableAttestation;
 import tech.pegasys.teku.datastructures.state.Checkpoint;
 import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.infrastructure.events.EventChannels;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.provider.JsonProvider;
+import tech.pegasys.teku.statetransition.validation.InternalValidationResult;
 import tech.pegasys.teku.storage.api.ChainHeadChannel;
 import tech.pegasys.teku.storage.api.FinalizedCheckpointChannel;
 import tech.pegasys.teku.storage.api.ReorgContext;
@@ -46,25 +52,35 @@ import tech.pegasys.teku.sync.events.SyncState;
 public class EventSubscriptionManager implements ChainHeadChannel, FinalizedCheckpointChannel {
   private static final Logger LOG = LogManager.getLogger();
 
+  private final ConfigProvider configProvider;
   private final JsonProvider jsonProvider;
   private final ChainDataProvider provider;
   private final AsyncRunner asyncRunner;
+  private final int maxPendingEvents;
   // collection of subscribers
   private final Collection<EventSubscriber> eventSubscribers;
 
   public EventSubscriptionManager(
-      final ChainDataProvider provider,
+      final NodeDataProvider nodeDataProvider,
+      final ChainDataProvider chainDataProvider,
       final JsonProvider jsonProvider,
       final SyncDataProvider syncDataProvider,
+      final ConfigProvider configProvider,
       final AsyncRunner asyncRunner,
-      final EventChannels eventChannels) {
-    this.provider = provider;
+      final EventChannels eventChannels,
+      final int maxPendingEvents) {
+    this.provider = chainDataProvider;
     this.jsonProvider = jsonProvider;
     this.asyncRunner = asyncRunner;
+    this.maxPendingEvents = maxPendingEvents;
     this.eventSubscribers = new ConcurrentLinkedQueue<>();
+    this.configProvider = configProvider;
     eventChannels.subscribe(ChainHeadChannel.class, this);
     eventChannels.subscribe(FinalizedCheckpointChannel.class, this);
     syncDataProvider.subscribeToSyncStateChanges(this::onSyncStateChange);
+    nodeDataProvider.subscribeToReceivedBlocks(this::onNewBlock);
+    nodeDataProvider.subscribeToValidAttestations(this::onNewAttestation);
+    nodeDataProvider.subscribeToNewVoluntaryExits(this::onNewVoluntaryExit);
   }
 
   public void registerClient(final SseClient sseClient) {
@@ -79,7 +95,8 @@ public class EventSubscriptionManager implements ChainHeadChannel, FinalizedChec
               eventSubscribers.removeIf(sub -> sub.getSseClient().equals(sseClient));
               LOG.trace("disconnected " + sseClient.hashCode());
             },
-            asyncRunner);
+            asyncRunner,
+            maxPendingEvents);
     eventSubscribers.add(subscriber);
   }
 
@@ -105,7 +122,7 @@ public class EventSubscriptionManager implements ChainHeadChannel, FinalizedChec
                         bestBlockRoot,
                         context.getOldBestStateRoot(),
                         stateRoot,
-                        compute_epoch_at_slot(slot)));
+                        configProvider.computeEpochAtSlot(slot)));
             notifySubscribersOfEvent(EventType.chain_reorg, reorgEventString);
           } catch (JsonProcessingException ex) {
             LOG.error(ex);
@@ -128,6 +145,37 @@ public class EventSubscriptionManager implements ChainHeadChannel, FinalizedChec
     }
   }
 
+  protected void onNewVoluntaryExit(
+      final tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit exit,
+      final InternalValidationResult result) {
+    try {
+      final String newVoluntaryExitString =
+          jsonProvider.objectToJSON(new SignedVoluntaryExit(exit));
+      notifySubscribersOfEvent(EventType.voluntary_exit, newVoluntaryExitString);
+    } catch (JsonProcessingException ex) {
+      LOG.error(ex);
+    }
+  }
+
+  protected void onNewAttestation(final ValidateableAttestation attestation) {
+    try {
+      final String newAttestationJsonString =
+          jsonProvider.objectToJSON(new Attestation(attestation.getAttestation()));
+      notifySubscribersOfEvent(EventType.attestation, newAttestationJsonString);
+    } catch (JsonProcessingException ex) {
+      LOG.error(ex);
+    }
+  }
+
+  protected void onNewBlock(final tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock block) {
+    try {
+      final String newBlockJsonString = jsonProvider.objectToJSON(new SignedBeaconBlock(block));
+      notifySubscribersOfEvent(EventType.block, newBlockJsonString);
+    } catch (JsonProcessingException ex) {
+      LOG.error(ex);
+    }
+  }
+
   @Override
   public void onNewFinalizedCheckpoint(final Checkpoint checkpoint) {
     try {
@@ -142,7 +190,7 @@ public class EventSubscriptionManager implements ChainHeadChannel, FinalizedChec
     }
   }
 
-  public void onSyncStateChange(final SyncState syncState) {
+  protected void onSyncStateChange(final SyncState syncState) {
     try {
       final String newSyncStateString =
           jsonProvider.objectToJSON(new SyncStateChangeEvent(syncState.name()));

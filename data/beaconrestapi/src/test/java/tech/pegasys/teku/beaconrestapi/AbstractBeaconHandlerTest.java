@@ -22,24 +22,29 @@ import io.javalin.core.util.Header;
 import io.javalin.http.Context;
 import org.mockito.ArgumentCaptor;
 import tech.pegasys.teku.api.ChainDataProvider;
+import tech.pegasys.teku.api.ConfigProvider;
 import tech.pegasys.teku.api.NetworkDataProvider;
 import tech.pegasys.teku.api.SyncDataProvider;
 import tech.pegasys.teku.api.ValidatorDataProvider;
 import tech.pegasys.teku.beaconrestapi.schema.BadRequest;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.networking.eth2.Eth2Network;
+import tech.pegasys.teku.networking.eth2.Eth2P2PNetwork;
+import tech.pegasys.teku.networks.SpecProviderFactory;
 import tech.pegasys.teku.provider.JsonProvider;
+import tech.pegasys.teku.spec.SpecProvider;
 import tech.pegasys.teku.sync.SyncService;
 import tech.pegasys.teku.sync.events.SyncingStatus;
 
 public abstract class AbstractBeaconHandlerTest {
 
-  protected final Eth2Network eth2Network = mock(Eth2Network.class);
+  protected final Eth2P2PNetwork eth2P2PNetwork = mock(Eth2P2PNetwork.class);
+  protected final SpecProvider specProvider = SpecProviderFactory.createMinimal();
 
   protected final Context context = mock(Context.class);
   protected final JsonProvider jsonProvider = new JsonProvider();
-  protected final NetworkDataProvider network = new NetworkDataProvider(eth2Network);
+  protected final NetworkDataProvider network = new NetworkDataProvider(eth2P2PNetwork);
+  protected final ConfigProvider configProvider = new ConfigProvider(specProvider);
 
   protected final SyncService syncService = mock(SyncService.class);
   protected final SyncDataProvider syncDataProvider = new SyncDataProvider(syncService);

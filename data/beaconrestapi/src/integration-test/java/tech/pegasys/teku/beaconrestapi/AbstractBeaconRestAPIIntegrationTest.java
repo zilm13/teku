@@ -36,13 +36,15 @@ import tech.pegasys.teku.datastructures.eth1.Eth1Address;
 import tech.pegasys.teku.datastructures.operations.AttesterSlashing;
 import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
 import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.async.SyncAsyncRunner;
 import tech.pegasys.teku.infrastructure.events.EventChannels;
-import tech.pegasys.teku.networking.eth2.Eth2Network;
-import tech.pegasys.teku.spec.StubSpecProvider;
+import tech.pegasys.teku.networking.eth2.Eth2P2PNetwork;
+import tech.pegasys.teku.networks.SpecProviderFactory;
+import tech.pegasys.teku.spec.SpecProvider;
 import tech.pegasys.teku.statetransition.OperationPool;
 import tech.pegasys.teku.statetransition.attestation.AggregatingAttestationPool;
+import tech.pegasys.teku.statetransition.attestation.AttestationManager;
+import tech.pegasys.teku.statetransition.block.BlockManager;
 import tech.pegasys.teku.storage.api.StorageQueryChannel;
 import tech.pegasys.teku.storage.client.CombinedChainDataClient;
 import tech.pegasys.teku.storage.client.RecentChainData;
@@ -63,22 +65,24 @@ public abstract class AbstractBeaconRestAPIIntegrationTest {
           .restApiHostAllowlist(List.of("127.0.0.1", "localhost"))
           .build();
 
-  protected final DataStructureUtil dataStructureUtil = new DataStructureUtil();
+  protected final SpecProvider specProvider = SpecProviderFactory.createMinimal();
   protected final ObjectMapper objectMapper = new ObjectMapper();
 
-  protected final Eth2Network eth2Network = mock(Eth2Network.class);
+  protected final Eth2P2PNetwork eth2P2PNetwork = mock(Eth2P2PNetwork.class);
   protected StorageQueryChannel historicalChainData = mock(StorageQueryChannel.class);
   protected RecentChainData recentChainData = mock(RecentChainData.class);
   protected final SyncService syncService = mock(SyncService.class);
   protected final ValidatorApiChannel validatorApiChannel = mock(ValidatorApiChannel.class);
   private final AggregatingAttestationPool attestationPool = mock(AggregatingAttestationPool.class);
+  private final BlockManager blockManager = mock(BlockManager.class);
+  private final AttestationManager attestationManager = mock(AttestationManager.class);
   private final OperationPool<AttesterSlashing> attesterSlashingPool = mock(OperationPool.class);
   private final OperationPool<ProposerSlashing> proposerSlashingPool = mock(OperationPool.class);
   private final OperationPool<SignedVoluntaryExit> voluntaryExitPool = mock(OperationPool.class);
   protected final EventChannels eventChannels = mock(EventChannels.class);
 
   protected CombinedChainDataClient combinedChainDataClient =
-      new CombinedChainDataClient(recentChainData, historicalChainData);
+      new CombinedChainDataClient(recentChainData, historicalChainData, specProvider);
   protected DataProvider dataProvider;
   protected BeaconRestApi beaconRestApi;
   protected OkHttpClient client;
@@ -87,13 +91,15 @@ public abstract class AbstractBeaconRestAPIIntegrationTest {
   public void setup() {
     dataProvider =
         new DataProvider(
-            StubSpecProvider.create(),
+            specProvider,
             recentChainData,
             combinedChainDataClient,
-            eth2Network,
+            eth2P2PNetwork,
             syncService,
             validatorApiChannel,
             attestationPool,
+            blockManager,
+            attestationManager,
             attesterSlashingPool,
             proposerSlashingPool,
             voluntaryExitPool);

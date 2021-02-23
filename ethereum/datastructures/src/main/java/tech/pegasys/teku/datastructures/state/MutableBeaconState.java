@@ -18,19 +18,17 @@ import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlockHeader;
 import tech.pegasys.teku.datastructures.blocks.Eth1Data;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
 import tech.pegasys.teku.ssz.SSZTypes.SSZBackingList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZBackingVector;
-import tech.pegasys.teku.ssz.SSZTypes.SSZList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableVector;
-import tech.pegasys.teku.ssz.backing.ContainerViewWriteRef;
-import tech.pegasys.teku.ssz.backing.view.AbstractBasicView;
-import tech.pegasys.teku.ssz.backing.view.BasicViews.Bytes32View;
-import tech.pegasys.teku.ssz.backing.view.BasicViews.UInt64View;
-import tech.pegasys.teku.ssz.backing.view.ViewUtils;
+import tech.pegasys.teku.ssz.backing.SszMutableRefContainer;
+import tech.pegasys.teku.ssz.backing.collections.SszBitvector;
+import tech.pegasys.teku.ssz.backing.view.AbstractSszPrimitive;
+import tech.pegasys.teku.ssz.backing.view.SszPrimitives.SszBytes32;
+import tech.pegasys.teku.ssz.backing.view.SszPrimitives.SszUInt64;
 
-public interface MutableBeaconState extends BeaconState, ContainerViewWriteRef {
+public interface MutableBeaconState extends BeaconState, SszMutableRefContainer {
 
   static MutableBeaconState createBuilder() {
     return MutableBeaconStateImpl.createBuilder();
@@ -39,15 +37,15 @@ public interface MutableBeaconState extends BeaconState, ContainerViewWriteRef {
   // Versioning
 
   default void setGenesis_time(UInt64 genesis_time) {
-    set(0, new UInt64View(genesis_time));
+    set(0, new SszUInt64(genesis_time));
   }
 
   default void setGenesis_validators_root(Bytes32 genesis_validators_root) {
-    set(1, new Bytes32View(genesis_validators_root));
+    set(1, new SszBytes32(genesis_validators_root));
   }
 
   default void setSlot(UInt64 slot) {
-    set(2, new UInt64View(slot));
+    set(2, new SszUInt64(slot));
   }
 
   default void setFork(Fork fork) {
@@ -62,19 +60,19 @@ public interface MutableBeaconState extends BeaconState, ContainerViewWriteRef {
   @Override
   default SSZMutableVector<Bytes32> getBlock_roots() {
     return new SSZBackingVector<>(
-        Bytes32.class, getAnyByRef(5), Bytes32View::new, AbstractBasicView::get);
+        Bytes32.class, getAnyByRef(5), SszBytes32::new, AbstractSszPrimitive::get);
   }
 
   @Override
   default SSZMutableVector<Bytes32> getState_roots() {
     return new SSZBackingVector<>(
-        Bytes32.class, getAnyByRef(6), Bytes32View::new, AbstractBasicView::get);
+        Bytes32.class, getAnyByRef(6), SszBytes32::new, AbstractSszPrimitive::get);
   }
 
   @Override
   default SSZMutableList<Bytes32> getHistorical_roots() {
     return new SSZBackingList<>(
-        Bytes32.class, getAnyByRef(7), Bytes32View::new, AbstractBasicView::get);
+        Bytes32.class, getAnyByRef(7), SszBytes32::new, AbstractSszPrimitive::get);
   }
 
   // Eth1
@@ -89,7 +87,7 @@ public interface MutableBeaconState extends BeaconState, ContainerViewWriteRef {
   }
 
   default void setEth1_deposit_index(UInt64 eth1_deposit_index) {
-    set(10, new UInt64View(eth1_deposit_index));
+    set(10, new SszUInt64(eth1_deposit_index));
   }
 
   // Registry
@@ -102,27 +100,27 @@ public interface MutableBeaconState extends BeaconState, ContainerViewWriteRef {
   @Override
   default SSZMutableList<UInt64> getBalances() {
     return new SSZBackingList<>(
-        UInt64.class, getAnyByRef(12), UInt64View::new, AbstractBasicView::get);
+        UInt64.class, getAnyByRef(12), SszUInt64::new, AbstractSszPrimitive::get);
   }
 
   @Override
   default SSZMutableVector<Bytes32> getRandao_mixes() {
     return new SSZBackingVector<>(
-        Bytes32.class, getAnyByRef(13), Bytes32View::new, AbstractBasicView::get);
+        Bytes32.class, getAnyByRef(13), SszBytes32::new, AbstractSszPrimitive::get);
   }
 
   // Withdrawals
   @Override
   default SSZMutableList<Withdrawal> getWithdrawals() {
     return new SSZBackingList<>(
-            Withdrawal.class, getAnyByRef(14), Function.identity(), Function.identity());
+        Withdrawal.class, getAnyByRef(14), Function.identity(), Function.identity());
   }
 
   // Slashings
   @Override
   default SSZMutableVector<UInt64> getSlashings() {
     return new SSZBackingVector<>(
-        UInt64.class, getAnyByRef(15), UInt64View::new, AbstractBasicView::get);
+        UInt64.class, getAnyByRef(15), SszUInt64::new, AbstractSszPrimitive::get);
   }
 
   // Attestations
@@ -139,8 +137,8 @@ public interface MutableBeaconState extends BeaconState, ContainerViewWriteRef {
   }
 
   // Finality
-  default void setJustification_bits(Bitvector justification_bits) {
-    set(18, ViewUtils.createBitvectorView(justification_bits));
+  default void setJustification_bits(SszBitvector justification_bits) {
+    set(18, justification_bits);
   }
 
   default void setPrevious_justified_checkpoint(Checkpoint previous_justified_checkpoint) {

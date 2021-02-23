@@ -21,10 +21,9 @@ import java.util.Optional;
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
-import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
 import tech.pegasys.teku.networking.eth2.rpc.core.encodings.compression.Compressor.Decompressor;
 import tech.pegasys.teku.networking.eth2.rpc.core.encodings.compression.noop.NoopCompressor;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 
 public class NoopCompressorTest {
   private final DataStructureUtil dataStructureUtil = new DataStructureUtil();
@@ -33,8 +32,7 @@ public class NoopCompressorTest {
   @Test
   public void roundTrip() throws Exception {
     final BeaconState state = dataStructureUtil.randomBeaconState(0);
-    final Bytes serializedState =
-        Bytes.wrap(SimpleOffsetSerializer.serialize(state).toArrayUnsafe());
+    final Bytes serializedState = Bytes.wrap(state.sszSerialize().toArrayUnsafe());
 
     final Bytes compressed = compressor.compress(serializedState);
     Decompressor decompressor = compressor.createDecompressor(serializedState.size());

@@ -33,10 +33,10 @@ import tech.pegasys.teku.datastructures.operations.DepositWithIndex;
 import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.datastructures.state.Fork;
 import tech.pegasys.teku.datastructures.state.Validator;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.datastructures.util.MerkleTree;
 import tech.pegasys.teku.datastructures.util.OptimizedMerkleTree;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
 import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
 import tech.pegasys.teku.util.config.Constants;
@@ -195,7 +195,7 @@ class BlockProcessorUtilTest {
 
     // Add the deposit to a Merkle tree so that we can get the root to put into the state Eth1 data
     MerkleTree depositMerkleTree = new OptimizedMerkleTree(Constants.DEPOSIT_CONTRACT_TREE_DEPTH);
-    depositMerkleTree.add(depositData.hash_tree_root());
+    depositMerkleTree.add(depositData.hashTreeRoot());
 
     beaconState =
         beaconState.updated(
@@ -213,7 +213,7 @@ class BlockProcessorUtilTest {
   }
 
   private Validator makeValidator(BLSPublicKey pubkey, Bytes32 withdrawalCredentials) {
-    return Validator.create(
+    return new Validator(
         pubkey.toBytesCompressed(),
         withdrawalCredentials,
         Constants.MAX_EFFECTIVE_BALANCE,

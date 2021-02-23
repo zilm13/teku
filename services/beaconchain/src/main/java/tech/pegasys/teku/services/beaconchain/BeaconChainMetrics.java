@@ -35,9 +35,9 @@ import tech.pegasys.teku.datastructures.state.PendingAttestation;
 import tech.pegasys.teku.infrastructure.metrics.SettableGauge;
 import tech.pegasys.teku.infrastructure.metrics.TekuMetricCategory;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.networking.eth2.Eth2Network;
-import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
+import tech.pegasys.teku.networking.eth2.Eth2P2PNetwork;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
+import tech.pegasys.teku.ssz.backing.collections.SszBitlist;
 import tech.pegasys.teku.storage.client.RecentChainData;
 import tech.pegasys.teku.util.time.channels.SlotEventsChannel;
 
@@ -71,7 +71,7 @@ public class BeaconChainMetrics implements SlotEventsChannel {
       final RecentChainData recentChainData,
       final NodeSlot nodeSlot,
       final MetricsSystem metricsSystem,
-      final Eth2Network p2pNetwork) {
+      final Eth2P2PNetwork p2pNetwork) {
     this.recentChainData = recentChainData;
     this.nodeSlot = nodeSlot;
 
@@ -239,9 +239,9 @@ public class BeaconChainMetrics implements SlotEventsChannel {
   private CorrectAndLiveValidators getNumberOfValidators(
       final SSZList<PendingAttestation> attestations, final Bytes32 correctTargetRoot) {
 
-    final Map<UInt64, Map<UInt64, Bitlist>> liveValidatorsAggregationBitsBySlotAndCommittee =
+    final Map<UInt64, Map<UInt64, SszBitlist>> liveValidatorsAggregationBitsBySlotAndCommittee =
         new HashMap<>();
-    final Map<UInt64, Map<UInt64, Bitlist>> correctValidatorsAggregationBitsBySlotAndCommittee =
+    final Map<UInt64, Map<UInt64, SszBitlist>> correctValidatorsAggregationBitsBySlotAndCommittee =
         new HashMap<>();
 
     attestations.forEach(
@@ -249,29 +249,30 @@ public class BeaconChainMetrics implements SlotEventsChannel {
           if (isCorrectAttestation(attestation, correctTargetRoot)) {
             correctValidatorsAggregationBitsBySlotAndCommittee
                 .computeIfAbsent(attestation.getData().getSlot(), __ -> new HashMap<>())
-                .computeIfAbsent(
+                .merge(
                     attestation.getData().getIndex(),
-                    __ -> attestation.getAggregation_bits().copy())
-                .setAllBits(attestation.getAggregation_bits());
+                    attestation.getAggregation_bits(),
+                    SszBitlist::nullableOr);
           }
 
           liveValidatorsAggregationBitsBySlotAndCommittee
               .computeIfAbsent(attestation.getData().getSlot(), __ -> new HashMap<>())
-              .computeIfAbsent(
-                  attestation.getData().getIndex(), __ -> attestation.getAggregation_bits().copy())
-              .setAllBits(attestation.getAggregation_bits());
+              .merge(
+                  attestation.getData().getIndex(),
+                  attestation.getAggregation_bits(),
+                  SszBitlist::nullableOr);
         });
 
     final int numberOfCorrectValidators =
         correctValidatorsAggregationBitsBySlotAndCommittee.values().stream()
             .flatMap(aggregationBitsByCommittee -> aggregationBitsByCommittee.values().stream())
-            .mapToInt(Bitlist::getBitCount)
+            .mapToInt(SszBitlist::getBitCount)
             .sum();
 
     final int numberOfLiveValidators =
         liveValidatorsAggregationBitsBySlotAndCommittee.values().stream()
             .flatMap(aggregationBitsByCommittee -> aggregationBitsByCommittee.values().stream())
-            .mapToInt(Bitlist::getBitCount)
+            .mapToInt(SszBitlist::getBitCount)
             .sum();
 
     return new CorrectAndLiveValidators(numberOfCorrectValidators, numberOfLiveValidators);

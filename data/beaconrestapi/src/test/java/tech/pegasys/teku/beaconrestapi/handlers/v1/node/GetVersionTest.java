@@ -14,13 +14,13 @@
 package tech.pegasys.teku.beaconrestapi.handlers.v1.node;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static tech.pegasys.teku.beaconrestapi.CacheControlUtils.CACHE_NONE;
+import static tech.pegasys.teku.beaconrestapi.RestApiConstants.CACHE_NONE;
 
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.api.response.v1.node.Version;
 import tech.pegasys.teku.api.response.v1.node.VersionResponse;
 import tech.pegasys.teku.beaconrestapi.AbstractBeaconHandlerTest;
-import tech.pegasys.teku.util.cli.VersionProvider;
+import tech.pegasys.teku.infrastructure.version.VersionProvider;
 
 public class GetVersionTest extends AbstractBeaconHandlerTest {
   private final VersionResponse versionResponse =

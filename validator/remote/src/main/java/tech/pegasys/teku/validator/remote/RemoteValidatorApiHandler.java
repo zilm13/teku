@@ -17,13 +17,14 @@ import static java.util.Collections.emptyMap;
 import static java.util.stream.Collectors.toMap;
 
 import com.google.common.base.Throwables;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.logging.log4j.LogManager;
@@ -96,7 +97,7 @@ public class RemoteValidatorApiHandler implements ValidatorApiChannel {
 
   @Override
   public SafeFuture<Map<BLSPublicKey, Integer>> getValidatorIndices(
-      final List<BLSPublicKey> publicKeys) {
+      final Collection<BLSPublicKey> publicKeys) {
     if (publicKeys.isEmpty()) {
       return SafeFuture.completedFuture(emptyMap());
     }
@@ -108,12 +109,14 @@ public class RemoteValidatorApiHandler implements ValidatorApiChannel {
 
   @Override
   public SafeFuture<Optional<Map<BLSPublicKey, ValidatorStatus>>> getValidatorStatuses(
-      List<BLSPublicKey> publicKeys) {
+      Collection<BLSPublicKey> publicKeys) {
     return sendRequest(() -> makeBatchedValidatorRequest(publicKeys, ValidatorResponse::getStatus));
   }
 
   private <T> Optional<Map<BLSPublicKey, T>> makeBatchedValidatorRequest(
-      List<BLSPublicKey> publicKeys, Function<ValidatorResponse, T> valueExtractor) {
+      Collection<BLSPublicKey> publicKeysCollection,
+      Function<ValidatorResponse, T> valueExtractor) {
+    final List<BLSPublicKey> publicKeys = new ArrayList<>(publicKeysCollection);
     final Map<BLSPublicKey, T> returnedObjects = new HashMap<>();
     for (int i = 0; i < publicKeys.size(); i += MAX_PUBLIC_KEY_BATCH_SIZE) {
       final List<BLSPublicKey> batch =
@@ -314,7 +317,7 @@ public class RemoteValidatorApiHandler implements ValidatorApiChannel {
                   && attempt < MAX_RATE_LIMITING_RETRIES) {
                 LOG.warn("Beacon node request rate limit has been exceeded. Retrying after delay.");
                 return asyncRunner.runAfterDelay(
-                    () -> sendRequest(requestExecutor, attempt + 1), 2, TimeUnit.SECONDS);
+                    () -> sendRequest(requestExecutor, attempt + 1), Duration.ofSeconds(2));
               } else {
                 return SafeFuture.failedFuture(error);
               }

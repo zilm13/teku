@@ -14,6 +14,7 @@
 package tech.pegasys.teku.statetransition.validation;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_start_slot_at_epoch;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ONE;
 
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.bls.BLSKeyGenerator;
 import tech.pegasys.teku.bls.BLSKeyPair;
 import tech.pegasys.teku.bls.BLSSignature;
+import tech.pegasys.teku.bls.BLSTestUtil;
 import tech.pegasys.teku.core.ChainBuilder;
 import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
@@ -59,7 +61,7 @@ public class BlockValidatorTest {
     final SignedBeaconBlock block = beaconChainUtil.createBlockAtSlot(nextSlot);
 
     InternalValidationResult result = blockValidator.validate(block).join();
-    assertThat(result).isEqualTo(InternalValidationResult.ACCEPT);
+    assertTrue(result.isAccept());
   }
 
   @Test
@@ -67,8 +69,8 @@ public class BlockValidatorTest {
     final SignedBeaconBlock block =
         beaconChainUtil.createAndImportBlockAtSlot(recentChainData.getHeadSlot().plus(ONE));
 
-    assertThat(blockValidator.validate(block))
-        .isCompletedWithValue(InternalValidationResult.IGNORE);
+    InternalValidationResult result = blockValidator.validate(block).join();
+    assertTrue(result.isIgnore());
   }
 
   @Test
@@ -78,10 +80,10 @@ public class BlockValidatorTest {
     final SignedBeaconBlock block = beaconChainUtil.createBlockAtSlot(nextSlot);
 
     InternalValidationResult result1 = blockValidator.validate(block).join();
-    assertThat(result1).isEqualTo(InternalValidationResult.ACCEPT);
+    assertTrue(result1.isAccept());
 
     InternalValidationResult result2 = blockValidator.validate(block).join();
-    assertThat(result2).isEqualTo(InternalValidationResult.IGNORE);
+    assertTrue(result2.isIgnore());
   }
 
   @Test
@@ -90,7 +92,7 @@ public class BlockValidatorTest {
     final SignedBeaconBlock block = beaconChainUtil.createBlockAtSlot(nextSlot);
 
     InternalValidationResult result = blockValidator.validate(block).join();
-    assertThat(result).isEqualTo(InternalValidationResult.SAVE_FOR_FUTURE);
+    assertTrue(result.isSaveForFuture());
   }
 
   @Test
@@ -116,7 +118,7 @@ public class BlockValidatorTest {
     final SignedBeaconBlock blockWithNoParent = new SignedBeaconBlock(block, blockSignature);
 
     InternalValidationResult result = blockValidator.validate(blockWithNoParent).join();
-    assertThat(result).isEqualTo(InternalValidationResult.SAVE_FOR_FUTURE);
+    assertTrue(result.isSaveForFuture());
   }
 
   @Test
@@ -128,7 +130,7 @@ public class BlockValidatorTest {
     beaconChainUtil.setSlot(recentChainData.getHeadSlot());
 
     InternalValidationResult result = blockValidator.validate(block).join();
-    assertThat(result).isEqualTo(InternalValidationResult.IGNORE);
+    assertTrue(result.isIgnore());
   }
 
   @Test
@@ -157,7 +159,7 @@ public class BlockValidatorTest {
         new SignedBeaconBlock(block, blockSignature);
 
     InternalValidationResult result = blockValidator.validate(invalidProposerSignedBlock).join();
-    assertThat(result).isEqualTo(InternalValidationResult.REJECT);
+    assertTrue(result.isReject());
   }
 
   @Test
@@ -167,10 +169,11 @@ public class BlockValidatorTest {
 
     final SignedBeaconBlock block =
         new SignedBeaconBlock(
-            beaconChainUtil.createBlockAtSlot(nextSlot).getMessage(), BLSSignature.random(0));
+            beaconChainUtil.createBlockAtSlot(nextSlot).getMessage(),
+            BLSTestUtil.randomSignature(0));
 
     InternalValidationResult result = blockValidator.validate(block).join();
-    assertThat(result).isEqualTo(InternalValidationResult.REJECT);
+    assertTrue(result.isReject());
   }
 
   @Test

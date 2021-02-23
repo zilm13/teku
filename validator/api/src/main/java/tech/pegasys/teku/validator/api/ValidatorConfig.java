@@ -22,18 +22,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.apache.commons.lang3.tuple.Pair;
-import org.apache.logging.log4j.status.StatusLogger;
-import tech.pegasys.teku.bls.BLSPublicKey;
 import tech.pegasys.teku.util.config.InvalidConfigurationException;
-import tech.pegasys.teku.util.config.KeyStoreFilesLocator;
-import tech.pegasys.teku.util.config.ValidatorPerformanceTrackingMode;
 
 public class ValidatorConfig {
 
   private final List<String> validatorKeys;
-  private final List<String> validatorKeystoreFiles;
-  private final List<String> validatorKeystorePasswordFiles;
-  private final List<BLSPublicKey> validatorExternalSignerPublicKeys;
+  private final List<String> validatorExternalSignerPublicKeySources;
   private final boolean validatorExternalSignerSlashingProtectionEnabled;
   private final URL validatorExternalSignerUrl;
   private final Duration validatorExternalSignerTimeout;
@@ -50,9 +44,7 @@ public class ValidatorConfig {
 
   private ValidatorConfig(
       final List<String> validatorKeys,
-      final List<String> validatorKeystoreFiles,
-      final List<String> validatorKeystorePasswordFiles,
-      final List<BLSPublicKey> validatorExternalSignerPublicKeys,
+      final List<String> validatorExternalSignerPublicKeySources,
       final URL validatorExternalSignerUrl,
       final Duration validatorExternalSignerTimeout,
       final Path validatorExternalSignerKeystore,
@@ -67,9 +59,7 @@ public class ValidatorConfig {
       final int validatorExternalSignerConcurrentRequestLimit,
       final boolean useDependentRoots) {
     this.validatorKeys = validatorKeys;
-    this.validatorKeystoreFiles = validatorKeystoreFiles;
-    this.validatorKeystorePasswordFiles = validatorKeystorePasswordFiles;
-    this.validatorExternalSignerPublicKeys = validatorExternalSignerPublicKeys;
+    this.validatorExternalSignerPublicKeySources = validatorExternalSignerPublicKeySources;
     this.validatorExternalSignerUrl = validatorExternalSignerUrl;
     this.validatorExternalSignerTimeout = validatorExternalSignerTimeout;
     this.validatorExternalSignerKeystore = validatorExternalSignerKeystore;
@@ -100,16 +90,8 @@ public class ValidatorConfig {
     return validatorKeystoreLockingEnabled;
   }
 
-  public List<String> getValidatorKeystoreFiles() {
-    return validatorKeystoreFiles;
-  }
-
-  public List<String> getValidatorKeystorePasswordFiles() {
-    return validatorKeystorePasswordFiles;
-  }
-
-  public List<BLSPublicKey> getValidatorExternalSignerPublicKeys() {
-    return validatorExternalSignerPublicKeys;
+  public List<String> getValidatorExternalSignerPublicKeySources() {
+    return validatorExternalSignerPublicKeySources;
   }
 
   public boolean isValidatorExternalSignerSlashingProtectionEnabled() {
@@ -153,10 +135,6 @@ public class ValidatorConfig {
     final KeyStoreFilesLocator processor =
         new KeyStoreFilesLocator(validatorKeys, File.pathSeparator);
     processor.parse();
-    if (validatorKeystoreFiles != null) {
-      processor.parseKeyAndPasswordList(
-          getValidatorKeystoreFiles(), getValidatorKeystorePasswordFiles());
-    }
 
     return processor.getFilePairs();
   }
@@ -168,9 +146,7 @@ public class ValidatorConfig {
   public static final class Builder {
 
     private List<String> validatorKeys = new ArrayList<>();
-    private List<String> validatorKeystoreFiles = new ArrayList<>();
-    private List<String> validatorKeystorePasswordFiles = new ArrayList<>();
-    private List<BLSPublicKey> validatorExternalSignerPublicKeys = new ArrayList<>();
+    private List<String> validatorExternalSignerPublicKeySources = new ArrayList<>();
     private URL validatorExternalSignerUrl;
     private int validatorExternalSignerConcurrentRequestLimit;
     private Duration validatorExternalSignerTimeout = Duration.ofSeconds(5);
@@ -192,19 +168,9 @@ public class ValidatorConfig {
       return this;
     }
 
-    public Builder validatorKeystoreFiles(List<String> validatorKeystoreFiles) {
-      this.validatorKeystoreFiles = validatorKeystoreFiles;
-      return this;
-    }
-
-    public Builder validatorKeystorePasswordFiles(List<String> validatorKeystorePasswordFiles) {
-      this.validatorKeystorePasswordFiles = validatorKeystorePasswordFiles;
-      return this;
-    }
-
-    public Builder validatorExternalSignerPublicKeys(
-        List<BLSPublicKey> validatorExternalSignerPublicKeys) {
-      this.validatorExternalSignerPublicKeys = validatorExternalSignerPublicKeys;
+    public Builder validatorExternalSignerPublicKeySources(
+        List<String> validatorExternalSignerPublicKeys) {
+      this.validatorExternalSignerPublicKeySources = validatorExternalSignerPublicKeys;
       return this;
     }
 
@@ -283,16 +249,13 @@ public class ValidatorConfig {
     }
 
     public ValidatorConfig build() {
-      validateKeyStoreFilesAndPasswordFilesConfig();
       validateExternalSignerUrlAndPublicKeys();
       validateExternalSignerKeystoreAndPasswordFileConfig();
       validateExternalSignerTruststoreAndPasswordFileConfig();
       validateExternalSignerURLScheme();
       return new ValidatorConfig(
           validatorKeys,
-          validatorKeystoreFiles,
-          validatorKeystorePasswordFiles,
-          validatorExternalSignerPublicKeys,
+          validatorExternalSignerPublicKeySources,
           validatorExternalSignerUrl,
           validatorExternalSignerTimeout,
           validatorExternalSignerKeystore,
@@ -306,31 +269,6 @@ public class ValidatorConfig {
           validatorExternalSignerSlashingProtectionEnabled,
           validatorExternalSignerConcurrentRequestLimit,
           useDependentRoots);
-    }
-
-    private void validateKeyStoreFilesAndPasswordFilesConfig() {
-      if (validatorKeystoreFiles.isEmpty() && validatorKeystorePasswordFiles.isEmpty()) {
-        return;
-      }
-      if (validatorKeystoreFiles.isEmpty() != validatorKeystorePasswordFiles.isEmpty()) {
-        final String errorMessage =
-            "Invalid configuration. '--validators-key-files' and '--validators-key-password-files' must be specified together";
-        throw new InvalidConfigurationException(errorMessage);
-      }
-
-      if (validatorKeystoreFiles.size() != validatorKeystorePasswordFiles.size()) {
-        StatusLogger.getLogger()
-            .debug(
-                "Invalid configuration. The size of validator.validatorsKeystoreFiles {} and validator.validatorsKeystorePasswordFiles {} must match",
-                validatorKeystoreFiles.size(),
-                validatorKeystorePasswordFiles.size());
-
-        final String errorMessage =
-            String.format(
-                "Invalid configuration. The number of --validators-key-files (%d) must equal the number of --validators-key-password-files (%d)",
-                validatorKeystoreFiles.size(), validatorKeystorePasswordFiles.size());
-        throw new InvalidConfigurationException(errorMessage);
-      }
     }
 
     private void validateExternalSignerUrlAndPublicKeys() {
@@ -380,8 +318,8 @@ public class ValidatorConfig {
     }
 
     private boolean externalPublicKeysNotDefined() {
-      return validatorExternalSignerPublicKeys == null
-          || validatorExternalSignerPublicKeys.isEmpty();
+      return validatorExternalSignerPublicKeySources == null
+          || validatorExternalSignerPublicKeySources.isEmpty();
     }
 
     private static boolean isURLSchemeHttps(final URL url) {

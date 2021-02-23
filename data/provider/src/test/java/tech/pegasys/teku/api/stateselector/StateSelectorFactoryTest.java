@@ -25,8 +25,10 @@ import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.api.exceptions.BadRequestException;
 import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
+import tech.pegasys.teku.networks.SpecProviderFactory;
+import tech.pegasys.teku.spec.SpecProvider;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.storage.api.StorageQueryChannel;
 import tech.pegasys.teku.storage.client.CombinedChainDataClient;
 import tech.pegasys.teku.storage.client.RecentChainData;
@@ -34,8 +36,10 @@ import tech.pegasys.teku.storage.client.RecentChainData;
 public class StateSelectorFactoryTest {
 
   private final CombinedChainDataClient client = mock(CombinedChainDataClient.class);
-  private final DataStructureUtil data = new DataStructureUtil();
+  private final SpecProvider specProvider = SpecProviderFactory.createMinimal();
+  private final DataStructureUtil data = new DataStructureUtil(specProvider);
   private final BeaconState state = data.randomBeaconState();
+
   private final StateSelectorFactory factory = new StateSelectorFactory(client);
 
   @Test
@@ -86,11 +90,11 @@ public class StateSelectorFactoryTest {
   @Test
   public void forStateRoot_shouldGetStateAtSlotExact()
       throws ExecutionException, InterruptedException {
-    when(client.getStateByStateRoot(state.hash_tree_root()))
+    when(client.getStateByStateRoot(state.hashTreeRoot()))
         .thenReturn(SafeFuture.completedFuture(Optional.of(state)));
-    Optional<BeaconState> result = factory.forStateRoot(state.hash_tree_root()).getState().get();
+    Optional<BeaconState> result = factory.forStateRoot(state.hashTreeRoot()).getState().get();
     assertThat(result).isEqualTo(Optional.of(state));
-    verify(client).getStateByStateRoot(state.hash_tree_root());
+    verify(client).getStateByStateRoot(state.hashTreeRoot());
   }
 
   @Test
@@ -109,7 +113,7 @@ public class StateSelectorFactoryTest {
     final StorageQueryChannel historicalChainData = mock(StorageQueryChannel.class);
     final RecentChainData recentChainData = mock(RecentChainData.class);
     final CombinedChainDataClient client1 =
-        new CombinedChainDataClient(recentChainData, historicalChainData);
+        new CombinedChainDataClient(recentChainData, historicalChainData, specProvider);
     final StateSelectorFactory factory = new StateSelectorFactory(client1);
     when(recentChainData.isPreGenesis()).thenReturn(false);
     when(recentChainData.isPreForkChoice()).thenReturn(true);

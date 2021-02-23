@@ -66,8 +66,8 @@ public class BlockProposalUtil {
         new BeaconBlockBody(
             randaoReveal,
             eth1Data,
-            graffiti,
             executableData,
+            graffiti,
             proposerSlashings,
             attesterSlashings,
             attestations,
@@ -88,8 +88,8 @@ public class BlockProposalUtil {
     try {
       final BeaconState newState = stateTransition.process_block(blockSlotState, newBlock);
 
-      Bytes32 stateRoot = newState.hash_tree_root();
-      BeaconBlock newCompleteBlock = new BeaconBlock(newBlock, stateRoot);
+      Bytes32 stateRoot = newState.hashTreeRoot();
+      BeaconBlock newCompleteBlock = newBlock.withStateRoot(stateRoot);
 
       return new BeaconBlockAndState(newCompleteBlock, newState);
     } catch (final BlockProcessingException e) {

@@ -17,16 +17,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.Test;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
-import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 
 class SignedBeaconBlockTest {
   @Test
   public void shouldRoundTripViaSsz() {
     final SignedBeaconBlock block = new DataStructureUtil().randomSignedBeaconBlock(1);
-    final Bytes ssz = SimpleOffsetSerializer.serialize(block);
-    final SignedBeaconBlock result =
-        SimpleOffsetSerializer.deserialize(ssz, SignedBeaconBlock.class);
+    final Bytes ssz = block.sszSerialize();
+    final SignedBeaconBlock result = SignedBeaconBlock.getSszSchema().sszDeserialize(ssz);
     assertThat(result).isEqualTo(block);
   }
 }

@@ -13,6 +13,7 @@
 
 package tech.pegasys.teku.infrastructure.async;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -494,6 +495,10 @@ public class SafeFuture<T> extends CompletableFuture<T> {
     return (SafeFuture<T>) super.whenComplete(action);
   }
 
+  public SafeFuture<T> orTimeout(final Duration timeout) {
+    return orTimeout(timeout.toMillis(), TimeUnit.MILLISECONDS);
+  }
+
   @Override
   public SafeFuture<T> orTimeout(final long timeout, final TimeUnit unit) {
     return (SafeFuture<T>) super.orTimeout(timeout, unit);
@@ -511,6 +516,26 @@ public class SafeFuture<T> extends CompletableFuture<T> {
                 action.accept(t);
               }
             });
+  }
+
+  /**
+   * Returns a void future that completes successfully with null result. The consumer is invoked if
+   * this future completes exceptions and the returned future only completes once the consumer
+   * returns.
+   *
+   * <p>The returned future will only complete exceptionally if the consumer throws an exception.
+   *
+   * @param action the exception handler to invoke.
+   * @return a void future that completes successfully unless the consumer throws an exception.
+   */
+  public SafeFuture<Void> handleException(final Consumer<Throwable> action) {
+    return handle(
+        (__, error) -> {
+          if (error != null) {
+            action.accept(error);
+          }
+          return null;
+        });
   }
 
   /**

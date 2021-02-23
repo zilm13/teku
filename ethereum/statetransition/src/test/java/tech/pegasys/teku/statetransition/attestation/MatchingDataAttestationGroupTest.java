@@ -15,18 +15,15 @@ package tech.pegasys.teku.statetransition.attestation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static tech.pegasys.teku.statetransition.attestation.AggregatorUtil.aggregateAttestations;
-import static tech.pegasys.teku.util.config.Constants.MAX_VALIDATORS_PER_COMMITTEE;
 
-import java.util.stream.IntStream;
 import org.apache.tuweni.bytes.Bytes32;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.datastructures.attestation.ValidateableAttestation;
 import tech.pegasys.teku.datastructures.operations.Attestation;
 import tech.pegasys.teku.datastructures.operations.AttestationData;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
-import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
+import tech.pegasys.teku.ssz.backing.collections.SszBitlist;
 
 class MatchingDataAttestationGroupTest {
   private static final UInt64 SLOT = UInt64.valueOf(1234);
@@ -59,9 +56,7 @@ class MatchingDataAttestationGroupTest {
   @Test
   public void remove_shouldRemoveAttestationEvenWhenInstanceIsDifferent() {
     final Attestation attestation = addAttestation(1).getAttestation();
-    final Attestation copy =
-        SimpleOffsetSerializer.deserialize(
-            SimpleOffsetSerializer.serialize(attestation), Attestation.class);
+    final Attestation copy = Attestation.SSZ_SCHEMA.sszDeserialize(attestation.sszSerialize());
     int numRemoved = group.remove(copy);
 
     assertThat(group.stream()).isEmpty();
@@ -122,8 +117,7 @@ class MatchingDataAttestationGroupTest {
     final ValidateableAttestation attestation = addAttestation(1);
     final ValidateableAttestation copy =
         ValidateableAttestation.from(
-            SimpleOffsetSerializer.deserialize(
-                SimpleOffsetSerializer.serialize(attestation.getAttestation()), Attestation.class));
+            Attestation.SSZ_SCHEMA.sszDeserialize(attestation.getAttestation().sszSerialize()));
 
     assertThat(group.add(copy)).isFalse();
     assertThat(group.stream()).containsExactly(attestation);
@@ -197,8 +191,8 @@ class MatchingDataAttestationGroupTest {
   }
 
   private ValidateableAttestation createAttestation(final int... validators) {
-    final Bitlist aggregationBits = new Bitlist(10, MAX_VALIDATORS_PER_COMMITTEE);
-    IntStream.of(validators).forEach(aggregationBits::setBit);
+    final SszBitlist aggregationBits =
+        Attestation.SSZ_SCHEMA.getAggregationBitsSchema().ofBits(10, validators);
     return ValidateableAttestation.from(
         new Attestation(aggregationBits, attestationData, dataStructureUtil.randomSignature()));
   }

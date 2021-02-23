@@ -29,6 +29,7 @@ import tech.pegasys.teku.benchmarks.gen.BlockIO.Reader;
 import tech.pegasys.teku.benchmarks.gen.BlsKeyPairIO;
 import tech.pegasys.teku.bls.BLSKeyPair;
 import tech.pegasys.teku.bls.BLSPublicKey;
+import tech.pegasys.teku.bls.BLSTestUtil;
 import tech.pegasys.teku.core.ForkChoiceAttestationValidator;
 import tech.pegasys.teku.core.ForkChoiceBlockTasks;
 import tech.pegasys.teku.core.StateTransition;
@@ -36,23 +37,22 @@ import tech.pegasys.teku.core.results.BlockImportResult;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.datastructures.interop.InteropStartupUtil;
 import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.datastructures.state.BeaconStateImpl;
 import tech.pegasys.teku.datastructures.state.Validator;
 import tech.pegasys.teku.datastructures.util.BeaconStateUtil;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
-import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
+import tech.pegasys.teku.infrastructure.async.eventthread.InlineEventThread;
+import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
 import tech.pegasys.teku.statetransition.block.BlockImporter;
 import tech.pegasys.teku.statetransition.forkchoice.ForkChoice;
-import tech.pegasys.teku.statetransition.forkchoice.SyncForkChoiceExecutor;
 import tech.pegasys.teku.storage.client.MemoryOnlyRecentChainData;
 import tech.pegasys.teku.storage.client.RecentChainData;
 import tech.pegasys.teku.util.config.Constants;
+import tech.pegasys.teku.weaksubjectivity.WeakSubjectivityFactory;
 import tech.pegasys.teku.weaksubjectivity.WeakSubjectivityValidator;
 
 /** The test to be run manually for profiling block imports */
 public class ProfilingRun {
-
   public static Consumer<Object> blackHole = o -> {};
 
   @Disabled
@@ -80,22 +80,22 @@ public class ProfilingRun {
 
     BeaconState initialState =
         InteropStartupUtil.createMockedStartInitialBeaconState(0, validatorKeys, false);
+    final WeakSubjectivityValidator wsValidator = WeakSubjectivityFactory.lenientValidator();
 
     while (true) {
       EventBus localEventBus = mock(EventBus.class);
       RecentChainData recentChainData = MemoryOnlyRecentChainData.create(localEventBus);
       BeaconChainUtil localChain = BeaconChainUtil.create(recentChainData, validatorKeys, false);
-      recentChainData.initializeFromGenesis(initialState);
+      recentChainData.initializeFromGenesis(initialState, UInt64.ZERO);
       ForkChoice forkChoice =
           new ForkChoice(
               new ForkChoiceAttestationValidator(),
               new ForkChoiceBlockTasks(),
-              new SyncForkChoiceExecutor(),
+              new InlineEventThread(),
               recentChainData,
               new StateTransition());
       BlockImporter blockImporter =
-          new BlockImporter(
-              recentChainData, forkChoice, WeakSubjectivityValidator.lenient(), localEventBus);
+          new BlockImporter(recentChainData, forkChoice, wsValidator, localEventBus);
 
       System.out.println("Start blocks import from " + blocksFile);
       int blockCount = 0;
@@ -157,23 +157,23 @@ public class ProfilingRun {
 
     BeaconState initialState =
         InteropStartupUtil.createMockedStartInitialBeaconState(0, validatorKeys, false);
+    final WeakSubjectivityValidator wsValidator = WeakSubjectivityFactory.lenientValidator();
 
     while (true) {
       EventBus localEventBus = mock(EventBus.class);
       RecentChainData recentChainData = MemoryOnlyRecentChainData.create(localEventBus);
       BeaconChainUtil localChain = BeaconChainUtil.create(recentChainData, validatorKeys, false);
-      recentChainData.initializeFromGenesis(initialState);
+      recentChainData.initializeFromGenesis(initialState, UInt64.ZERO);
       initialState = null;
       ForkChoice forkChoice =
           new ForkChoice(
               new ForkChoiceAttestationValidator(),
               new ForkChoiceBlockTasks(),
-              new SyncForkChoiceExecutor(),
+              new InlineEventThread(),
               recentChainData,
               new StateTransition());
       BlockImporter blockImporter =
-          new BlockImporter(
-              recentChainData, forkChoice, WeakSubjectivityValidator.lenient(), localEventBus);
+          new BlockImporter(recentChainData, forkChoice, wsValidator, localEventBus);
 
       System.out.println("Start blocks import from " + blocksFile);
       int counter = 1;
@@ -214,7 +214,7 @@ public class ProfilingRun {
   @Disabled
   @Test
   void runSszDeserialize() {
-    BLSPublicKey publicKey = BLSPublicKey.random(1);
+    BLSPublicKey publicKey = BLSTestUtil.randomPublicKey(1);
     System.out.println("Generating state...");
     BeaconState beaconState =
         new DataStructureUtil(1).withPubKeyGenerator(() -> publicKey).randomBeaconState(100_000);
@@ -222,11 +222,12 @@ public class ProfilingRun {
     Bytes bytes = beaconState.sszSerialize();
 
     System.out.println("Deserializing...");
+
     while (true) {
       long s = System.currentTimeMillis();
       long sum = 0;
       for (int i = 0; i < 1; i++) {
-        BeaconStateImpl state = SimpleOffsetSerializer.deserialize(bytes, BeaconStateImpl.class);
+        BeaconState state = BeaconState.getSszSchema().sszDeserialize(bytes);
         blackHole.accept(state);
         for (Validator validator : state.getValidators()) {
           sum += validator.getEffective_balance().longValue();

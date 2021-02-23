@@ -14,10 +14,10 @@
 package tech.pegasys.teku.sync.forward.multipeer;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -29,10 +29,10 @@ import java.util.concurrent.Executor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.eventthread.InlineEventThread;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.storage.client.RecentChainData;
 import tech.pegasys.teku.sync.events.SyncingStatus;
 import tech.pegasys.teku.sync.forward.ForwardSync.SyncSubscriber;
@@ -41,9 +41,8 @@ import tech.pegasys.teku.sync.forward.multipeer.chains.TargetChain;
 class SyncControllerTest {
   private final DataStructureUtil dataStructureUtil = new DataStructureUtil();
   private final InlineEventThread eventThread = new InlineEventThread();
-  private final ChainSelector finalizedChainSelector = mock(ChainSelector.class);
   private final Sync sync = mock(Sync.class);
-  private final ChainSelector nonfinalizedChainSelector = mock(ChainSelector.class);
+  private final SyncTargetSelector syncTargetSelector = mock(SyncTargetSelector.class);
   private final RecentChainData recentChainData = mock(RecentChainData.class);
   private final Executor subscriberExecutor = mock(Executor.class);
 
@@ -51,12 +50,7 @@ class SyncControllerTest {
 
   private final SyncController syncController =
       new SyncController(
-          eventThread,
-          subscriberExecutor,
-          recentChainData,
-          finalizedChainSelector,
-          nonfinalizedChainSelector,
-          sync);
+          eventThread, subscriberExecutor, recentChainData, syncTargetSelector, sync);
   private static final UInt64 HEAD_SLOT = UInt64.valueOf(2338);
 
   @BeforeEach
@@ -110,7 +104,8 @@ class SyncControllerTest {
     ignoreFuture(startFinalizedSync());
     verify(sync).syncToChain(targetChain);
 
-    when(finalizedChainSelector.selectTargetChain(true)).thenReturn(Optional.of(newTargetChain));
+    when(syncTargetSelector.selectSyncTarget(Optional.of(SyncTarget.finalizedTarget(targetChain))))
+        .thenReturn(Optional.of(SyncTarget.finalizedTarget(newTargetChain)));
     when(sync.syncToChain(newTargetChain)).thenReturn(new SafeFuture<>());
     onTargetChainsUpdated();
 
@@ -123,12 +118,51 @@ class SyncControllerTest {
   }
 
   @Test
+  void shouldPassFailedSyncsToSyncTargetSelector() {
+    // When a sync fails, we want to stay in sync mode and switch to another target chain even
+    // if it's not much ahead of our current head.
+
+    final SafeFuture<SyncResult> syncFuture = startFinalizedSync();
+
+    // First selection has no current sync
+    verify(syncTargetSelector).selectSyncTarget(Optional.empty());
+
+    when(sync.syncToChain(targetChain)).thenReturn(new SafeFuture<>());
+    syncFuture.complete(SyncResult.FAILED);
+
+    verify(syncTargetSelector)
+        .selectSyncTarget(Optional.of(SyncTarget.finalizedTarget(targetChain)));
+    // Should restart sync to the chain even though it has the same target
+    verify(sync, times(2)).syncToChain(targetChain);
+  }
+
+  @Test
+  void shouldPassExceptionallyCompletedSyncsToSyncTargetSelector() {
+    // When a sync fails, we want to stay in sync mode and switch to another target chain even
+    // if it's not much ahead of our current head.
+
+    final SafeFuture<SyncResult> syncFuture = startFinalizedSync();
+
+    // First selection has no current sync
+    verify(syncTargetSelector).selectSyncTarget(Optional.empty());
+
+    when(sync.syncToChain(targetChain)).thenReturn(new SafeFuture<>());
+    syncFuture.completeExceptionally(new RuntimeException());
+
+    verify(syncTargetSelector)
+        .selectSyncTarget(Optional.of(SyncTarget.finalizedTarget(targetChain)));
+    // Should restart sync to the chain even though it has the same target
+    verify(sync, times(2)).syncToChain(targetChain);
+  }
+
+  @Test
   void shouldRemainSyncingWhenNoTargetChainSelectedButPreviousSyncStillActive() {
     final SafeFuture<SyncResult> previousSync = startFinalizedSync();
 
     assertThat(syncController.isSyncActive()).isTrue();
 
-    when(finalizedChainSelector.selectTargetChain(true)).thenReturn(Optional.empty());
+    when(syncTargetSelector.selectSyncTarget(Optional.of(SyncTarget.finalizedTarget(targetChain))))
+        .thenReturn(Optional.empty());
     onTargetChainsUpdated();
 
     assertThat(syncController.isSyncActive()).isTrue();
@@ -162,7 +196,8 @@ class SyncControllerTest {
 
     // Sync switches to a better chain
     final TargetChain newTargetChain = chainWith(dataStructureUtil.randomSlotAndBlockRoot());
-    when(finalizedChainSelector.selectTargetChain(true)).thenReturn(Optional.of(newTargetChain));
+    when(syncTargetSelector.selectSyncTarget(Optional.of(SyncTarget.finalizedTarget(targetChain))))
+        .thenReturn(Optional.of(SyncTarget.finalizedTarget(targetChain)));
     when(sync.syncToChain(newTargetChain))
         .thenAnswer(
             invocation -> {
@@ -177,31 +212,9 @@ class SyncControllerTest {
   }
 
   @Test
-  void shouldOnlySwitchToNonFinalChainWhenFinalizedSyncCompletes() {
-    final SyncSubscriber subscriber = mock(SyncSubscriber.class);
-    syncController.subscribeToSyncChanges(subscriber);
-    final SafeFuture<SyncResult> finalizedSync = startFinalizedSync();
-
-    final TargetChain nonfinalTargetChain = chainWith(dataStructureUtil.randomSlotAndBlockRoot());
-    when(nonfinalizedChainSelector.selectTargetChain(anyBoolean()))
-        .thenReturn(Optional.of(nonfinalTargetChain));
-    when(sync.syncToChain(nonfinalTargetChain)).thenReturn(new SafeFuture<>());
-
-    onTargetChainsUpdated();
-
-    verify(sync).syncToChain(targetChain);
-    verifyNoMoreInteractions(sync);
-
-    finalizedSync.complete(SyncResult.COMPLETE);
-
-    ignoreFuture(verify(sync).syncToChain(nonfinalTargetChain));
-    verify(subscriber, never()).onSyncingChange(false);
-  }
-
-  @Test
   void shouldStartNonFinalizedSyncWhenNoSuitableFinalizedTargetChainAvailable() {
-    when(finalizedChainSelector.selectTargetChain(false)).thenReturn(Optional.empty());
-    when(nonfinalizedChainSelector.selectTargetChain(false)).thenReturn(Optional.of(targetChain));
+    when(syncTargetSelector.selectSyncTarget(Optional.empty()))
+        .thenReturn(Optional.of(SyncTarget.nonfinalizedTarget(targetChain)));
 
     when(sync.syncToChain(targetChain)).thenReturn(new SafeFuture<>());
 
@@ -225,8 +238,8 @@ class SyncControllerTest {
 
   private SafeFuture<SyncResult> startFinalizedSync() {
     final SafeFuture<SyncResult> syncResult = new SafeFuture<>();
-    when(finalizedChainSelector.selectTargetChain(anyBoolean()))
-        .thenReturn(Optional.of(targetChain));
+    when(syncTargetSelector.selectSyncTarget(any()))
+        .thenReturn(Optional.of(SyncTarget.finalizedTarget(targetChain)));
     when(sync.syncToChain(targetChain)).thenReturn(syncResult);
     onTargetChainsUpdated();
     return syncResult;

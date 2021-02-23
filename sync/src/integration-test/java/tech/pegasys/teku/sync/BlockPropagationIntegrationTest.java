@@ -28,7 +28,7 @@ import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.infrastructure.async.DelayedExecutorAsyncRunner;
 import tech.pegasys.teku.infrastructure.async.Waiter;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.networking.eth2.Eth2NetworkFactory;
+import tech.pegasys.teku.networking.eth2.Eth2P2PNetworkFactory;
 import tech.pegasys.teku.networking.eth2.gossip.encoding.GossipEncoding;
 import tech.pegasys.teku.networking.eth2.rpc.core.encodings.RpcEncoding;
 import tech.pegasys.teku.statetransition.events.block.ProposedBlockEvent;
@@ -37,7 +37,7 @@ import tech.pegasys.teku.util.config.Constants;
 public class BlockPropagationIntegrationTest {
   private final AsyncRunner asyncRunner = DelayedExecutorAsyncRunner.create();
   private final List<BLSKeyPair> validatorKeys = BLSKeyGenerator.generateKeyPairs(3);
-  private final Eth2NetworkFactory networkFactory = new Eth2NetworkFactory();
+  private final Eth2P2PNetworkFactory networkFactory = new Eth2P2PNetworkFactory();
 
   @AfterEach
   public void tearDown() throws Exception {
@@ -99,12 +99,12 @@ public class BlockPropagationIntegrationTest {
     Waiter.waitFor(
         () -> {
           for (SignedBeaconBlock block : blocksToFetch) {
-            final Bytes32 blockRoot = block.getMessage().hash_tree_root();
+            final Bytes32 blockRoot = block.getMessage().hashTreeRoot();
             assertThatSafeFuture(node2.recentChainData().retrieveBlockByRoot(blockRoot))
                 .isCompletedWithNonEmptyOptional();
           }
           // Last block should be imported as well
-          final Bytes32 newBlockRoot = newBlock.getMessage().hash_tree_root();
+          final Bytes32 newBlockRoot = newBlock.getMessage().hashTreeRoot();
           assertThatSafeFuture(node2.recentChainData().retrieveBlockByRoot(newBlockRoot))
               .isCompletedWithNonEmptyOptional();
         });

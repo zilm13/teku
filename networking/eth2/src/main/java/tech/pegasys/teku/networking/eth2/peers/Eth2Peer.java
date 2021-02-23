@@ -30,7 +30,8 @@ import tech.pegasys.teku.networking.eth2.rpc.core.ResponseCallback;
 import tech.pegasys.teku.networking.eth2.rpc.core.ResponseStreamListener;
 import tech.pegasys.teku.networking.eth2.rpc.core.RpcException;
 import tech.pegasys.teku.networking.p2p.peer.Peer;
-import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
+import tech.pegasys.teku.ssz.backing.SszData;
+import tech.pegasys.teku.ssz.backing.collections.SszBitvector;
 
 public interface Eth2Peer extends Peer, SyncSource {
   static Eth2Peer create(
@@ -61,7 +62,7 @@ public interface Eth2Peer extends Peer, SyncSource {
 
   PeerStatus getStatus();
 
-  Optional<Bitvector> getRemoteAttestationSubnets();
+  Optional<SszBitvector> getRemoteAttestationSubnets();
 
   UInt64 finalizedEpoch();
 
@@ -85,7 +86,7 @@ public interface Eth2Peer extends Peer, SyncSource {
 
   SafeFuture<MetadataMessage> requestMetadata();
 
-  <I extends RpcRequest, O> SafeFuture<O> requestSingleItem(
+  <I extends RpcRequest, O extends SszData> SafeFuture<O> requestSingleItem(
       final Eth2RpcMethod<I, O> method, final I request);
 
   boolean wantToReceiveObjects(ResponseCallback<SignedBeaconBlock> callback, long objectCount);

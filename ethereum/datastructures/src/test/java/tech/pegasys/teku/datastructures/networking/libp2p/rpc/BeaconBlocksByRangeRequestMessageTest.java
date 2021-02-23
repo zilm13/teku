@@ -13,11 +13,10 @@
 
 package tech.pegasys.teku.datastructures.networking.libp2p.rpc;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static tech.pegasys.teku.ssz.backing.SszDataAssert.assertThatSszData;
 
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.Test;
-import tech.pegasys.teku.datastructures.util.SimpleOffsetSerializer;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 
 class BeaconBlocksByRangeRequestMessageTest {
@@ -27,10 +26,10 @@ class BeaconBlocksByRangeRequestMessageTest {
     final BeaconBlocksByRangeRequestMessage request =
         new BeaconBlocksByRangeRequestMessage(
             UInt64.valueOf(2), UInt64.valueOf(3), UInt64.valueOf(4));
-    final Bytes data = SimpleOffsetSerializer.serialize(request);
+    final Bytes data = request.sszSerialize();
     final BeaconBlocksByRangeRequestMessage result =
-        SimpleOffsetSerializer.deserialize(data, BeaconBlocksByRangeRequestMessage.class);
+        BeaconBlocksByRangeRequestMessage.SSZ_SCHEMA.sszDeserialize(data);
 
-    assertThat(result).isEqualToComparingFieldByField(request);
+    assertThatSszData(result).isEqualByAllMeansTo(request);
   }
 }

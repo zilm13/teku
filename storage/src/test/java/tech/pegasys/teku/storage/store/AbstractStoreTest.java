@@ -26,8 +26,8 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import tech.pegasys.teku.core.ChainBuilder;
-import tech.pegasys.teku.core.lookup.BlockProvider;
-import tech.pegasys.teku.core.lookup.StateAndBlockSummaryProvider;
+import tech.pegasys.teku.dataproviders.lookup.BlockProvider;
+import tech.pegasys.teku.dataproviders.lookup.StateAndBlockSummaryProvider;
 import tech.pegasys.teku.datastructures.blocks.CheckpointEpochs;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.SignedBlockAndState;
@@ -37,11 +37,14 @@ import tech.pegasys.teku.datastructures.state.CheckpointState;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.metrics.StubMetricsSystem;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.networks.SpecProviderFactory;
 import tech.pegasys.teku.protoarray.StoredBlockMetadata;
+import tech.pegasys.teku.spec.SpecProvider;
 import tech.pegasys.teku.storage.api.StorageUpdateChannel;
 import tech.pegasys.teku.storage.api.StubStorageUpdateChannel;
 
 public abstract class AbstractStoreTest {
+  protected final SpecProvider specProvider = SpecProviderFactory.createMinimal();
   protected final StorageUpdateChannel storageUpdateChannel = new StubStorageUpdateChannel();
   protected final ChainBuilder chainBuilder = ChainBuilder.createDefault();
 

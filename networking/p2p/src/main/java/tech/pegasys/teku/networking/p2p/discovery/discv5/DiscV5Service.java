@@ -27,35 +27,48 @@ import org.ethereum.beacon.discovery.schema.NodeRecord;
 import org.ethereum.beacon.discovery.schema.NodeRecordBuilder;
 import org.ethereum.beacon.discovery.schema.NodeRecordInfo;
 import org.ethereum.beacon.discovery.schema.NodeStatus;
+import org.ethereum.beacon.discovery.storage.NewAddressHandler;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
+import tech.pegasys.teku.networking.p2p.discovery.DiscoveryConfig;
 import tech.pegasys.teku.networking.p2p.discovery.DiscoveryPeer;
 import tech.pegasys.teku.networking.p2p.discovery.DiscoveryService;
 import tech.pegasys.teku.networking.p2p.libp2p.MultiaddrUtil;
-import tech.pegasys.teku.networking.p2p.network.NetworkConfig;
+import tech.pegasys.teku.networking.p2p.network.config.NetworkConfig;
 import tech.pegasys.teku.service.serviceutils.Service;
-import tech.pegasys.teku.ssz.SSZTypes.Bitvector;
+import tech.pegasys.teku.ssz.backing.collections.SszBitvector;
+import tech.pegasys.teku.ssz.backing.schema.collections.SszBitvectorSchema;
 import tech.pegasys.teku.storage.store.KeyValueStore;
 
 public class DiscV5Service extends Service implements DiscoveryService {
   private static final String SEQ_NO_STORE_KEY = "local-enr-seqno";
+  static final SszBitvectorSchema<SszBitvector> SUBNET_SUBSCRIPTIONS_SCHEMA =
+      SszBitvectorSchema.create(ATTESTATION_SUBNET_COUNT);
 
   public static DiscoveryService create(
-      NetworkConfig p2pConfig, KeyValueStore<String, Bytes> kvStore) {
-    return new DiscV5Service(p2pConfig, kvStore);
+      final DiscoveryConfig discoConfig,
+      final NetworkConfig p2pConfig,
+      final KeyValueStore<String, Bytes> kvStore,
+      final Bytes privateKey) {
+    return new DiscV5Service(discoConfig, p2pConfig, kvStore, privateKey);
   }
 
   private final DiscoverySystem discoverySystem;
   private final KeyValueStore<String, Bytes> kvStore;
 
-  private DiscV5Service(NetworkConfig p2pConfig, KeyValueStore<String, Bytes> kvStore) {
-    final Bytes privateKey = Bytes.wrap(p2pConfig.getPrivateKey().raw());
+  private DiscV5Service(
+      final DiscoveryConfig discoConfig,
+      NetworkConfig p2pConfig,
+      KeyValueStore<String, Bytes> kvStore,
+      final Bytes privateKey) {
     final String listenAddress = p2pConfig.getNetworkInterface();
     final int listenPort = p2pConfig.getListenPort();
     final String advertisedAddress = p2pConfig.getAdvertisedIp();
     final int advertisedPort = p2pConfig.getAdvertisedPort();
-    final List<String> bootnodes = p2pConfig.getBootnodes();
+    final List<String> bootnodes = discoConfig.getBootnodes();
     final UInt64 seqNo =
         kvStore.get(SEQ_NO_STORE_KEY).map(UInt64::fromBytes).orElse(UInt64.ZERO).add(1);
+    final NewAddressHandler maybeUpdateNodeRecordHandler =
+        maybeUpdateNodeRecord(p2pConfig.hasUserExplicitlySetAdvertisedIp());
     discoverySystem =
         new DiscoverySystemBuilder()
             .listen(listenAddress, listenPort)
@@ -67,9 +80,20 @@ public class DiscV5Service extends Service implements DiscoveryService {
                     .address(advertisedAddress, advertisedPort)
                     .seq(seqNo)
                     .build())
+            .newAddressHandler(maybeUpdateNodeRecordHandler)
             .localNodeRecordListener(this::localNodeRecordUpdated)
             .build();
     this.kvStore = kvStore;
+  }
+
+  private NewAddressHandler maybeUpdateNodeRecord(boolean userExplicitlySetAdvertisedIpOrPort) {
+    return (oldRecord, proposedNewRecord) -> {
+      if (userExplicitlySetAdvertisedIpOrPort) {
+        return Optional.of(oldRecord);
+      } else {
+        return Optional.of(proposedNewRecord);
+      }
+    };
   }
 
   private void localNodeRecordUpdated(NodeRecord oldRecord, NodeRecord newRecord) {
@@ -113,7 +137,7 @@ public class DiscV5Service extends Service implements DiscoveryService {
             (Bytes) nodeRecord.get(EnrField.PKEY_SECP256K1),
             nodeRecord.getUdpAddress().get(),
             Optional.empty(),
-            new Bitvector(ATTESTATION_SUBNET_COUNT));
+            SUBNET_SUBSCRIPTIONS_SCHEMA.getDefault());
 
     return Optional.of(MultiaddrUtil.fromDiscoveryPeerAsUdp(discoveryPeer).toString());
   }

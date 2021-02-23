@@ -29,37 +29,41 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
-import tech.pegasys.teku.core.lookup.BlockProvider;
-import tech.pegasys.teku.core.lookup.StateAndBlockSummaryProvider;
+import tech.pegasys.teku.dataproviders.lookup.BlockProvider;
+import tech.pegasys.teku.dataproviders.lookup.StateAndBlockSummaryProvider;
 import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.datastructures.blocks.SignedBlockAndState;
 import tech.pegasys.teku.datastructures.state.AnchorPoint;
 import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.StubAsyncRunner;
 import tech.pegasys.teku.infrastructure.metrics.StubMetricsSystem;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.networks.SpecProviderFactory;
 import tech.pegasys.teku.protoarray.ProtoArrayStorageChannel;
 import tech.pegasys.teku.protoarray.StoredBlockMetadata;
+import tech.pegasys.teku.spec.SpecProvider;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.storage.api.ChainHeadChannel;
 import tech.pegasys.teku.storage.api.FinalizedCheckpointChannel;
 import tech.pegasys.teku.storage.api.StorageQueryChannel;
 import tech.pegasys.teku.storage.api.StorageUpdateChannel;
 import tech.pegasys.teku.storage.api.StubChainHeadChannel;
 import tech.pegasys.teku.storage.api.StubFinalizedCheckpointChannel;
+import tech.pegasys.teku.storage.api.VoteUpdateChannel;
 import tech.pegasys.teku.storage.store.StoreAssertions;
 import tech.pegasys.teku.storage.store.StoreBuilder;
 import tech.pegasys.teku.storage.store.StoreConfig;
 import tech.pegasys.teku.storage.store.UpdatableStore;
 
 public class StorageBackedRecentChainDataTest {
-
-  private static final BeaconState INITIAL_STATE =
-      new DataStructureUtil(3).randomBeaconState(UInt64.ZERO);
+  private final SpecProvider specProvider = SpecProviderFactory.createMinimal();
+  private final BeaconState INITIAL_STATE =
+      new DataStructureUtil(3, specProvider).randomBeaconState(UInt64.ZERO);
 
   private final StorageQueryChannel storageQueryChannel = mock(StorageQueryChannel.class);
   private final StorageUpdateChannel storageUpdateChannel = mock(StorageUpdateChannel.class);
+  private final VoteUpdateChannel voteUpdateChannel = mock(VoteUpdateChannel.class);
   private final FinalizedCheckpointChannel finalizedCheckpointChannel =
       new StubFinalizedCheckpointChannel();
   private final ChainHeadChannel chainHeadChannel = new StubChainHeadChannel();
@@ -81,10 +85,12 @@ public class StorageBackedRecentChainDataTest {
             asyncRunner,
             storageQueryChannel,
             storageUpdateChannel,
+            voteUpdateChannel,
             ProtoArrayStorageChannel.NO_OP,
             finalizedCheckpointChannel,
             chainHeadChannel,
-            eventBus);
+            eventBus,
+            specProvider);
 
     // We should have posted a request to get the store from storage
     verify(storageQueryChannel).onStoreRequest();
@@ -99,7 +105,9 @@ public class StorageBackedRecentChainDataTest {
             new StubMetricsSystem(),
             BlockProvider.NOOP,
             StateAndBlockSummaryProvider.NOOP,
-            AnchorPoint.fromGenesisState(INITIAL_STATE));
+            AnchorPoint.fromGenesisState(INITIAL_STATE),
+            UInt64.ZERO,
+            specProvider);
     storeRequestFuture.complete(Optional.of(genesisStoreBuilder));
     assertThat(client).isCompleted();
     assertStoreInitialized(client.get());
@@ -131,10 +139,12 @@ public class StorageBackedRecentChainDataTest {
             asyncRunner,
             storageQueryChannel,
             storageUpdateChannel,
+            voteUpdateChannel,
             protoArrayStorageChannel,
             finalizedCheckpointChannel,
             chainHeadChannel,
-            eventBus);
+            eventBus,
+            specProvider);
 
     // We should have posted a request to get the store from storage
     verify(storageQueryChannel).onStoreRequest();
@@ -192,10 +202,12 @@ public class StorageBackedRecentChainDataTest {
             asyncRunner,
             storageQueryChannel,
             storageUpdateChannel,
+            voteUpdateChannel,
             ProtoArrayStorageChannel.NO_OP,
             finalizedCheckpointChannel,
             chainHeadChannel,
-            eventBus);
+            eventBus,
+            specProvider);
 
     // We should have posted a request to get the store from storage
     verify(storageQueryChannel).onStoreRequest();
@@ -215,10 +227,12 @@ public class StorageBackedRecentChainDataTest {
                 new StubMetricsSystem(),
                 BlockProvider.NOOP,
                 StateAndBlockSummaryProvider.NOOP,
-                AnchorPoint.fromGenesisState(INITIAL_STATE))
+                AnchorPoint.fromGenesisState(INITIAL_STATE),
+                UInt64.ZERO,
+                specProvider)
             .storeConfig(storeConfig)
             .build();
-    client.get().initializeFromGenesis(INITIAL_STATE);
+    client.get().initializeFromGenesis(INITIAL_STATE, UInt64.ZERO);
     assertStoreInitialized(client.get());
     assertStoreIsSet(client.get());
     StoreAssertions.assertStoresMatch(client.get().getStore(), genesisStore);
@@ -240,10 +254,12 @@ public class StorageBackedRecentChainDataTest {
             asyncRunner,
             storageQueryChannel,
             storageUpdateChannel,
+            voteUpdateChannel,
             ProtoArrayStorageChannel.NO_OP,
             finalizedCheckpointChannel,
             chainHeadChannel,
-            eventBus);
+            eventBus,
+            specProvider);
 
     // We should have posted a request to get the store from storage
     verify(storageQueryChannel).onStoreRequest();
@@ -260,7 +276,9 @@ public class StorageBackedRecentChainDataTest {
             new StubMetricsSystem(),
             BlockProvider.NOOP,
             StateAndBlockSummaryProvider.NOOP,
-            AnchorPoint.fromGenesisState(INITIAL_STATE));
+            AnchorPoint.fromGenesisState(INITIAL_STATE),
+            UInt64.ZERO,
+            specProvider);
     storeRequestFuture.complete(Optional.of(genesisStoreBuilder));
     assertThat(client).isCompleted();
     assertStoreInitialized(client.get());
@@ -283,10 +301,12 @@ public class StorageBackedRecentChainDataTest {
             asyncRunner,
             storageQueryChannel,
             storageUpdateChannel,
+            voteUpdateChannel,
             ProtoArrayStorageChannel.NO_OP,
             finalizedCheckpointChannel,
             chainHeadChannel,
-            eventBus);
+            eventBus,
+            specProvider);
 
     // We should have posted a request to get the store from storage
     verify(storageQueryChannel).onStoreRequest();
@@ -310,7 +330,7 @@ public class StorageBackedRecentChainDataTest {
     assertThat(client.getStore()).isNotNull();
 
     // With a store set, we shouldn't be allowed to overwrite the store by setting the genesis state
-    assertThatThrownBy(() -> client.initializeFromGenesis(INITIAL_STATE))
+    assertThatThrownBy(() -> client.initializeFromGenesis(INITIAL_STATE, UInt64.ZERO))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining(
             "Failed to initialize from state: store has already been initialized");

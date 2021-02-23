@@ -16,8 +16,6 @@ package tech.pegasys.teku.networking.eth2.gossip.topics;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static tech.pegasys.teku.statetransition.validation.InternalValidationResult.IGNORE;
-import static tech.pegasys.teku.statetransition.validation.InternalValidationResult.REJECT;
 
 import com.google.common.eventbus.EventBus;
 import io.libp2p.core.pubsub.ValidationResult;
@@ -25,12 +23,12 @@ import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.StubAsyncRunner;
 import tech.pegasys.teku.networking.eth2.gossip.ProposerSlashingGossipManager;
 import tech.pegasys.teku.networking.eth2.gossip.encoding.GossipEncoding;
 import tech.pegasys.teku.networking.eth2.gossip.topics.topichandlers.Eth2TopicHandler;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
 import tech.pegasys.teku.statetransition.validation.InternalValidationResult;
@@ -56,7 +54,7 @@ public class ProposerSlashingTopicHandlerTest {
           gossipEncoding,
           dataStructureUtil.randomForkInfo().getForkDigest(),
           ProposerSlashingGossipManager.TOPIC_NAME,
-          ProposerSlashing.class);
+          ProposerSlashing.SSZ_SCHEMA);
 
   @BeforeEach
   public void setup() {
@@ -78,7 +76,8 @@ public class ProposerSlashingTopicHandlerTest {
   @Test
   public void handleMessage_ignoredSlashing() {
     final ProposerSlashing slashing = dataStructureUtil.randomProposerSlashing();
-    when(processor.process(slashing)).thenReturn(SafeFuture.completedFuture(IGNORE));
+    when(processor.process(slashing))
+        .thenReturn(SafeFuture.completedFuture(InternalValidationResult.IGNORE));
     Bytes serialized = gossipEncoding.encode(slashing);
     final SafeFuture<ValidationResult> result =
         topicHandler.handleMessage(topicHandler.prepareMessage(serialized));
@@ -89,7 +88,8 @@ public class ProposerSlashingTopicHandlerTest {
   @Test
   public void handleMessage_rejectedSlashing() {
     final ProposerSlashing slashing = dataStructureUtil.randomProposerSlashing();
-    when(processor.process(slashing)).thenReturn(SafeFuture.completedFuture(REJECT));
+    when(processor.process(slashing))
+        .thenReturn(SafeFuture.completedFuture(InternalValidationResult.REJECT));
     Bytes serialized = gossipEncoding.encode(slashing);
     final SafeFuture<ValidationResult> result =
         topicHandler.handleMessage(topicHandler.prepareMessage(serialized));
@@ -117,7 +117,7 @@ public class ProposerSlashingTopicHandlerTest {
             gossipEncoding,
             forkDigest,
             ProposerSlashingGossipManager.TOPIC_NAME,
-            ProposerSlashing.class);
+            ProposerSlashing.SSZ_SCHEMA);
     assertThat(topicHandler.getTopic()).isEqualTo("/eth2/11223344/proposer_slashing/ssz_snappy");
   }
 }

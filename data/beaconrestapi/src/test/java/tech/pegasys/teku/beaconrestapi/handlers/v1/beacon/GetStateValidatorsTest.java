@@ -20,7 +20,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ONE;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ZERO;
-import static tech.pegasys.teku.util.config.Constants.FAR_FUTURE_EPOCH;
+import static tech.pegasys.teku.spec.constants.SpecConstants.FAR_FUTURE_EPOCH;
 
 import java.util.List;
 import java.util.Map;
@@ -31,11 +31,12 @@ import tech.pegasys.teku.api.response.v1.beacon.ValidatorResponse;
 import tech.pegasys.teku.api.response.v1.beacon.ValidatorStatus;
 import tech.pegasys.teku.api.schema.Validator;
 import tech.pegasys.teku.beaconrestapi.AbstractBeaconHandlerTest;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 
 public class GetStateValidatorsTest extends AbstractBeaconHandlerTest {
+
   private final DataStructureUtil dataStructureUtil = new DataStructureUtil();
   private final GetStateValidators handler =
       new GetStateValidators(chainDataProvider, jsonProvider);

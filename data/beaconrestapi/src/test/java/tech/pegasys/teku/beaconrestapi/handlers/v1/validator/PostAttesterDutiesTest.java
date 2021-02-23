@@ -19,7 +19,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_start_slot_at_epoch;
 
 import java.util.List;
 import java.util.Map;
@@ -31,7 +30,7 @@ import tech.pegasys.teku.api.response.v1.validator.AttesterDuty;
 import tech.pegasys.teku.api.response.v1.validator.PostAttesterDutiesResponse;
 import tech.pegasys.teku.api.schema.BLSPubKey;
 import tech.pegasys.teku.beaconrestapi.schema.BadRequest;
-import tech.pegasys.teku.bls.BLSPublicKey;
+import tech.pegasys.teku.bls.BLSTestUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 
@@ -62,10 +61,12 @@ public class PostAttesterDutiesTest extends AbstractValidatorApiTest {
     when(context.pathParamMap()).thenReturn(Map.of("epoch", "100"));
     when(context.body()).thenReturn("[\"2\"]");
 
+    final UInt64 epoch = UInt64.valueOf(100);
+    final UInt64 startSlot =
+        specProvider.atEpoch(epoch).getBeaconStateUtil().computeStartSlotAtEpoch(epoch);
     PostAttesterDutiesResponse duties =
         new PostAttesterDutiesResponse(
-            Bytes32.fromHexString("0x1234"),
-            List.of(getDuty(2, 1, 2, 10, 3, compute_start_slot_at_epoch(UInt64.valueOf(100)))));
+            Bytes32.fromHexString("0x1234"), List.of(getDuty(2, 1, 2, 10, 3, startSlot)));
     when(validatorDataProvider.getAttesterDuties(eq(UInt64.valueOf(100)), any()))
         .thenReturn(SafeFuture.completedFuture(Optional.of(duties)));
 
@@ -97,7 +98,7 @@ public class PostAttesterDutiesTest extends AbstractValidatorApiTest {
       final long validatorCommitteeIndex,
       final UInt64 slot) {
     return new AttesterDuty(
-        new BLSPubKey(BLSPublicKey.random(1)),
+        new BLSPubKey(BLSTestUtil.randomPublicKey(1)),
         UInt64.valueOf(validatorIndex),
         UInt64.valueOf(committeeIndex),
         UInt64.valueOf(committeeLength),

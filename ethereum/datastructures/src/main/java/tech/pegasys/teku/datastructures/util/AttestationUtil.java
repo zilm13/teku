@@ -42,19 +42,13 @@ import tech.pegasys.teku.datastructures.operations.IndexedAttestation;
 import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.datastructures.state.Checkpoint;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
 import tech.pegasys.teku.ssz.SSZTypes.SSZList;
+import tech.pegasys.teku.ssz.backing.collections.SszBitlist;
 
+@Deprecated
 public class AttestationUtil {
 
   private static final Logger LOG = LogManager.getLogger();
-
-  public static Bitlist getAggregationBits(int committeeSize, int indexIntoCommittee) {
-    // Create aggregation bitfield
-    Bitlist aggregationBits = new Bitlist(committeeSize, MAX_VALIDATORS_PER_COMMITTEE);
-    aggregationBits.setBit(indexIntoCommittee);
-    return aggregationBits;
-  }
 
   /**
    * Check if ``data_1`` and ``data_2`` are slashable according to Casper FFG rules.
@@ -65,6 +59,7 @@ public class AttestationUtil {
    * @see
    *     <a>https://github.com/ethereum/eth2.0-specs/blob/v0.8.0/specs/core/0_beacon-chain.md#is_slashable_attestation_data</a>
    */
+  @Deprecated
   public static boolean is_slashable_attestation_data(
       AttestationData data_1, AttestationData data_2) {
     return (
@@ -83,6 +78,7 @@ public class AttestationUtil {
    * @see
    *     <a>https://github.com/ethereum/eth2.0-specs/blob/v0.8.0/specs/core/0_beacon-chain.md#get_indexed_attestation</a>
    */
+  @Deprecated
   public static IndexedAttestation get_indexed_attestation(
       BeaconState state, Attestation attestation) {
     List<Integer> attesting_indices =
@@ -108,22 +104,25 @@ public class AttestationUtil {
    * @see
    *     <a>https://github.com/ethereum/eth2.0-specs/blob/v0.8.0/specs/core/0_beacon-chain.md#get_attesting_indices</a>
    */
+  @Deprecated
   public static List<Integer> get_attesting_indices(
-      BeaconState state, AttestationData data, Bitlist bits) {
+      BeaconState state, AttestationData data, SszBitlist bits) {
     return stream_attesting_indices(state, data, bits).boxed().collect(toList());
   }
 
+  @Deprecated
   public static IntStream stream_attesting_indices(
-      BeaconState state, AttestationData data, Bitlist bits) {
+      BeaconState state, AttestationData data, SszBitlist bits) {
     List<Integer> committee = get_beacon_committee(state, data.getSlot(), data.getIndex());
     checkArgument(
-        bits.getCurrentSize() == committee.size(),
+        bits.size() == committee.size(),
         "Aggregation bitlist size (%s) does not match committee size (%s)",
-        bits.getCurrentSize(),
+        bits.size(),
         committee.size());
     return IntStream.range(0, committee.size()).filter(bits::getBit).map(committee::get);
   }
 
+  @Deprecated
   public static AttestationProcessingResult is_valid_indexed_attestation(
       BeaconState state, ValidateableAttestation attestation) {
     if (attestation.isValidIndexedAttestation()) {
@@ -155,11 +154,13 @@ public class AttestationUtil {
    * @see
    *     <a>https://github.com/ethereum/eth2.0-specs/blob/v0.8.0/specs/core/0_beacon-chain.md#is_valid_indexed_attestation</a>
    */
+  @Deprecated
   public static AttestationProcessingResult is_valid_indexed_attestation(
       BeaconState state, IndexedAttestation indexed_attestation) {
     return is_valid_indexed_attestation(state, indexed_attestation, BLSSignatureVerifier.SIMPLE);
   }
 
+  @Deprecated
   public static AttestationProcessingResult is_valid_indexed_attestation(
       BeaconState state,
       IndexedAttestation indexed_attestation,
@@ -191,22 +192,7 @@ public class AttestationUtil {
     return AttestationProcessingResult.SUCCESSFUL;
   }
 
-  // Set bits of the newAttestation on the oldBitlist
-  // return true if any new bit was set
-  public static boolean setBitsForNewAttestation(Bitlist oldBitlist, Attestation newAttesation) {
-    Bitlist newBitlist = newAttesation.getAggregation_bits();
-    if (oldBitlist.getCurrentSize() != newBitlist.getCurrentSize())
-      throw new UnsupportedOperationException("Attestation bitlist size's don't match");
-    boolean representsNewAttester = false;
-    for (int i = 0; i < oldBitlist.getCurrentSize(); i++) {
-      if (newBitlist.getBit(i) && !oldBitlist.getBit(i)) {
-        oldBitlist.setBit(i);
-        representsNewAttester = true;
-      }
-    }
-    return representsNewAttester;
-  }
-
+  @Deprecated
   public static boolean representsNewAttester(
       Attestation oldAttestation, Attestation newAttestation) {
     int newAttesterIndex = getAttesterIndexIntoCommittee(newAttestation);
@@ -214,9 +200,10 @@ public class AttestationUtil {
   }
 
   // Returns the index of the first attester in the Attestation
+  @Deprecated
   public static int getAttesterIndexIntoCommittee(Attestation attestation) {
-    Bitlist aggregationBits = attestation.getAggregation_bits();
-    for (int i = 0; i < aggregationBits.getCurrentSize(); i++) {
+    SszBitlist aggregationBits = attestation.getAggregation_bits();
+    for (int i = 0; i < aggregationBits.size(); i++) {
       if (aggregationBits.getBit(i)) {
         return i;
       }
@@ -224,12 +211,8 @@ public class AttestationUtil {
     throw new UnsupportedOperationException("Attestation doesn't have any aggregation bit set");
   }
 
-  // Returns the indices of the attesters in the Attestation
-  public static List<Integer> getAttesterIndicesIntoCommittee(Bitlist aggregationBits) {
-    return aggregationBits.getAllSetBits();
-  }
-
   // Get attestation data that does not include attester specific shard or crosslink information
+  @Deprecated
   public static AttestationData getGenericAttestationData(
       UInt64 slot, BeaconState state, BeaconBlockSummary block, final UInt64 committeeIndex) {
     UInt64 epoch = compute_epoch_at_slot(slot);

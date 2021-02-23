@@ -42,9 +42,8 @@ import tech.pegasys.teku.datastructures.operations.AttestationData;
 import tech.pegasys.teku.datastructures.operations.IndexedAttestation;
 import tech.pegasys.teku.datastructures.state.Checkpoint;
 import tech.pegasys.teku.datastructures.util.AttestationProcessingResult;
-import tech.pegasys.teku.datastructures.util.DataStructureUtil;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bitlist;
+import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.statetransition.events.block.ImportedBlockEvent;
 import tech.pegasys.teku.statetransition.forkchoice.ForkChoice;
 import tech.pegasys.teku.statetransition.util.FutureItems;
@@ -145,7 +144,7 @@ class AttestationManagerTest {
   @Test
   public void shouldDeferProcessingForAttestationsThatAreMissingBlockDependencies() {
     final SignedBeaconBlock block = dataStructureUtil.randomSignedBeaconBlock(1);
-    final Bytes32 requiredBlockRoot = block.getMessage().hash_tree_root();
+    final Bytes32 requiredBlockRoot = block.getMessage().hashTreeRoot();
     final ValidateableAttestation attestation =
         ValidateableAttestation.from(attestationFromSlot(1, requiredBlockRoot));
     when(forkChoice.onAttestation(any()))
@@ -210,7 +209,7 @@ class AttestationManagerTest {
 
   private Attestation attestationFromSlot(final long slot, final Bytes32 targetRoot) {
     return new Attestation(
-        new Bitlist(1, 1),
+        Attestation.SSZ_SCHEMA.getAggregationBitsSchema().ofBits(1),
         new AttestationData(
             UInt64.valueOf(slot),
             UInt64.ZERO,
