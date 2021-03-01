@@ -63,6 +63,7 @@ public class Constants {
   // Initial values
   @Deprecated public static Bytes4 GENESIS_FORK_VERSION = Bytes4.fromHexString("0x00000000");
   @Deprecated public static Bytes BLS_WITHDRAWAL_PREFIX;
+  @Deprecated public static Bytes ETH1_ADDRESS_WITHDRAWAL_PREFIX;
 
   // Time parameters
   @Deprecated public static UInt64 GENESIS_DELAY;

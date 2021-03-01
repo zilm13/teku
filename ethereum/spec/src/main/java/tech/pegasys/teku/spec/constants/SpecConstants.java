@@ -56,6 +56,7 @@ public class SpecConstants {
   // Initial values
   private final Bytes4 genesisForkVersion;
   private final Bytes blsWithdrawalPrefix;
+  private final Bytes eth1AddressWithdrawalPrefix;
 
   // Time parameters
   private final UInt64 genesisDelay;
@@ -135,6 +136,7 @@ public class SpecConstants {
       final UInt64 effectiveBalanceIncrement,
       final Bytes4 genesisForkVersion,
       final Bytes blsWithdrawalPrefix,
+      final Bytes eth1AddressWithdrawalPrefix,
       final UInt64 genesisDelay,
       final int secondsPerSlot,
       final int minAttestationInclusionDelay,
@@ -196,6 +198,7 @@ public class SpecConstants {
     this.effectiveBalanceIncrement = effectiveBalanceIncrement;
     this.genesisForkVersion = genesisForkVersion;
     this.blsWithdrawalPrefix = blsWithdrawalPrefix;
+    this.eth1AddressWithdrawalPrefix = eth1AddressWithdrawalPrefix;
     this.genesisDelay = genesisDelay;
     this.secondsPerSlot = secondsPerSlot;
     this.minAttestationInclusionDelay = minAttestationInclusionDelay;
@@ -336,6 +339,10 @@ public class SpecConstants {
 
   public Bytes getBlsWithdrawalPrefix() {
     return blsWithdrawalPrefix;
+  }
+
+  public Bytes getEth1AddressWithdrawalPrefix() {
+    return eth1AddressWithdrawalPrefix;
   }
 
   public UInt64 getGenesisDelay() {
@@ -552,6 +559,7 @@ public class SpecConstants {
         && Objects.equals(effectiveBalanceIncrement, that.effectiveBalanceIncrement)
         && Objects.equals(genesisForkVersion, that.genesisForkVersion)
         && Objects.equals(blsWithdrawalPrefix, that.blsWithdrawalPrefix)
+        && Objects.equals(eth1AddressWithdrawalPrefix, that.eth1AddressWithdrawalPrefix)
         && Objects.equals(genesisDelay, that.genesisDelay)
         && Objects.equals(minEpochsToInactivityPenalty, that.minEpochsToInactivityPenalty)
         && Objects.equals(shardCommitteePeriod, that.shardCommitteePeriod)
@@ -594,6 +602,7 @@ public class SpecConstants {
         effectiveBalanceIncrement,
         genesisForkVersion,
         blsWithdrawalPrefix,
+        eth1AddressWithdrawalPrefix,
         genesisDelay,
         secondsPerSlot,
         minAttestationInclusionDelay,

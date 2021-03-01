@@ -41,6 +41,7 @@ import static tech.pegasys.teku.util.config.Constants.SLOTS_PER_HISTORICAL_ROOT;
 import static tech.pegasys.teku.util.config.Constants.WITHDRAWAL_ETH1;
 import static tech.pegasys.teku.util.config.Constants.WITHDRAWAL_ETH1_PREFIX;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -382,7 +383,7 @@ public final class EpochProcessorUtil {
 
     // Only Eth1 withdrawals are currently supported
     List<Pair<Integer, Validator>> eth1_withdrawal_validators =
-        validators_by_target.get(WITHDRAWAL_ETH1_PREFIX);
+        validators_by_target.getOrDefault(WITHDRAWAL_ETH1_PREFIX, Collections.emptyList());
     for (Pair<Integer, Validator> validatorPair : eth1_withdrawal_validators) {
       state.getValidators().set(validatorPair.getLeft(), Validator.NULL);
       state

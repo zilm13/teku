@@ -50,6 +50,7 @@ public class SpecConstantsBuilder {
   // Initial values
   private Bytes4 genesisForkVersion = Bytes4.fromHexString("0x00000000");
   private Bytes blsWithdrawalPrefix;
+  private Bytes eth1AddressWithdrawalPrefix;
 
   // Time parameters
   private UInt64 genesisDelay;
@@ -131,6 +132,7 @@ public class SpecConstantsBuilder {
         effectiveBalanceIncrement,
         genesisForkVersion,
         blsWithdrawalPrefix,
+        eth1AddressWithdrawalPrefix,
         genesisDelay,
         secondsPerSlot,
         minAttestationInclusionDelay,
@@ -195,6 +197,7 @@ public class SpecConstantsBuilder {
     validateConstant(effectiveBalanceIncrement);
     validateConstant(genesisForkVersion);
     validateConstant(blsWithdrawalPrefix);
+    validateConstant(eth1AddressWithdrawalPrefix);
     validateConstant(genesisDelay);
     validateConstant(secondsPerSlot);
     validateConstant(minAttestationInclusionDelay);
@@ -389,6 +392,12 @@ public class SpecConstantsBuilder {
   public SpecConstantsBuilder blsWithdrawalPrefix(final Bytes blsWithdrawalPrefix) {
     checkNotNull(blsWithdrawalPrefix);
     this.blsWithdrawalPrefix = blsWithdrawalPrefix;
+    return this;
+  }
+
+  public SpecConstantsBuilder eth1AddressWithdrawalPrefix(final Bytes eth1AddressWithdrawalPrefix) {
+    checkNotNull(eth1AddressWithdrawalPrefix);
+    this.eth1AddressWithdrawalPrefix = eth1AddressWithdrawalPrefix;
     return this;
   }
 

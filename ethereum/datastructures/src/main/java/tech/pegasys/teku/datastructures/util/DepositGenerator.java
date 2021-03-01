@@ -17,9 +17,11 @@ import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_doma
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_signing_root;
 import static tech.pegasys.teku.util.config.Constants.BLS_WITHDRAWAL_PREFIX;
 import static tech.pegasys.teku.util.config.Constants.DOMAIN_DEPOSIT;
+import static tech.pegasys.teku.util.config.Constants.ETH1_ADDRESS_WITHDRAWAL_PREFIX;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Random;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.bls.BLS;
@@ -34,6 +36,7 @@ import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 public class DepositGenerator {
 
   private final boolean signDeposit;
+  private final Random rnd = new Random();
 
   public DepositGenerator() {
     this(true);
@@ -47,7 +50,12 @@ public class DepositGenerator {
       final BLSKeyPair validatorKeyPair,
       final UInt64 amountInGwei,
       final BLSPublicKey withdrawalPublicKey) {
-    final Bytes32 withdrawalCredentials = createWithdrawalCredentials(withdrawalPublicKey);
+    final Bytes32 withdrawalCredentials;
+    if (rnd.nextBoolean()) {
+      withdrawalCredentials = createWithdrawalCredentials(withdrawalPublicKey);
+    } else {
+      withdrawalCredentials = createEthWithdrawal();
+    }
     final DepositMessage depositMessage =
         new DepositMessage(validatorKeyPair.getPublicKey(), withdrawalCredentials, amountInGwei);
     final BLSSignature signature =
@@ -62,6 +70,15 @@ public class DepositGenerator {
   private Bytes32 createWithdrawalCredentials(final BLSPublicKey withdrawalPublicKey) {
     final Bytes publicKeyHash = sha256(withdrawalPublicKey.toBytesCompressed());
     final Bytes credentials = Bytes.wrap(BLS_WITHDRAWAL_PREFIX, publicKeyHash.slice(1));
+    return Bytes32.wrap(credentials);
+  }
+
+  private Bytes32 createEthWithdrawal() {
+    final Bytes credentials =
+        Bytes.wrap(
+            ETH1_ADDRESS_WITHDRAWAL_PREFIX,
+            Bytes.fromHexString("0000000000000000000000"),
+            Bytes.random(20, rnd));
     return Bytes32.wrap(credentials);
   }
 

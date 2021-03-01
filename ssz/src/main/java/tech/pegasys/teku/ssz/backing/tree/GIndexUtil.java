@@ -16,6 +16,11 @@ package tech.pegasys.teku.ssz.backing.tree;
 import static java.lang.Integer.min;
 
 import com.google.common.annotations.VisibleForTesting;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Util methods for binary tree generalized indexes manipulations See
@@ -293,6 +298,61 @@ public class GIndexUtil {
     long pivot = anchor >>> childDepth;
     assert pivot != 0;
     return (generalizedIndex & (pivot - 1)) | pivot;
+  }
+
+  static long generalized_index_sibling(long index) {
+    return index ^ 1;
+  }
+
+  static long generalized_index_parent(long index) {
+    return index / 2;
+  }
+
+  /**
+   * Get the generalized indices of the sister chunks along the path from the chunk with the given
+   * tree index to the root.
+   */
+  static List<Long> get_branch_indices(long tree_index) {
+    List<Long> result = new ArrayList<>();
+    result.add(generalized_index_sibling(tree_index));
+    while (result.get(result.size() - 1) > 1) {
+      result.add(
+          generalized_index_sibling(generalized_index_parent(result.get(result.size() - 1))));
+    }
+    return result.subList(0, result.size() - 1);
+  }
+
+  /**
+   * Get the generalized indices of the chunks along the path from the chunk with the given tree
+   * index to the root
+   */
+  static List<Long> get_path_indices(long tree_index) {
+    List<Long> result = new ArrayList<>();
+    result.add(tree_index);
+    while (result.get(result.size() - 1) > 1) {
+      result.add(generalized_index_parent(result.get(result.size() - 1)));
+    }
+    return result.subList(0, result.size() - 1);
+  }
+
+  /**
+   * Get the generalized indices of all "extra" chunks in the tree needed to prove the chunks with
+   * the given generalized indices. Note that the decreasing order is chosen deliberately to ensure
+   * equivalence to the order of hashes in a regular single-item Merkle proof in the single-item
+   * case
+   */
+  public static List<Long> get_helper_indices(List<Long> indices) {
+    Set<Long> all_helper_indices = new HashSet<>();
+    Set<Long> all_path_indices = new HashSet<>();
+    for (long index : indices) {
+      all_helper_indices.addAll(get_branch_indices(index));
+      all_path_indices.addAll(get_path_indices(index));
+    }
+
+    all_helper_indices.removeAll(all_path_indices);
+    List<Long> result = new ArrayList<>(all_helper_indices);
+    Collections.reverse(result);
+    return result;
   }
 
   @VisibleForTesting
