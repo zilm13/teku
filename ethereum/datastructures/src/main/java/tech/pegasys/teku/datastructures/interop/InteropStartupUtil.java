@@ -14,6 +14,8 @@
 package tech.pegasys.teku.datastructures.interop;
 
 import java.util.List;
+import java.util.stream.IntStream;
+
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.bls.BLSKeyPair;
 import tech.pegasys.teku.datastructures.operations.DepositData;
@@ -52,6 +54,22 @@ public final class InteropStartupUtil {
     final List<DepositData> initialDepositData =
         new MockStartDepositGenerator(new DepositGenerator(signDeposits))
             .createDeposits(validatorKeys);
+    // TODO: outputs all validator's private data, remove when not needed
+    IntStream.range(0, validatorKeys.size()).forEach(
+            index -> {
+              BLSKeyPair keyPair = validatorKeys.get(index);
+              DepositData depositData = initialDepositData.get(index);
+              StringBuilder builder = new StringBuilder();
+              builder.append(keyPair.getPublicKey().toAbbreviatedString());
+              builder.append(":");
+              builder.append(keyPair.getPublicKey().toBytesCompressed().toHexString());
+              builder.append(":");
+              builder.append(keyPair.getSecretKey().toBytes().toHexString());
+              builder.append(":");
+              builder.append(depositData.getWithdrawal_credentials().toHexString());
+              System.out.println(builder.toString());
+            }
+    );
     return new MockStartBeaconStateGenerator()
         .createInitialBeaconState(eth1BlockHash, UInt64.valueOf(genesisTime), initialDepositData);
   }
