@@ -58,6 +58,7 @@ import tech.pegasys.teku.beaconrestapi.handlers.v1.beacon.GetStateValidator;
 import tech.pegasys.teku.beaconrestapi.handlers.v1.beacon.GetStateValidatorBalances;
 import tech.pegasys.teku.beaconrestapi.handlers.v1.beacon.GetStateValidators;
 import tech.pegasys.teku.beaconrestapi.handlers.v1.beacon.GetVoluntaryExits;
+import tech.pegasys.teku.beaconrestapi.handlers.v1.beacon.GetWithdrawal;
 import tech.pegasys.teku.beaconrestapi.handlers.v1.beacon.PostAttestation;
 import tech.pegasys.teku.beaconrestapi.handlers.v1.beacon.PostAttesterSlashing;
 import tech.pegasys.teku.beaconrestapi.handlers.v1.beacon.PostBlock;
@@ -310,6 +311,7 @@ public class BeaconRestApi {
         new GetStateFinalityCheckpoints(dataProvider, jsonProvider));
     app.get(GetStateValidators.ROUTE, new GetStateValidators(dataProvider, jsonProvider));
     app.get(GetStateValidator.ROUTE, new GetStateValidator(dataProvider, jsonProvider));
+    app.get(GetWithdrawal.ROUTE, new GetWithdrawal(dataProvider, jsonProvider));
     app.get(
         GetStateValidatorBalances.ROUTE, new GetStateValidatorBalances(dataProvider, jsonProvider));
     app.get(GetStateCommittees.ROUTE, new GetStateCommittees(dataProvider, jsonProvider));

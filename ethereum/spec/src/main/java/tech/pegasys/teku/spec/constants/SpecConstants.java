@@ -76,6 +76,7 @@ public class SpecConstants {
   private final int epochsPerSlashingsVector;
   private final int historicalRootsLimit;
   private final long validatorRegistryLimit;
+  private final long maxWithdrawals;
 
   // Reward and penalty quotients
   private final int baseRewardFactor;
@@ -152,6 +153,7 @@ public class SpecConstants {
       final int epochsPerSlashingsVector,
       final int historicalRootsLimit,
       final long validatorRegistryLimit,
+      final long maxWithdrawals,
       final int baseRewardFactor,
       final int whistleblowerRewardQuotient,
       final UInt64 proposerRewardQuotient,
@@ -214,6 +216,7 @@ public class SpecConstants {
     this.epochsPerSlashingsVector = epochsPerSlashingsVector;
     this.historicalRootsLimit = historicalRootsLimit;
     this.validatorRegistryLimit = validatorRegistryLimit;
+    this.maxWithdrawals = maxWithdrawals;
     this.baseRewardFactor = baseRewardFactor;
     this.whistleblowerRewardQuotient = whistleblowerRewardQuotient;
     this.proposerRewardQuotient = proposerRewardQuotient;
@@ -405,6 +408,10 @@ public class SpecConstants {
     return validatorRegistryLimit;
   }
 
+  public long getMaxWithdrawals() {
+    return maxWithdrawals;
+  }
+
   public int getBaseRewardFactor() {
     return baseRewardFactor;
   }
@@ -532,6 +539,7 @@ public class SpecConstants {
         && epochsPerSlashingsVector == that.epochsPerSlashingsVector
         && historicalRootsLimit == that.historicalRootsLimit
         && validatorRegistryLimit == that.validatorRegistryLimit
+        && maxWithdrawals == that.maxWithdrawals
         && baseRewardFactor == that.baseRewardFactor
         && whistleblowerRewardQuotient == that.whistleblowerRewardQuotient
         && minSlashingPenaltyQuotient == that.minSlashingPenaltyQuotient
@@ -618,6 +626,7 @@ public class SpecConstants {
         epochsPerSlashingsVector,
         historicalRootsLimit,
         validatorRegistryLimit,
+        maxWithdrawals,
         baseRewardFactor,
         whistleblowerRewardQuotient,
         proposerRewardQuotient,

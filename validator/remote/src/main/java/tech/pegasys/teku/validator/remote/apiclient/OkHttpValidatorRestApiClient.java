@@ -25,6 +25,7 @@ import static tech.pegasys.teku.validator.remote.apiclient.ValidatorApiMethod.GE
 import static tech.pegasys.teku.validator.remote.apiclient.ValidatorApiMethod.GET_UNSIGNED_ATTESTATION;
 import static tech.pegasys.teku.validator.remote.apiclient.ValidatorApiMethod.GET_UNSIGNED_BLOCK;
 import static tech.pegasys.teku.validator.remote.apiclient.ValidatorApiMethod.GET_VALIDATORS;
+import static tech.pegasys.teku.validator.remote.apiclient.ValidatorApiMethod.GET_WITHDRAWAL;
 import static tech.pegasys.teku.validator.remote.apiclient.ValidatorApiMethod.SEND_SIGNED_AGGREGATE_AND_PROOF;
 import static tech.pegasys.teku.validator.remote.apiclient.ValidatorApiMethod.SEND_SIGNED_ATTESTATION;
 import static tech.pegasys.teku.validator.remote.apiclient.ValidatorApiMethod.SEND_SIGNED_BLOCK;
@@ -57,7 +58,9 @@ import tech.pegasys.teku.api.response.v1.beacon.GetBlockHeaderResponse;
 import tech.pegasys.teku.api.response.v1.beacon.GetGenesisResponse;
 import tech.pegasys.teku.api.response.v1.beacon.GetStateForkResponse;
 import tech.pegasys.teku.api.response.v1.beacon.GetStateValidatorsResponse;
+import tech.pegasys.teku.api.response.v1.beacon.GetWithdrawalResponse;
 import tech.pegasys.teku.api.response.v1.beacon.ValidatorResponse;
+import tech.pegasys.teku.api.response.v1.beacon.WithdrawalResponse;
 import tech.pegasys.teku.api.response.v1.validator.GetAggregatedAttestationResponse;
 import tech.pegasys.teku.api.response.v1.validator.GetAttestationDataResponse;
 import tech.pegasys.teku.api.response.v1.validator.GetNewBlockResponse;
@@ -122,6 +125,14 @@ public class OkHttpValidatorRestApiClient implements ValidatorRestApiClient {
     final Map<String, String> queryParams = new HashMap<>();
     queryParams.put("id", String.join(",", validatorIds));
     return get(GET_VALIDATORS, queryParams, createHandler(GetStateValidatorsResponse.class))
+        .map(response -> response.data);
+  }
+
+  @Override
+  public Optional<WithdrawalResponse> getWithdrawal(final String pubkeyHash) {
+    final Map<String, String> queryParams = new HashMap<>();
+    queryParams.put("pubkey_hash", pubkeyHash);
+    return get(GET_WITHDRAWAL, queryParams, createHandler(GetWithdrawalResponse.class))
         .map(response -> response.data);
   }
 

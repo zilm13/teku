@@ -800,7 +800,7 @@ public final class DataStructureUtil {
         randomUInt64(),
         randomUInt256(),
         randomUInt64(),
-        randomBytes20(),
+        randomBytes20().getWrappedBytes(),
         randomUInt256(),
         randomBytes20().getWrappedBytes(),
         randomUInt256(),
@@ -812,7 +812,7 @@ public final class DataStructureUtil {
     return new ExecutableData(
         randomBytes32(),
         randomBytes32(),
-        randomBytes20(),
+        randomBytes20().getWrappedBytes(),
         randomBytes32(),
         randomUInt64(),
         randomUInt64(),

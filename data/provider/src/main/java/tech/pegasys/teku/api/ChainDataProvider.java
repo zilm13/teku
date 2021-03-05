@@ -19,6 +19,8 @@ import static tech.pegasys.teku.datastructures.util.ValidatorsUtil.getValidatorI
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ONE;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ZERO;
 import static tech.pegasys.teku.spec.constants.SpecConstants.FAR_FUTURE_EPOCH;
+import static tech.pegasys.teku.ssz.backing.tree.GIndexUtil.gIdxCompose;
+import static tech.pegasys.teku.ssz.backing.tree.GIndexUtil.get_helper_indices;
 
 import com.google.common.annotations.VisibleForTesting;
 import java.io.ByteArrayInputStream;
@@ -31,6 +33,7 @@ import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.api.blockselector.BlockSelectorFactory;
 import tech.pegasys.teku.api.exceptions.BadRequestException;
@@ -42,6 +45,7 @@ import tech.pegasys.teku.api.response.v1.beacon.GenesisData;
 import tech.pegasys.teku.api.response.v1.beacon.ValidatorBalanceResponse;
 import tech.pegasys.teku.api.response.v1.beacon.ValidatorResponse;
 import tech.pegasys.teku.api.response.v1.beacon.ValidatorStatus;
+import tech.pegasys.teku.api.response.v1.beacon.WithdrawalResponse;
 import tech.pegasys.teku.api.response.v1.debug.ChainHead;
 import tech.pegasys.teku.api.schema.Attestation;
 import tech.pegasys.teku.api.schema.BLSPubKey;
@@ -53,11 +57,14 @@ import tech.pegasys.teku.api.schema.SignedBeaconBlock;
 import tech.pegasys.teku.api.stateselector.StateSelectorFactory;
 import tech.pegasys.teku.datastructures.state.CommitteeAssignment;
 import tech.pegasys.teku.datastructures.state.ForkInfo;
+import tech.pegasys.teku.datastructures.state.Withdrawal;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.spec.SpecProvider;
+import tech.pegasys.teku.ssz.SSZTypes.SSZBackingList;
 import tech.pegasys.teku.ssz.backing.Merkleizable;
+import tech.pegasys.teku.ssz.backing.tree.TreeNode;
 import tech.pegasys.teku.storage.client.ChainDataUnavailableException;
 import tech.pegasys.teku.storage.client.CombinedChainDataClient;
 import tech.pegasys.teku.storage.client.RecentChainData;
@@ -294,6 +301,53 @@ public class ChainDataProvider {
         .thenApply(
             blockList ->
                 blockList.stream().map(block -> new BlockHeader(block, true)).collect(toList()));
+  }
+
+  public SafeFuture<Optional<WithdrawalResponse>> getWithdrawalWithProof(
+      final String stateIdParam, final Bytes32 pubkeyHash) {
+    return defaultStateSelectorFactory
+        .defaultStateSelector(stateIdParam)
+        .getState()
+        .thenApply(
+            maybeState ->
+                maybeState.flatMap(state -> searchWithdrawalWithProof(state, pubkeyHash)));
+  }
+
+  private Optional<WithdrawalResponse> searchWithdrawalWithProof(
+      final tech.pegasys.teku.datastructures.state.BeaconState state, Bytes32 pubkeyHash) {
+    Optional<Pair<Integer, Withdrawal>> found =
+        IntStream.range(0, state.getWithdrawals().size())
+            .mapToObj(i -> Pair.of(i, state.getWithdrawals().get(i)))
+            .filter(pair -> pair.getRight().getPubkey_hash().equals(pubkeyHash))
+            .findFirst();
+    if (found.isEmpty()) {
+      return Optional.empty();
+    }
+    TreeNode stateTree = state.getBackingNode();
+    long withdrawalIndex =
+        tech.pegasys.teku.datastructures.state.BeaconState.SSZ_SCHEMA
+            .get()
+            .getChildGeneralizedIndex(14);
+    long withdrawalElementIndex =
+        ((SSZBackingList) state.getWithdrawals())
+            .getSchema()
+            .getChildGeneralizedIndex(found.get().getLeft());
+    long composedIndex = gIdxCompose(withdrawalIndex, withdrawalElementIndex);
+    Pair<Long, TreeNode> withdrawalNode = Pair.of(composedIndex, stateTree.get(composedIndex));
+    TreeNode leaf = withdrawalNode.getRight();
+    List<Bytes32> proof =
+        get_helper_indices(Collections.singletonList(withdrawalNode.getLeft())).stream()
+            .map(it -> stateTree.get(it).hashTreeRoot())
+            .collect(Collectors.toList());
+    Bytes32 root = stateTree.hashTreeRoot();
+    Long index = withdrawalNode.getLeft();
+    return Optional.of(
+        new WithdrawalResponse(
+            root,
+            proof,
+            UInt64.valueOf(index),
+            new tech.pegasys.teku.api.schema.Withdrawal(
+                new Withdrawal(Withdrawal.SSZ_SCHEMA, leaf))));
   }
 
   public SafeFuture<Optional<List<ValidatorResponse>>> getStateValidators(

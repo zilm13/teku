@@ -20,6 +20,7 @@ import java.util.Set;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.api.response.v1.beacon.GetGenesisResponse;
 import tech.pegasys.teku.api.response.v1.beacon.ValidatorResponse;
+import tech.pegasys.teku.api.response.v1.beacon.WithdrawalResponse;
 import tech.pegasys.teku.api.response.v1.validator.GetProposerDutiesResponse;
 import tech.pegasys.teku.api.response.v1.validator.PostAttesterDutiesResponse;
 import tech.pegasys.teku.api.schema.Attestation;
@@ -42,6 +43,8 @@ public interface ValidatorRestApiClient {
   Optional<GetGenesisResponse> getGenesis();
 
   Optional<List<ValidatorResponse>> getValidators(List<String> validatorIds);
+
+  Optional<WithdrawalResponse> getWithdrawal(final String pubkeyHash);
 
   Optional<PostAttesterDutiesResponse> getAttestationDuties(
       final UInt64 epoch, final Collection<Integer> validatorIndexes);

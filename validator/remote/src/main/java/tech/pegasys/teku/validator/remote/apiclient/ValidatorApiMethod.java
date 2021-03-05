@@ -22,6 +22,7 @@ public enum ValidatorApiMethod {
   GET_FORK("eth/v1/beacon/states/:state_id/fork"),
   GET_GENESIS("eth/v1/beacon/genesis"),
   GET_VALIDATORS("eth/v1/beacon/states/head/validators"),
+  GET_WITHDRAWAL("eth/v1/beacon/states/head/withdrawal"),
   GET_DUTIES("validator/duties"),
   GET_UNSIGNED_BLOCK("eth/v1/validator/blocks/:slot"),
   SEND_SIGNED_BLOCK("eth/v1/beacon/blocks"),

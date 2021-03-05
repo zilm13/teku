@@ -70,6 +70,7 @@ public class SpecConstantsBuilder {
   private Integer epochsPerSlashingsVector;
   private Integer historicalRootsLimit;
   private Long validatorRegistryLimit;
+  private Long maxWithdrawals;
 
   // Reward and penalty quotients
   private Integer baseRewardFactor;
@@ -148,6 +149,7 @@ public class SpecConstantsBuilder {
         epochsPerSlashingsVector,
         historicalRootsLimit,
         validatorRegistryLimit,
+        maxWithdrawals,
         baseRewardFactor,
         whistleblowerRewardQuotient,
         proposerRewardQuotient,
@@ -213,6 +215,7 @@ public class SpecConstantsBuilder {
     validateConstant(epochsPerSlashingsVector);
     validateConstant(historicalRootsLimit);
     validateConstant(validatorRegistryLimit);
+    validateConstant(maxWithdrawals);
     validateConstant(baseRewardFactor);
     validateConstant(whistleblowerRewardQuotient);
     validateConstant(proposerRewardQuotient);
@@ -491,6 +494,12 @@ public class SpecConstantsBuilder {
   public SpecConstantsBuilder validatorRegistryLimit(final Long validatorRegistryLimit) {
     checkNotNull(validatorRegistryLimit);
     this.validatorRegistryLimit = validatorRegistryLimit;
+    return this;
+  }
+
+  public SpecConstantsBuilder maxWithdrawals(final Long maxWithdrawals) {
+    checkNotNull(maxWithdrawals);
+    this.maxWithdrawals = maxWithdrawals;
     return this;
   }
 

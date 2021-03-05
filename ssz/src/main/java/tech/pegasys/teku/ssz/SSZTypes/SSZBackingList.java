@@ -18,6 +18,7 @@ import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.ssz.backing.SszData;
 import tech.pegasys.teku.ssz.backing.SszList;
 import tech.pegasys.teku.ssz.backing.SszMutableList;
+import tech.pegasys.teku.ssz.backing.schema.SszListSchema;
 
 public class SSZBackingList<C, R extends SszData> extends SSZAbstractCollection<C>
     implements SSZMutableList<C> {
@@ -55,6 +56,10 @@ public class SSZBackingList<C, R extends SszData> extends SSZAbstractCollection<
   @Override
   public long getMaxSize() {
     return delegate.getSchema().getMaxLength();
+  }
+
+  public SszListSchema<R, ?> getSchema() {
+    return delegate.getSchema();
   }
 
   @Override
