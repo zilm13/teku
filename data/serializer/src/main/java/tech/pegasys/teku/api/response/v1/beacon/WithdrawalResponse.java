@@ -32,6 +32,13 @@ public class WithdrawalResponse {
   @Schema(type = "string", example = EXAMPLE_BYTES32, description = "State root")
   public final Bytes32 root;
 
+  @JsonProperty("slot")
+  @Schema(
+      type = "string",
+      example = EXAMPLE_UINT64,
+      description = "The slot at which the committee has to attest.")
+  public final UInt64 slot;
+
   @JsonProperty("proof")
   @ArraySchema(schema = @Schema(type = "string", example = EXAMPLE_BYTES32))
   public final List<Bytes32> proof;
@@ -49,10 +56,12 @@ public class WithdrawalResponse {
   @JsonCreator
   public WithdrawalResponse(
       @JsonProperty("root") final Bytes32 root,
+      @JsonProperty("slot") final UInt64 slot,
       @JsonProperty("proof") final List<Bytes32> proof,
       @JsonProperty("index") final UInt64 index,
       @JsonProperty("withdrawal") final Withdrawal withdrawal) {
     this.root = root;
+    this.slot = slot;
     this.proof = proof;
     this.index = index;
     this.withdrawal = withdrawal;
@@ -64,6 +73,7 @@ public class WithdrawalResponse {
     if (o == null || getClass() != o.getClass()) return false;
     WithdrawalResponse that = (WithdrawalResponse) o;
     return Objects.equal(root, that.root)
+        && Objects.equal(slot, that.slot)
         && Objects.equal(proof, that.proof)
         && Objects.equal(index, that.index)
         && Objects.equal(withdrawal, that.withdrawal);
@@ -71,7 +81,7 @@ public class WithdrawalResponse {
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(root, proof, index, withdrawal);
+    return Objects.hashCode(root, slot, proof, index, withdrawal);
   }
 
   @Override
@@ -79,6 +89,8 @@ public class WithdrawalResponse {
     return "WithdrawalResponse{"
         + "root="
         + root.toHexString()
+        + "slot="
+        + slot
         + ", proof="
         + proof.stream().map(Bytes32::toHexString).collect(Collectors.joining(","))
         + ", index="

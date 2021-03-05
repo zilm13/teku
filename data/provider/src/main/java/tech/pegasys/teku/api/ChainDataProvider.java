@@ -344,6 +344,7 @@ public class ChainDataProvider {
     return Optional.of(
         new WithdrawalResponse(
             root,
+            state.getSlot(),
             proof,
             UInt64.valueOf(index),
             new tech.pegasys.teku.api.schema.Withdrawal(
