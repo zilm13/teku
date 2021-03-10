@@ -13,14 +13,18 @@
 
 package tech.pegasys.teku.ssz.backing.tree;
 
+import static com.google.common.math.DoubleMath.log2;
 import static java.lang.Integer.min;
 
 import com.google.common.annotations.VisibleForTesting;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.crypto.Hash;
 
 /**
  * Util methods for binary tree generalized indexes manipulations See
@@ -351,8 +355,37 @@ public class GIndexUtil {
 
     all_helper_indices.removeAll(all_path_indices);
     List<Long> result = new ArrayList<>(all_helper_indices);
-    Collections.reverse(result);
+    result.sort(Comparator.reverseOrder());
     return result;
+  }
+
+  public static boolean verify_merkle_proof(
+      Bytes32 leaf, List<Bytes32> proof, long generalizedIndex, Bytes32 root) {
+    return calculate_merkle_root(leaf, proof, generalizedIndex).equals(root);
+  }
+
+  private static Bytes32 calculate_merkle_root(
+      Bytes32 leaf, List<Bytes32> proof, long generalizedIndex) {
+    assert proof.size() == get_generalized_index_length(generalizedIndex);
+    for (int i = 0; i < proof.size(); ++i) {
+      Bytes32 h = proof.get(i);
+      if (get_generalized_index_bit(generalizedIndex, i)) {
+        leaf = Hash.sha2_256(Bytes.concatenate(h, leaf));
+      } else {
+        leaf = Hash.sha2_256(Bytes.concatenate(leaf, h));
+      }
+    }
+    return leaf;
+  }
+
+  /** Return the length of a path represented by a generalized index */
+  private static int get_generalized_index_length(long generalizedIndex) {
+    return (int) log2(generalizedIndex);
+  }
+
+  /** Return the given bit of a generalized index */
+  private static boolean get_generalized_index_bit(long generalizedIndex, int position) {
+    return (generalizedIndex & (1L << position)) > 0;
   }
 
   @VisibleForTesting
