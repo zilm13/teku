@@ -33,6 +33,7 @@ import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.api.blockselector.BlockSelectorFactory;
@@ -55,6 +56,7 @@ import tech.pegasys.teku.api.schema.PublicKeyException;
 import tech.pegasys.teku.api.schema.Root;
 import tech.pegasys.teku.api.schema.SignedBeaconBlock;
 import tech.pegasys.teku.api.stateselector.StateSelectorFactory;
+import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.datastructures.state.CommitteeAssignment;
 import tech.pegasys.teku.datastructures.state.ForkInfo;
 import tech.pegasys.teku.datastructures.state.Withdrawal;
@@ -305,16 +307,35 @@ public class ChainDataProvider {
 
   public SafeFuture<Optional<WithdrawalResponse>> getWithdrawalWithProof(
       final String stateIdParam, final Bytes32 pubkeyHash) {
-    return defaultStateSelectorFactory
-        .defaultStateSelector(stateIdParam)
-        .getState()
-        .thenApply(
-            maybeState ->
-                maybeState.flatMap(state -> searchWithdrawalWithProof(state, pubkeyHash)));
+    SafeFuture<Optional<BeaconBlock>> blockFuture =
+        defaultBlockSelectorFactory
+            .defaultBlockSelector(stateIdParam)
+            .getSingleBlock()
+            .thenApply(
+                maybeBlock ->
+                    maybeBlock.flatMap(
+                        tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock::getBeaconBlock));
+    return blockFuture.thenCompose(
+        maybeBlock -> {
+          if (maybeBlock.isPresent()) {
+            BeaconBlock block = maybeBlock.get();
+            return defaultStateSelectorFactory
+                .forBlockRoot(block.getRoot())
+                .getState()
+                .thenApply(
+                    maybeState ->
+                        maybeState.flatMap(
+                            state -> searchWithdrawalWithProof(state, block, pubkeyHash)));
+          } else {
+            return SafeFuture.completedFuture(Optional.empty());
+          }
+        });
   }
 
   private Optional<WithdrawalResponse> searchWithdrawalWithProof(
-      final tech.pegasys.teku.datastructures.state.BeaconState state, Bytes32 pubkeyHash) {
+      final tech.pegasys.teku.datastructures.state.BeaconState state,
+      final tech.pegasys.teku.datastructures.blocks.BeaconBlock block,
+      Bytes32 pubkeyHash) {
     Optional<Pair<Integer, Withdrawal>> found =
         IntStream.range(0, state.getWithdrawals().size())
             .mapToObj(i -> Pair.of(i, state.getWithdrawals().get(i)))
@@ -323,6 +344,8 @@ public class ChainDataProvider {
     if (found.isEmpty()) {
       return Optional.empty();
     }
+
+    // Get proof in BeaconState tree
     TreeNode stateTree = state.getBackingNode();
     long withdrawalIndex =
         tech.pegasys.teku.datastructures.state.BeaconState.SSZ_SCHEMA
@@ -339,14 +362,24 @@ public class ChainDataProvider {
         get_helper_indices(Collections.singletonList(withdrawalNode.getLeft())).stream()
             .map(it -> stateTree.get(it).hashTreeRoot())
             .collect(Collectors.toList());
-    Bytes32 root = stateTree.hashTreeRoot();
-    Long index = withdrawalNode.getLeft();
+    Long withdrawalGIndex = withdrawalNode.getLeft();
+
+    // Expand proof to BeaconBlock
+    TreeNode blockTree = block.getBackingNode();
+    long stateIndex = BeaconBlock.SSZ_SCHEMA.get().getChildGeneralizedIndex(3);
+    List<Bytes32> stateProof =
+        get_helper_indices(Collections.singletonList(stateIndex)).stream()
+            .map(it -> blockTree.get(it).hashTreeRoot())
+            .collect(Collectors.toList());
+    Bytes32 root = blockTree.hashTreeRoot();
+    long virtualWithdrawalIndex = gIdxCompose(stateIndex, withdrawalGIndex);
+
     return Optional.of(
         new WithdrawalResponse(
             root,
-            state.getSlot(),
-            proof,
-            UInt64.valueOf(index),
+            block.getSlot(),
+            Stream.of(proof, stateProof).flatMap(List::stream).collect(Collectors.toList()),
+            UInt64.valueOf(virtualWithdrawalIndex),
             new tech.pegasys.teku.api.schema.Withdrawal(
                 new Withdrawal(Withdrawal.SSZ_SCHEMA, leaf))));
   }

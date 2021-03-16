@@ -36,7 +36,7 @@ public class WithdrawalResponse {
   @Schema(
       type = "string",
       example = EXAMPLE_UINT64,
-      description = "The slot at which the committee has to attest.")
+      description = "The slot at which the proof is valid")
   public final UInt64 slot;
 
   @JsonProperty("proof")
