@@ -23,13 +23,17 @@ import static tech.pegasys.teku.util.config.Constants.SECONDS_PER_SLOT;
 import static tech.pegasys.teku.util.config.Constants.SLOTS_PER_EPOCH;
 
 import com.google.common.annotations.VisibleForTesting;
+import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import tech.pegasys.teku.core.ForkChoiceUtil;
 import tech.pegasys.teku.datastructures.blocks.NodeSlot;
 import tech.pegasys.teku.datastructures.blocks.SlotAndBlockRoot;
 import tech.pegasys.teku.datastructures.state.BeaconState;
+import tech.pegasys.teku.datastructures.state.Validator;
 import tech.pegasys.teku.datastructures.util.BeaconStateUtil;
 import tech.pegasys.teku.infrastructure.logging.EventLogger;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
@@ -223,12 +227,31 @@ public class SlotProcessor {
       recentChainData
           .getFinalizedCheckpoint()
           .ifPresent(
-              finalizedCheckpoint ->
-                  eventLog.epochEvent(
-                      nodeEpoch,
-                      recentChainData.getStore().getJustifiedCheckpoint().getEpoch(),
-                      finalizedCheckpoint.getEpoch(),
-                      finalizedCheckpoint.getRoot()));
+              finalizedCheckpoint -> {
+                eventLog.epochEvent(
+                    nodeEpoch,
+                    recentChainData.getStore().getJustifiedCheckpoint().getEpoch(),
+                    finalizedCheckpoint.getEpoch(),
+                    finalizedCheckpoint.getRoot());
+                recentChainData
+                    .getChainHead()
+                    .ifPresent(
+                        summary -> {
+                          List<Pair<String, UInt64>> vals =
+                              IntStream.range(0, summary.getState().getValidators().size())
+                                  .mapToObj(
+                                      i -> {
+                                        Validator validator =
+                                            summary.getState().getValidators().get(i);
+                                        UInt64 balance = summary.getState().getBalances().get(i);
+                                        return Pair.of(
+                                            validator.getPubkey().toHexString().substring(0, 10),
+                                            balance);
+                                      })
+                                  .collect(Collectors.toList());
+                          eventLog.balancesEvent(nodeEpoch, vals);
+                        });
+              });
     }
     slotEventsChannelPublisher.onSlot(nodeSlot.getValue());
   }

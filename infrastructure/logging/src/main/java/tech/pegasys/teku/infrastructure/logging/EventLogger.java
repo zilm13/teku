@@ -18,6 +18,8 @@ import static tech.pegasys.teku.infrastructure.logging.ColorConsolePrinter.print
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.tuweni.bytes.Bytes32;
@@ -65,6 +67,20 @@ public class EventLogger {
             finalizedCheckpoint.toString(),
             LogFormatter.formatHashRoot(finalizedRoot));
     info(epochEventLog, Color.GREEN);
+  }
+
+  public void balancesEvent(final UInt64 currentEpoch, final List<Pair<String, UInt64>> vals) {
+    StringBuilder builder = new StringBuilder();
+    builder.append("Epoch: ");
+    builder.append(currentEpoch);
+    vals.forEach(
+        val -> {
+          builder.append(val.getLeft());
+          builder.append(": ");
+          builder.append(val.getRight());
+          builder.append(", ");
+        });
+    info(builder.toString(), Color.GREEN);
   }
 
   public void nodeSlotsMissed(final UInt64 oldSlot, final UInt64 newSlot) {
