@@ -76,7 +76,7 @@ public class SpecConstants {
   private final int epochsPerSlashingsVector;
   private final int historicalRootsLimit;
   private final long validatorRegistryLimit;
-  private final long maxWithdrawals;
+  private final long withdrawalRegistryLimit;
 
   // Reward and penalty quotients
   private final int baseRewardFactor;
@@ -153,7 +153,7 @@ public class SpecConstants {
       final int epochsPerSlashingsVector,
       final int historicalRootsLimit,
       final long validatorRegistryLimit,
-      final long maxWithdrawals,
+      final long withdrawalRegistryLimit,
       final int baseRewardFactor,
       final int whistleblowerRewardQuotient,
       final UInt64 proposerRewardQuotient,
@@ -216,7 +216,7 @@ public class SpecConstants {
     this.epochsPerSlashingsVector = epochsPerSlashingsVector;
     this.historicalRootsLimit = historicalRootsLimit;
     this.validatorRegistryLimit = validatorRegistryLimit;
-    this.maxWithdrawals = maxWithdrawals;
+    this.withdrawalRegistryLimit = withdrawalRegistryLimit;
     this.baseRewardFactor = baseRewardFactor;
     this.whistleblowerRewardQuotient = whistleblowerRewardQuotient;
     this.proposerRewardQuotient = proposerRewardQuotient;
@@ -408,8 +408,8 @@ public class SpecConstants {
     return validatorRegistryLimit;
   }
 
-  public long getMaxWithdrawals() {
-    return maxWithdrawals;
+  public long getWithdrawalRegistryLimit() {
+    return withdrawalRegistryLimit;
   }
 
   public int getBaseRewardFactor() {
@@ -539,7 +539,7 @@ public class SpecConstants {
         && epochsPerSlashingsVector == that.epochsPerSlashingsVector
         && historicalRootsLimit == that.historicalRootsLimit
         && validatorRegistryLimit == that.validatorRegistryLimit
-        && maxWithdrawals == that.maxWithdrawals
+        && withdrawalRegistryLimit == that.withdrawalRegistryLimit
         && baseRewardFactor == that.baseRewardFactor
         && whistleblowerRewardQuotient == that.whistleblowerRewardQuotient
         && minSlashingPenaltyQuotient == that.minSlashingPenaltyQuotient
@@ -626,7 +626,7 @@ public class SpecConstants {
         epochsPerSlashingsVector,
         historicalRootsLimit,
         validatorRegistryLimit,
-        maxWithdrawals,
+        withdrawalRegistryLimit,
         baseRewardFactor,
         whistleblowerRewardQuotient,
         proposerRewardQuotient,
