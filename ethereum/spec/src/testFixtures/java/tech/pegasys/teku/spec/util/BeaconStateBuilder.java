@@ -150,7 +150,7 @@ public class BeaconStateBuilder {
         dataStructureUtil.randomSSZList(
             Withdrawal.class,
             defaultValidatorCount,
-            dataStructureUtil.getMaxWithdrawals(),
+            dataStructureUtil.getWithdrawalRegistryLimit(),
             dataStructureUtil::randomWithdrawal);
     slashings =
         dataStructureUtil.randomSSZVector(

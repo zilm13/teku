@@ -610,8 +610,7 @@ public final class DataStructureUtil {
   }
 
   public Withdrawal randomWithdrawal() {
-    return new Withdrawal(
-        randomBytes32(), randomBytes4(), randomBytes32(), randomUInt64(), UInt64.ONE);
+    return new Withdrawal(randomUInt64(), randomBytes32(), UInt64.ONE, randomUInt64());
   }
 
   public Fork randomFork() {
@@ -706,8 +705,8 @@ public final class DataStructureUtil {
         SpecConstants::getValidatorRegistryLimit, Constants.VALIDATOR_REGISTRY_LIMIT);
   }
 
-  long getMaxWithdrawals() {
-    return Constants.MAX_WITHDRAWALS;
+  long getWithdrawalRegistryLimit() {
+    return Constants.WITHDRAWAL_REGISTRY_LIMIT;
   }
 
   long getEpochsPerHistoricalVector() {

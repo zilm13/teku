@@ -28,9 +28,9 @@ import tech.pegasys.teku.api.schema.Withdrawal;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 
 public class WithdrawalResponse {
-  @JsonProperty("root")
-  @Schema(type = "string", example = EXAMPLE_BYTES32, description = "State root")
-  public final Bytes32 root;
+  @JsonProperty("beacon_block_root")
+  @Schema(type = "string", example = EXAMPLE_BYTES32, description = "Beacon block root")
+  public final Bytes32 beaconBlockRoot;
 
   @JsonProperty("slot")
   @Schema(
@@ -55,12 +55,12 @@ public class WithdrawalResponse {
 
   @JsonCreator
   public WithdrawalResponse(
-      @JsonProperty("root") final Bytes32 root,
+      @JsonProperty("beacon_block_root") final Bytes32 beaconBlockRoot,
       @JsonProperty("slot") final UInt64 slot,
       @JsonProperty("proof") final List<Bytes32> proof,
       @JsonProperty("index") final UInt64 index,
       @JsonProperty("withdrawal") final Withdrawal withdrawal) {
-    this.root = root;
+    this.beaconBlockRoot = beaconBlockRoot;
     this.slot = slot;
     this.proof = proof;
     this.index = index;
@@ -72,7 +72,7 @@ public class WithdrawalResponse {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
     WithdrawalResponse that = (WithdrawalResponse) o;
-    return Objects.equal(root, that.root)
+    return Objects.equal(beaconBlockRoot, that.beaconBlockRoot)
         && Objects.equal(slot, that.slot)
         && Objects.equal(proof, that.proof)
         && Objects.equal(index, that.index)
@@ -81,14 +81,14 @@ public class WithdrawalResponse {
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(root, slot, proof, index, withdrawal);
+    return Objects.hashCode(beaconBlockRoot, slot, proof, index, withdrawal);
   }
 
   @Override
   public String toString() {
     return "WithdrawalResponse{"
-        + "root="
-        + root.toHexString()
+        + "beaconBlockRoot="
+        + beaconBlockRoot.toHexString()
         + "slot="
         + slot
         + ", proof="

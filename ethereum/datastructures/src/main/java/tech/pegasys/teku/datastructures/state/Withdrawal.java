@@ -15,18 +15,16 @@ package tech.pegasys.teku.datastructures.state;
 
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
-import tech.pegasys.teku.ssz.backing.containers.Container5;
-import tech.pegasys.teku.ssz.backing.containers.ContainerSchema5;
+import tech.pegasys.teku.ssz.backing.containers.Container4;
+import tech.pegasys.teku.ssz.backing.containers.ContainerSchema4;
 import tech.pegasys.teku.ssz.backing.schema.SszPrimitiveSchemas;
 import tech.pegasys.teku.ssz.backing.tree.TreeNode;
 import tech.pegasys.teku.ssz.backing.view.SszPrimitives;
 
 public class Withdrawal
-    extends Container5<
+    extends Container4<
         Withdrawal,
-        SszPrimitives.SszBytes32,
-        SszPrimitives.SszBytes4,
+        SszPrimitives.SszUInt64,
         SszPrimitives.SszBytes32,
         SszPrimitives.SszUInt64,
         SszPrimitives.SszUInt64> {
@@ -34,18 +32,16 @@ public class Withdrawal
   public static final WithdrawalSchema SSZ_SCHEMA = new WithdrawalSchema();
 
   public Withdrawal(
-      Bytes32 pubkey_hash,
-      Bytes4 withdrawal_target,
+      UInt64 validator_index,
       Bytes32 withdrawal_credentials,
-      UInt64 amount,
-      UInt64 withdrawal_epoch) {
+      UInt64 withdrawn_epoch,
+      UInt64 amount) {
     super(
         SSZ_SCHEMA,
-        new SszPrimitives.SszBytes32(pubkey_hash),
-        new SszPrimitives.SszBytes4(withdrawal_target),
+        new SszPrimitives.SszUInt64(validator_index),
         new SszPrimitives.SszBytes32(withdrawal_credentials),
-        new SszPrimitives.SszUInt64(amount),
-        new SszPrimitives.SszUInt64(withdrawal_epoch));
+        new SszPrimitives.SszUInt64(withdrawn_epoch),
+        new SszPrimitives.SszUInt64(amount));
   }
 
   public Withdrawal(WithdrawalSchema type, TreeNode backingNode) {
@@ -56,15 +52,15 @@ public class Withdrawal
     super(SSZ_SCHEMA);
   }
 
-  public Bytes32 getPubkey_hash() {
+  public UInt64 getValidator_index() {
     return getField0().get();
   }
 
-  public Bytes4 getWithdrawal_target() {
+  public Bytes32 getWithdrawal_credentials() {
     return getField1().get();
   }
 
-  public Bytes32 getWithdrawal_credentials() {
+  public UInt64 getWithdrawn_epoch() {
     return getField2().get();
   }
 
@@ -72,15 +68,10 @@ public class Withdrawal
     return getField3().get();
   }
 
-  public UInt64 getWithdrawal_epoch() {
-    return getField4().get();
-  }
-
   public static class WithdrawalSchema
-      extends ContainerSchema5<
+      extends ContainerSchema4<
           Withdrawal,
-          SszPrimitives.SszBytes32,
-          SszPrimitives.SszBytes4,
+          SszPrimitives.SszUInt64,
           SszPrimitives.SszBytes32,
           SszPrimitives.SszUInt64,
           SszPrimitives.SszUInt64> {
@@ -88,11 +79,10 @@ public class Withdrawal
     public WithdrawalSchema() {
       super(
           "Withdrawal",
-          namedSchema("pubkey_hash", SszPrimitiveSchemas.BYTES32_SCHEMA),
-          namedSchema("withdrawal_target", SszPrimitiveSchemas.BYTES4_SCHEMA),
+          namedSchema("validator_index", SszPrimitiveSchemas.UINT64_SCHEMA),
           namedSchema("withdrawal_credentials", SszPrimitiveSchemas.BYTES32_SCHEMA),
-          namedSchema("amount", SszPrimitiveSchemas.UINT64_SCHEMA),
-          namedSchema("withdrawal_epoch", SszPrimitiveSchemas.UINT64_SCHEMA));
+          namedSchema("withdrawn_epoch", SszPrimitiveSchemas.UINT64_SCHEMA),
+          namedSchema("amount", SszPrimitiveSchemas.UINT64_SCHEMA));
     }
 
     @Override

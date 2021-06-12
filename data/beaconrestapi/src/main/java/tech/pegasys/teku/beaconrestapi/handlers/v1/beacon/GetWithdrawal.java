@@ -15,7 +15,7 @@ package tech.pegasys.teku.beaconrestapi.handlers.v1.beacon;
 
 import static tech.pegasys.teku.beaconrestapi.RestApiConstants.PARAM_STATE_ID;
 import static tech.pegasys.teku.beaconrestapi.RestApiConstants.PARAM_STATE_ID_DESCRIPTION;
-import static tech.pegasys.teku.beaconrestapi.RestApiConstants.PUBKEY_HASH;
+import static tech.pegasys.teku.beaconrestapi.RestApiConstants.PARAM_VALIDATOR_INDEX;
 import static tech.pegasys.teku.beaconrestapi.RestApiConstants.RES_BAD_REQUEST;
 import static tech.pegasys.teku.beaconrestapi.RestApiConstants.RES_INTERNAL_ERROR;
 import static tech.pegasys.teku.beaconrestapi.RestApiConstants.RES_NOT_FOUND;
@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import javax.servlet.http.HttpServletResponse;
-import org.apache.tuweni.bytes.Bytes32;
 import org.jetbrains.annotations.NotNull;
 import tech.pegasys.teku.api.ChainDataProvider;
 import tech.pegasys.teku.api.DataProvider;
@@ -44,6 +43,7 @@ import tech.pegasys.teku.beaconrestapi.SingleQueryParameterUtils;
 import tech.pegasys.teku.beaconrestapi.handlers.AbstractHandler;
 import tech.pegasys.teku.beaconrestapi.schema.BadRequest;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
+import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.provider.JsonProvider;
 
 public class GetWithdrawal extends AbstractHandler {
@@ -72,8 +72,8 @@ public class GetWithdrawal extends AbstractHandler {
       },
       queryParams = {
         @OpenApiParam(
-            name = PUBKEY_HASH,
-            description = "Validator's public key hash",
+            name = PARAM_VALIDATOR_INDEX,
+            description = "Corresponding validator's index",
             isRepeatable = true)
       },
       responses = {
@@ -90,16 +90,17 @@ public class GetWithdrawal extends AbstractHandler {
     final Map<String, List<String>> queryParamMap = ctx.queryParamMap();
     final Map<String, String> pathParamMap = ctx.pathParamMap();
 
-    if (!queryParamMap.containsKey(PUBKEY_HASH)) {
+    if (!queryParamMap.containsKey(PARAM_VALIDATOR_INDEX)) {
       ctx.status(HttpServletResponse.SC_BAD_REQUEST);
       return;
     }
     try {
-      final Bytes32 pubkeyHash =
-          SingleQueryParameterUtils.getParameterValueAsBytes32(queryParamMap, PUBKEY_HASH);
+      final UInt64 validatorIndex =
+          SingleQueryParameterUtils.getParameterValueAsUInt64(queryParamMap, PARAM_VALIDATOR_INDEX);
       ctx.result(
           chainDataProvider
-              .getWithdrawalWithProof(pathParamMap.getOrDefault(PARAM_STATE_ID, "head"), pubkeyHash)
+              .getWithdrawalWithProof(
+                  pathParamMap.getOrDefault(PARAM_STATE_ID, "head"), validatorIndex)
               .thenApplyChecked(
                   result -> jsonProvider.objectToJSON(new GetWithdrawalResponse(result.get())))
               .exceptionallyCompose(error -> handleError(ctx, error)));

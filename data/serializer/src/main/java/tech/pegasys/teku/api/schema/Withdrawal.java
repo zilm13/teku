@@ -14,10 +14,8 @@
 package tech.pegasys.teku.api.schema;
 
 import static tech.pegasys.teku.api.schema.SchemaConstants.EXAMPLE_BYTES32;
-import static tech.pegasys.teku.api.schema.SchemaConstants.EXAMPLE_BYTES4;
 import static tech.pegasys.teku.api.schema.SchemaConstants.EXAMPLE_UINT64;
 import static tech.pegasys.teku.api.schema.SchemaConstants.PATTERN_BYTES32;
-import static tech.pegasys.teku.api.schema.SchemaConstants.PATTERN_BYTES4;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -25,22 +23,10 @@ import com.google.common.base.Objects;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
 
 public class Withdrawal {
-  @Schema(
-      type = "string",
-      pattern = PATTERN_BYTES32,
-      example = EXAMPLE_BYTES32,
-      description = "Keccak hash of validator public key")
-  public final Bytes32 pubkey_hash;
-
-  @Schema(
-      type = "string",
-      pattern = PATTERN_BYTES4,
-      example = EXAMPLE_BYTES4,
-      description = "Keccak hash of validator public key")
-  public final Bytes4 withdrawal_target;
+  @Schema(type = "string", example = EXAMPLE_UINT64, description = "Validator index")
+  public final UInt64 validator_index;
 
   @Schema(
       type = "string",
@@ -49,37 +35,34 @@ public class Withdrawal {
       description = "Withdrawal credentials")
   public final Bytes32 withdrawal_credentials;
 
+  @Schema(type = "string", example = EXAMPLE_UINT64, description = "Epoch of withdrawal")
+  public final UInt64 withdrawn_epoch;
+
   @Schema(type = "string", example = EXAMPLE_UINT64, description = "Withdrawal amount in Gwei")
   public final UInt64 amount;
 
-  @Schema(type = "string", example = EXAMPLE_UINT64, description = "Withdrawal epoch")
-  public final UInt64 withdrawal_epoch;
-
   @JsonCreator
   public Withdrawal(
-      @JsonProperty("pubkey_hash") final Bytes32 pubkey_hash,
-      @JsonProperty("withdrawal_target") final Bytes4 withdrawal_target,
+      @JsonProperty("validator_index") final UInt64 validator_index,
       @JsonProperty("withdrawal_credentials") final Bytes32 withdrawal_credentials,
-      @JsonProperty("amount") final UInt64 amount,
-      @JsonProperty("withdrawal_epoch") final UInt64 withdrawal_epoch) {
-    this.pubkey_hash = pubkey_hash;
-    this.withdrawal_target = withdrawal_target;
+      @JsonProperty("withdrawn_epoch") final UInt64 withdrawn_epoch,
+      @JsonProperty("amount") final UInt64 amount) {
+    this.validator_index = validator_index;
     this.withdrawal_credentials = withdrawal_credentials;
+    this.withdrawn_epoch = withdrawn_epoch;
     this.amount = amount;
-    this.withdrawal_epoch = withdrawal_epoch;
   }
 
   public Withdrawal(final tech.pegasys.teku.datastructures.state.Withdrawal withdrawal) {
-    this.pubkey_hash = withdrawal.getPubkey_hash();
-    this.withdrawal_target = withdrawal.getWithdrawal_target();
+    this.validator_index = withdrawal.getValidator_index();
     this.withdrawal_credentials = withdrawal.getWithdrawal_credentials();
+    this.withdrawn_epoch = withdrawal.getWithdrawn_epoch();
     this.amount = withdrawal.getAmount();
-    this.withdrawal_epoch = withdrawal.getWithdrawal_epoch();
   }
 
   public tech.pegasys.teku.datastructures.state.Withdrawal asInternalWithdrawal() {
     return new tech.pegasys.teku.datastructures.state.Withdrawal(
-        pubkey_hash, withdrawal_target, withdrawal_credentials, amount, withdrawal_epoch);
+        validator_index, withdrawal_credentials, withdrawn_epoch, amount);
   }
 
   @Override
@@ -87,32 +70,28 @@ public class Withdrawal {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
     Withdrawal that = (Withdrawal) o;
-    return Objects.equal(pubkey_hash, that.pubkey_hash)
-        && Objects.equal(withdrawal_target, that.withdrawal_target)
+    return Objects.equal(validator_index, that.validator_index)
         && Objects.equal(withdrawal_credentials, that.withdrawal_credentials)
-        && Objects.equal(amount, that.amount)
-        && Objects.equal(withdrawal_epoch, that.withdrawal_epoch);
+        && Objects.equal(withdrawn_epoch, that.withdrawn_epoch)
+        && Objects.equal(amount, that.amount);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(
-        pubkey_hash, withdrawal_target, withdrawal_credentials, amount, withdrawal_epoch);
+    return Objects.hashCode(validator_index, withdrawal_credentials, withdrawn_epoch, amount);
   }
 
   @Override
   public String toString() {
     return "Withdrawal{"
-        + "pubkey_hash="
-        + pubkey_hash
-        + ", withdrawal_target="
-        + withdrawal_target
+        + "validator_index="
+        + validator_index
         + ", withdrawal_credentials="
         + withdrawal_credentials
+        + ", withdrawn_epoch="
+        + withdrawn_epoch
         + ", amount="
         + amount
-        + ", withdrawal_epoch="
-        + withdrawal_epoch
         + '}';
   }
 }

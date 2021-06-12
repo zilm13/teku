@@ -306,7 +306,7 @@ public class ChainDataProvider {
   }
 
   public SafeFuture<Optional<WithdrawalResponse>> getWithdrawalWithProof(
-      final String stateIdParam, final Bytes32 pubkeyHash) {
+      final String stateIdParam, final UInt64 validatorIndex) {
     SafeFuture<Optional<BeaconBlock>> blockFuture =
         defaultBlockSelectorFactory
             .defaultBlockSelector(stateIdParam)
@@ -325,7 +325,7 @@ public class ChainDataProvider {
                 .thenApply(
                     maybeState ->
                         maybeState.flatMap(
-                            state -> searchWithdrawalWithProof(state, block, pubkeyHash)));
+                            state -> searchWithdrawalWithProof(state, block, validatorIndex)));
           } else {
             return SafeFuture.completedFuture(Optional.empty());
           }
@@ -335,11 +335,11 @@ public class ChainDataProvider {
   private Optional<WithdrawalResponse> searchWithdrawalWithProof(
       final tech.pegasys.teku.datastructures.state.BeaconState state,
       final tech.pegasys.teku.datastructures.blocks.BeaconBlock block,
-      Bytes32 pubkeyHash) {
+      UInt64 validatorIndex) {
     Optional<Pair<Integer, Withdrawal>> found =
         IntStream.range(0, state.getWithdrawals().size())
             .mapToObj(i -> Pair.of(i, state.getWithdrawals().get(i)))
-            .filter(pair -> pair.getRight().getPubkey_hash().equals(pubkeyHash))
+            .filter(pair -> pair.getRight().getValidator_index().equals(validatorIndex))
             .findFirst();
     if (found.isEmpty()) {
       return Optional.empty();

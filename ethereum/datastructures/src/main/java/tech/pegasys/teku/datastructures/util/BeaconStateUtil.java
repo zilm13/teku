@@ -198,7 +198,8 @@ public class BeaconStateUtil {
         FAR_FUTURE_EPOCH,
         FAR_FUTURE_EPOCH,
         FAR_FUTURE_EPOCH,
-        FAR_FUTURE_EPOCH);
+        FAR_FUTURE_EPOCH,
+        UInt64.ZERO);
   }
 
   @Deprecated

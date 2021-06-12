@@ -18,8 +18,8 @@ import static tech.pegasys.teku.api.schema.SchemaConstants.DESCRIPTION_BYTES_SSZ
 import static tech.pegasys.teku.util.config.Constants.EPOCHS_PER_ETH1_VOTING_PERIOD;
 import static tech.pegasys.teku.util.config.Constants.HISTORICAL_ROOTS_LIMIT;
 import static tech.pegasys.teku.util.config.Constants.MAX_ATTESTATIONS;
-import static tech.pegasys.teku.util.config.Constants.MAX_WITHDRAWALS;
 import static tech.pegasys.teku.util.config.Constants.VALIDATOR_REGISTRY_LIMIT;
+import static tech.pegasys.teku.util.config.Constants.WITHDRAWAL_REGISTRY_LIMIT;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -203,7 +203,7 @@ public class BeaconState {
         SSZVector.createMutable(randao_mixes, Bytes32.class),
         SSZList.createMutable(
             withdrawals.stream().map(Withdrawal::asInternalWithdrawal).collect(Collectors.toList()),
-            MAX_WITHDRAWALS,
+            WITHDRAWAL_REGISTRY_LIMIT,
             tech.pegasys.teku.datastructures.state.Withdrawal.class),
         SSZVector.createMutable(slashings, UInt64.class),
         SSZList.createMutable(

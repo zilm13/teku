@@ -73,6 +73,12 @@ public class Validator {
           "When validator can withdraw or transfer funds. 'FAR_FUTURE_EPOCH' if not defined.")
   public final UInt64 withdrawable_epoch;
 
+  @Schema(
+      type = "string",
+      example = EXAMPLE_UINT64,
+      description = "When validator was withdrawn. 'ZERO' if not defined.")
+  public final UInt64 withdrawn_epoch;
+
   @JsonCreator
   public Validator(
       @JsonProperty("pubkey") final BLSPubKey pubkey,
@@ -82,7 +88,8 @@ public class Validator {
       @JsonProperty("activation_eligibility_epoch") final UInt64 activation_eligibility_epoch,
       @JsonProperty("activation_epoch") final UInt64 activation_epoch,
       @JsonProperty("exit_epoch") final UInt64 exit_epoch,
-      @JsonProperty("withdrawable_epoch") final UInt64 withdrawable_epoch) {
+      @JsonProperty("withdrawable_epoch") final UInt64 withdrawable_epoch,
+      @JsonProperty("withdrawn_epoch") final UInt64 withdrawn_epoch) {
     this.pubkey = pubkey;
     this.withdrawal_credentials = withdrawal_credentials;
     this.effective_balance = effective_balance;
@@ -91,6 +98,7 @@ public class Validator {
     this.activation_epoch = activation_epoch;
     this.exit_epoch = exit_epoch;
     this.withdrawable_epoch = withdrawable_epoch;
+    this.withdrawn_epoch = withdrawn_epoch;
   }
 
   public Validator(final tech.pegasys.teku.datastructures.state.Validator validator) {
@@ -102,6 +110,7 @@ public class Validator {
     this.activation_epoch = validator.getActivation_epoch();
     this.exit_epoch = validator.getExit_epoch();
     this.withdrawable_epoch = validator.getWithdrawable_epoch();
+    this.withdrawn_epoch = validator.getWithdrawn_epoch();
   }
 
   public tech.pegasys.teku.datastructures.state.Validator asInternalValidator() {
@@ -113,7 +122,8 @@ public class Validator {
         activation_eligibility_epoch,
         activation_epoch,
         exit_epoch,
-        withdrawable_epoch);
+        withdrawable_epoch,
+        withdrawn_epoch);
   }
 
   @Override
@@ -128,7 +138,8 @@ public class Validator {
         && Objects.equals(activation_eligibility_epoch, validator.activation_eligibility_epoch)
         && Objects.equals(activation_epoch, validator.activation_epoch)
         && Objects.equals(exit_epoch, validator.exit_epoch)
-        && Objects.equals(withdrawable_epoch, validator.withdrawable_epoch);
+        && Objects.equals(withdrawable_epoch, validator.withdrawable_epoch)
+        && Objects.equals(withdrawn_epoch, validator.withdrawn_epoch);
   }
 
   @Override
@@ -141,7 +152,8 @@ public class Validator {
         activation_eligibility_epoch,
         activation_epoch,
         exit_epoch,
-        withdrawable_epoch);
+        withdrawable_epoch,
+        withdrawn_epoch);
   }
 
   @Override
@@ -155,6 +167,7 @@ public class Validator {
         .add("activation_epoch", activation_epoch)
         .add("exit_epoch", exit_epoch)
         .add("withdrawable_epoch", withdrawable_epoch)
+        .add("withdrawn_epoch", withdrawn_epoch)
         .toString();
   }
 }

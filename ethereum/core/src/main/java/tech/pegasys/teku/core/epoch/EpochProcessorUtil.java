@@ -13,7 +13,6 @@
 
 package tech.pegasys.teku.core.epoch;
 
-import static org.apache.tuweni.crypto.Hash.keccak256;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.all;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_activation_exit_epoch;
 import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_block_root;
@@ -38,7 +37,6 @@ import static tech.pegasys.teku.util.config.Constants.MAX_ATTESTATIONS;
 import static tech.pegasys.teku.util.config.Constants.MAX_EFFECTIVE_BALANCE;
 import static tech.pegasys.teku.util.config.Constants.SLOTS_PER_EPOCH;
 import static tech.pegasys.teku.util.config.Constants.SLOTS_PER_HISTORICAL_ROOT;
-import static tech.pegasys.teku.util.config.Constants.WITHDRAWAL_ETH1;
 import static tech.pegasys.teku.util.config.Constants.WITHDRAWAL_ETH1_PREFIX;
 
 import java.util.Collections;
@@ -369,9 +367,13 @@ public final class EpochProcessorUtil {
             .filter(
                 validatorPair ->
                     validatorPair
-                        .getRight()
-                        .getWithdrawable_epoch()
-                        .isLessThanOrEqualTo(current_epoch))
+                            .getRight()
+                            .getWithdrawable_epoch()
+                            .isLessThanOrEqualTo(current_epoch)
+                        && validatorPair
+                            .getRight()
+                            .getWithdrawn_epoch()
+                            .isLessThan(validatorPair.getRight().getWithdrawable_epoch()))
             .collect(Collectors.toList());
     Map<Byte, List<Pair<Integer, Validator>>> validators_by_target =
         withdrawal_validators.stream()
@@ -385,16 +387,24 @@ public final class EpochProcessorUtil {
     List<Pair<Integer, Validator>> eth1_withdrawal_validators =
         validators_by_target.getOrDefault(WITHDRAWAL_ETH1_PREFIX, Collections.emptyList());
     for (Pair<Integer, Validator> validatorPair : eth1_withdrawal_validators) {
-      state.getValidators().set(validatorPair.getLeft(), Validator.NULL);
+      state
+          .getValidators()
+          .set(
+              validatorPair.getLeft(),
+              validatorPair
+                  .getRight()
+                  .withWithdrawn_epoch(current_epoch)
+                  .withEffective_balance(UInt64.ZERO));
+      UInt64 balance = state.getBalances().get(validatorPair.getLeft());
+      state.getBalances().set(validatorPair.getLeft(), UInt64.ZERO);
       state
           .getWithdrawals()
           .add(
               new Withdrawal(
-                  keccak256(validatorPair.getRight().getPubkey()),
-                  WITHDRAWAL_ETH1,
+                  UInt64.fromLongBits(validatorPair.getLeft()),
                   validatorPair.getRight().getWithdrawal_credentials(),
-                  validatorPair.getRight().getEffective_balance(),
-                  current_epoch));
+                  current_epoch,
+                  balance));
     }
   }
 }

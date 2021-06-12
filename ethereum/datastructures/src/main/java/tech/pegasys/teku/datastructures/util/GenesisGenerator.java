@@ -121,7 +121,8 @@ public class GenesisGenerator {
             activation_eligibility_epoch,
             activation_epoch,
             validator.getExit_epoch(),
-            validator.getWithdrawable_epoch());
+            validator.getWithdrawable_epoch(),
+            validator.getWithdrawn_epoch());
 
     state.getValidators().set(index, modifiedValidator);
   }

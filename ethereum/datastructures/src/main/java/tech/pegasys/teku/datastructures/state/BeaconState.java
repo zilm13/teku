@@ -108,7 +108,8 @@ public interface BeaconState extends SszContainer {
   // TODO: should be mapping
   SszField WITHDRAWALS_FIELD =
       new SszField(
-          14, () -> SszListSchema.create(Withdrawal.SSZ_SCHEMA, Constants.MAX_WITHDRAWALS));
+          14,
+          () -> SszListSchema.create(Withdrawal.SSZ_SCHEMA, Constants.WITHDRAWAL_REGISTRY_LIMIT));
 
   SszField SLASHINGS_FIELD =
       new SszField(
@@ -149,44 +150,6 @@ public interface BeaconState extends SszContainer {
 
   static BeaconStateSchema getSszSchema() {
     return SSZ_SCHEMA.get();
-  }
-
-  class BeaconStateSchema extends AbstractSszContainerSchema<BeaconState> {
-
-    public BeaconStateSchema() {
-      super(
-          "BeaconState",
-          Stream.of(
-                  GENESIS_TIME_FIELD,
-                  GENESIS_VALIDATORS_ROOT_FIELD,
-                  SLOT_FIELD,
-                  FORK_FIELD,
-                  LATEST_BLOCK_HEADER_FIELD,
-                  BLOCK_ROOTS_FIELD,
-                  STATE_ROOTS_FIELD,
-                  HISTORICAL_ROOTS_FIELD,
-                  ETH1_DATA_FIELD,
-                  ETH1_DATA_VOTES_FIELD,
-                  ETH1_DEPOSIT_INDEX_FIELD,
-                  VALIDATORS_FIELD,
-                  BALANCES_FIELD,
-                  RANDAO_MIXES_FIELD,
-                  WITHDRAWALS_FIELD,
-                  SLASHINGS_FIELD,
-                  PREVIOUS_EPOCH_ATTESTATIONS_FIELD,
-                  CURRENT_EPOCH_ATTESTATIONS_FIELD,
-                  JUSTIFICATION_BITS_FIELD,
-                  PREVIOUS_JUSTIFIED_CHECKPOINT_FIELD,
-                  CURRENT_JUSTIFIED_CHECKPOINT_FIELD,
-                  FINALIZED_CHECKPOINT_FIELD)
-              .map(f -> namedSchema(f.getName(), f.getSchema().get()))
-              .collect(Collectors.toList()));
-    }
-
-    @Override
-    public BeaconState createFromBackingNode(TreeNode node) {
-      return new BeaconStateImpl(this, node);
-    }
   }
 
   static BeaconState createEmpty() {
@@ -416,5 +379,43 @@ public interface BeaconState extends SszContainer {
   interface Mutator<E1 extends Exception, E2 extends Exception, E3 extends Exception> {
 
     void mutate(MutableBeaconState state) throws E1, E2, E3;
+  }
+
+  class BeaconStateSchema extends AbstractSszContainerSchema<BeaconState> {
+
+    public BeaconStateSchema() {
+      super(
+          "BeaconState",
+          Stream.of(
+                  GENESIS_TIME_FIELD,
+                  GENESIS_VALIDATORS_ROOT_FIELD,
+                  SLOT_FIELD,
+                  FORK_FIELD,
+                  LATEST_BLOCK_HEADER_FIELD,
+                  BLOCK_ROOTS_FIELD,
+                  STATE_ROOTS_FIELD,
+                  HISTORICAL_ROOTS_FIELD,
+                  ETH1_DATA_FIELD,
+                  ETH1_DATA_VOTES_FIELD,
+                  ETH1_DEPOSIT_INDEX_FIELD,
+                  VALIDATORS_FIELD,
+                  BALANCES_FIELD,
+                  RANDAO_MIXES_FIELD,
+                  WITHDRAWALS_FIELD,
+                  SLASHINGS_FIELD,
+                  PREVIOUS_EPOCH_ATTESTATIONS_FIELD,
+                  CURRENT_EPOCH_ATTESTATIONS_FIELD,
+                  JUSTIFICATION_BITS_FIELD,
+                  PREVIOUS_JUSTIFIED_CHECKPOINT_FIELD,
+                  CURRENT_JUSTIFIED_CHECKPOINT_FIELD,
+                  FINALIZED_CHECKPOINT_FIELD)
+              .map(f -> namedSchema(f.getName(), f.getSchema().get()))
+              .collect(Collectors.toList()));
+    }
+
+    @Override
+    public BeaconState createFromBackingNode(TreeNode node) {
+      return new BeaconStateImpl(this, node);
+    }
   }
 }

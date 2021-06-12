@@ -84,7 +84,7 @@ public class Constants {
   @Deprecated public static int HISTORICAL_ROOTS_LIMIT;
   @Deprecated public static long VALIDATOR_REGISTRY_LIMIT;
 
-  @Deprecated public static long MAX_WITHDRAWALS;
+  @Deprecated public static long WITHDRAWAL_REGISTRY_LIMIT;
 
   // Reward and penalty quotients
   @Deprecated public static int BASE_REWARD_FACTOR;

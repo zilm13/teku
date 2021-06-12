@@ -103,18 +103,24 @@ public class ValidatorResponseTest {
   }
 
   private Validator withdrawalValidator(final UInt64 balance, final UInt64 withdrawable_epoch) {
-    return createValidator(balance, false, ZERO, ZERO, ZERO, withdrawable_epoch);
+    return createValidator(balance, false, ZERO, ZERO, ZERO, withdrawable_epoch, ZERO);
   }
 
   private Validator exitedValidator(
       final UInt64 exit_epoch, final UInt64 withdrawable_epoch, final boolean slashed) {
     return createValidator(
-        UInt64.valueOf("32000000000"), slashed, ZERO, ZERO, exit_epoch, withdrawable_epoch);
+        UInt64.valueOf("32000000000"),
+        slashed,
+        ZERO,
+        ZERO,
+        exit_epoch,
+        withdrawable_epoch,
+        exit_epoch);
   }
 
   private Validator activeValidator(final UInt64 exit_epoch, final boolean slashed) {
     return createValidator(
-        UInt64.valueOf("32000000000"), slashed, ZERO, ZERO, exit_epoch, FAR_FUTURE_EPOCH);
+        UInt64.valueOf("32000000000"), slashed, ZERO, ZERO, exit_epoch, FAR_FUTURE_EPOCH, ZERO);
   }
 
   private Validator pendingValidator(
@@ -125,7 +131,8 @@ public class ValidatorResponseTest {
         activation_eligibility_epoch,
         activation_epoch,
         FAR_FUTURE_EPOCH,
-        FAR_FUTURE_EPOCH);
+        FAR_FUTURE_EPOCH,
+        ZERO);
   }
 
   private Validator createValidator(
@@ -134,7 +141,8 @@ public class ValidatorResponseTest {
       final UInt64 activation_eligibility_epoch,
       final UInt64 activation_epoch,
       final UInt64 exit_epoch,
-      final UInt64 withdrawable_epoch) {
+      final UInt64 withdrawable_epoch,
+      final UInt64 withdrawn_epoch) {
     return new Validator(
         key,
         creds,
@@ -143,6 +151,7 @@ public class ValidatorResponseTest {
         activation_eligibility_epoch,
         activation_epoch,
         exit_epoch,
-        withdrawable_epoch);
+        withdrawable_epoch,
+        withdrawn_epoch);
   }
 }

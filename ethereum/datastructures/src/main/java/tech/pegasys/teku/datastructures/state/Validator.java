@@ -18,8 +18,8 @@ import org.apache.tuweni.bytes.Bytes48;
 import tech.pegasys.teku.bls.BLSPublicKey;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.ssz.backing.SszVector;
-import tech.pegasys.teku.ssz.backing.containers.Container8;
-import tech.pegasys.teku.ssz.backing.containers.ContainerSchema8;
+import tech.pegasys.teku.ssz.backing.containers.Container9;
+import tech.pegasys.teku.ssz.backing.containers.ContainerSchema9;
 import tech.pegasys.teku.ssz.backing.schema.SszComplexSchemas;
 import tech.pegasys.teku.ssz.backing.schema.SszPrimitiveSchemas;
 import tech.pegasys.teku.ssz.backing.tree.TreeNode;
@@ -30,7 +30,7 @@ import tech.pegasys.teku.ssz.backing.view.SszPrimitives.SszUInt64;
 import tech.pegasys.teku.ssz.backing.view.SszUtils;
 
 public class Validator
-    extends Container8<
+    extends Container9<
         Validator,
         SszVector<SszByte>,
         SszBytes32,
@@ -39,15 +39,17 @@ public class Validator
         SszUInt64,
         SszUInt64,
         SszUInt64,
+        SszUInt64,
         SszUInt64> {
 
   public static class ValidatorSchema
-      extends ContainerSchema8<
+      extends ContainerSchema9<
           Validator,
           SszVector<SszByte>,
           SszBytes32,
           SszUInt64,
           SszBit,
+          SszUInt64,
           SszUInt64,
           SszUInt64,
           SszUInt64,
@@ -63,7 +65,8 @@ public class Validator
           namedSchema("activation_eligibility_epoch", SszPrimitiveSchemas.UINT64_SCHEMA),
           namedSchema("activation_epoch", SszPrimitiveSchemas.UINT64_SCHEMA),
           namedSchema("exit_epoch", SszPrimitiveSchemas.UINT64_SCHEMA),
-          namedSchema("withdrawable_epoch", SszPrimitiveSchemas.UINT64_SCHEMA));
+          namedSchema("withdrawable_epoch", SszPrimitiveSchemas.UINT64_SCHEMA),
+          namedSchema("withdrawn_epoch", SszPrimitiveSchemas.UINT64_SCHEMA));
     }
 
     @Override
@@ -73,18 +76,6 @@ public class Validator
   }
 
   public static final ValidatorSchema SSZ_SCHEMA = new ValidatorSchema();
-
-  // FIXME: Looks like sh!t
-  public static final Validator NULL =
-      new Validator(
-          Bytes48.ZERO,
-          Bytes32.ZERO,
-          UInt64.MAX_VALUE.decrement(),
-          false,
-          UInt64.MAX_VALUE.decrement(),
-          UInt64.MAX_VALUE.decrement(),
-          UInt64.MAX_VALUE.decrement(),
-          UInt64.MAX_VALUE.decrement());
 
   private Validator(ValidatorSchema type, TreeNode backingNode) {
     super(type, backingNode);
@@ -98,7 +89,8 @@ public class Validator
       UInt64 activation_eligibility_epoch,
       UInt64 activation_epoch,
       UInt64 exit_epoch,
-      UInt64 withdrawable_epoch) {
+      UInt64 withdrawable_epoch,
+      UInt64 withdrawn_epoch) {
     super(
         SSZ_SCHEMA,
         SszUtils.toSszByteVector(pubkey),
@@ -108,7 +100,8 @@ public class Validator
         new SszUInt64(activation_eligibility_epoch),
         new SszUInt64(activation_epoch),
         new SszUInt64(exit_epoch),
-        new SszUInt64(withdrawable_epoch));
+        new SszUInt64(withdrawable_epoch),
+        new SszUInt64(withdrawn_epoch));
   }
 
   /**
@@ -152,6 +145,10 @@ public class Validator
     return getField7().get();
   }
 
+  public UInt64 getWithdrawn_epoch() {
+    return getField7().get();
+  }
+
   public Validator withEffective_balance(UInt64 effective_balance) {
     return new Validator(
         getPubkey(),
@@ -161,7 +158,8 @@ public class Validator
         getActivation_eligibility_epoch(),
         getActivation_epoch(),
         getExit_epoch(),
-        getWithdrawable_epoch());
+        getWithdrawable_epoch(),
+        getWithdrawn_epoch());
   }
 
   public Validator withSlashed(boolean slashed) {
@@ -173,7 +171,8 @@ public class Validator
         getActivation_eligibility_epoch(),
         getActivation_epoch(),
         getExit_epoch(),
-        getWithdrawable_epoch());
+        getWithdrawable_epoch(),
+        getWithdrawn_epoch());
   }
 
   public Validator withActivation_eligibility_epoch(UInt64 activation_eligibility_epoch) {
@@ -185,7 +184,8 @@ public class Validator
         activation_eligibility_epoch,
         getActivation_epoch(),
         getExit_epoch(),
-        getWithdrawable_epoch());
+        getWithdrawable_epoch(),
+        getWithdrawn_epoch());
   }
 
   public Validator withActivation_epoch(UInt64 activation_epoch) {
@@ -197,7 +197,8 @@ public class Validator
         getActivation_eligibility_epoch(),
         activation_epoch,
         getExit_epoch(),
-        getWithdrawable_epoch());
+        getWithdrawable_epoch(),
+        getWithdrawn_epoch());
   }
 
   public Validator withExit_epoch(UInt64 exit_epoch) {
@@ -209,7 +210,8 @@ public class Validator
         getActivation_eligibility_epoch(),
         getActivation_epoch(),
         exit_epoch,
-        getWithdrawable_epoch());
+        getWithdrawable_epoch(),
+        getWithdrawn_epoch());
   }
 
   public Validator withWithdrawable_epoch(UInt64 withdrawable_epoch) {
@@ -221,6 +223,20 @@ public class Validator
         getActivation_eligibility_epoch(),
         getActivation_epoch(),
         getExit_epoch(),
-        withdrawable_epoch);
+        withdrawable_epoch,
+        getWithdrawn_epoch());
+  }
+
+  public Validator withWithdrawn_epoch(UInt64 withdrawn_epoch) {
+    return new Validator(
+        getPubkey(),
+        getWithdrawal_credentials(),
+        getEffective_balance(),
+        isSlashed(),
+        getActivation_eligibility_epoch(),
+        getActivation_epoch(),
+        getExit_epoch(),
+        getWithdrawable_epoch(),
+        withdrawn_epoch);
   }
 }

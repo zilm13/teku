@@ -129,9 +129,9 @@ public class OkHttpValidatorRestApiClient implements ValidatorRestApiClient {
   }
 
   @Override
-  public Optional<WithdrawalResponse> getWithdrawal(final String pubkeyHash) {
+  public Optional<WithdrawalResponse> getWithdrawal(final String validatorIndex) {
     final Map<String, String> queryParams = new HashMap<>();
-    queryParams.put("pubkey_hash", pubkeyHash);
+    queryParams.put("validator_index", validatorIndex);
     return get(GET_WITHDRAWAL, queryParams, createHandler(GetWithdrawalResponse.class))
         .map(response -> response.data);
   }
