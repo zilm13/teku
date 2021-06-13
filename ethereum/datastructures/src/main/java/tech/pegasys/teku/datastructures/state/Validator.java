@@ -146,7 +146,7 @@ public class Validator
   }
 
   public UInt64 getWithdrawn_epoch() {
-    return getField7().get();
+    return getField8().get();
   }
 
   public Validator withEffective_balance(UInt64 effective_balance) {
