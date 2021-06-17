@@ -34,12 +34,12 @@ class AsyncResponseProcessor<TResponse> {
   private final SafeFuture<Void> finishedProcessing = new SafeFuture<>();
 
   private final AsyncRunner asyncRunner;
-  private final ResponseStream<TResponse> responseStream;
+  private final ResponseStreamImpl<TResponse> responseStream;
   private final AsyncProcessingErrorHandler onError;
 
   public AsyncResponseProcessor(
       final AsyncRunner asyncRunner,
-      final ResponseStream<TResponse> responseStream,
+      final ResponseStreamImpl<TResponse> responseStream,
       final AsyncProcessingErrorHandler onError) {
     this.asyncRunner = asyncRunner;
     this.responseStream = responseStream;

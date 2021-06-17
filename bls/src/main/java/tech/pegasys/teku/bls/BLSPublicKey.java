@@ -40,7 +40,7 @@ public final class BLSPublicKey {
 
   /**
    * Aggregates list of PublicKeys, returns the public key that corresponds to G1 point at infinity
-   * if list is empty, or if any of the public keys is infinity or not a G1 group member.
+   * if list is empty
    *
    * @param publicKeys The list of public keys to aggregate
    * @return PublicKey The public key
@@ -102,9 +102,9 @@ public final class BLSPublicKey {
   }
 
   /**
-   * Construct from an implementation-specific PublicKey object.
+   * Construct from a Mikuli PublicKey object.
    *
-   * @param publicKey An implementation-specific PublicKey
+   * @param publicKey A Mikuli PublicKey
    */
   BLSPublicKey(PublicKey publicKey) {
     this(() -> publicKey, Suppliers.memoize(publicKey::toBytesCompressed));

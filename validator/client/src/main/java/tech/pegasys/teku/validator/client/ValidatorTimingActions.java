@@ -13,7 +13,6 @@
 
 package tech.pegasys.teku.validator.client;
 
-import java.util.Collection;
 import org.apache.tuweni.bytes.Bytes32;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import tech.pegasys.teku.infrastructure.metrics.SettableGauge;
@@ -24,7 +23,8 @@ import tech.pegasys.teku.validator.api.ValidatorTimingChannel;
 
 public class ValidatorTimingActions implements ValidatorTimingChannel {
   private final ValidatorIndexProvider validatorIndexProvider;
-  private final Collection<ValidatorTimingChannel> delegates;
+  private final ValidatorTimingChannel blockDuties;
+  private final ValidatorTimingChannel attestationDuties;
   private final ValidatorStatusLogger statusLogger;
   private final Spec spec;
 
@@ -33,12 +33,14 @@ public class ValidatorTimingActions implements ValidatorTimingChannel {
   public ValidatorTimingActions(
       final ValidatorStatusLogger statusLogger,
       final ValidatorIndexProvider validatorIndexProvider,
-      final Collection<ValidatorTimingChannel> delegates,
+      final ValidatorTimingChannel blockDuties,
+      final ValidatorTimingChannel attestationDuties,
       final Spec spec,
       final MetricsSystem metricsSystem) {
     this.statusLogger = statusLogger;
     this.validatorIndexProvider = validatorIndexProvider;
-    this.delegates = delegates;
+    this.blockDuties = blockDuties;
+    this.attestationDuties = attestationDuties;
     this.spec = spec;
 
     this.validatorCurrentEpoch =
@@ -52,7 +54,8 @@ public class ValidatorTimingActions implements ValidatorTimingChannel {
   @Override
   public void onSlot(final UInt64 slot) {
     validatorIndexProvider.lookupValidators();
-    delegates.forEach(delegate -> delegate.onSlot(slot));
+    blockDuties.onSlot(slot);
+    attestationDuties.onSlot(slot);
     final UInt64 epoch = spec.computeEpochAtSlot(slot);
     validatorCurrentEpoch.set(epoch.doubleValue());
     final UInt64 firstSlotOfEpoch = spec.computeStartSlotAtEpoch(epoch);
@@ -67,34 +70,39 @@ public class ValidatorTimingActions implements ValidatorTimingChannel {
       final Bytes32 previousDutyDependentRoot,
       final Bytes32 currentDutyDependentRoot,
       final Bytes32 headBlockRoot) {
-    delegates.forEach(
-        delegate ->
-            delegate.onHeadUpdate(
-                slot, previousDutyDependentRoot, currentDutyDependentRoot, headBlockRoot));
+    blockDuties.onHeadUpdate(
+        slot, previousDutyDependentRoot, currentDutyDependentRoot, headBlockRoot);
+    attestationDuties.onHeadUpdate(
+        slot, previousDutyDependentRoot, currentDutyDependentRoot, headBlockRoot);
   }
 
   @Override
   public void onChainReorg(final UInt64 newSlot, final UInt64 commonAncestorSlot) {
-    delegates.forEach(delegate -> delegate.onChainReorg(newSlot, commonAncestorSlot));
+    blockDuties.onChainReorg(newSlot, commonAncestorSlot);
+    attestationDuties.onChainReorg(newSlot, commonAncestorSlot);
   }
 
   @Override
   public void onPossibleMissedEvents() {
-    delegates.forEach(ValidatorTimingChannel::onPossibleMissedEvents);
+    blockDuties.onPossibleMissedEvents();
+    attestationDuties.onPossibleMissedEvents();
   }
 
   @Override
   public void onBlockProductionDue(final UInt64 slot) {
-    delegates.forEach(delegate -> delegate.onBlockProductionDue(slot));
+    blockDuties.onBlockProductionDue(slot);
+    attestationDuties.onBlockProductionDue(slot);
   }
 
   @Override
   public void onAttestationCreationDue(final UInt64 slot) {
-    delegates.forEach(delegate -> delegate.onAttestationCreationDue(slot));
+    attestationDuties.onAttestationCreationDue(slot);
+    blockDuties.onAttestationCreationDue(slot);
   }
 
   @Override
   public void onAttestationAggregationDue(final UInt64 slot) {
-    delegates.forEach(delegates -> delegates.onAttestationAggregationDue(slot));
+    attestationDuties.onAttestationAggregationDue(slot);
+    blockDuties.onAttestationAggregationDue(slot);
   }
 }

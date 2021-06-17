@@ -28,19 +28,11 @@ public class ChainUpdater {
 
   public final RecentChainData recentChainData;
   public final ChainBuilder chainBuilder;
-  public final Spec spec;
+  public final Spec spec = TestSpecFactory.createMinimalPhase0();
 
   public ChainUpdater(final RecentChainData recentChainData, final ChainBuilder chainBuilder) {
     this.recentChainData = recentChainData;
     this.chainBuilder = chainBuilder;
-    spec = TestSpecFactory.createMinimalPhase0();
-  }
-
-  public ChainUpdater(
-      final RecentChainData recentChainData, final ChainBuilder chainBuilder, final Spec spec) {
-    this.recentChainData = recentChainData;
-    this.chainBuilder = chainBuilder;
-    this.spec = spec;
   }
 
   public UInt64 getHeadSlot() {
@@ -116,14 +108,10 @@ public class ChainUpdater {
   }
 
   public SignedBlockAndState advanceChainUntil(final long slot) {
-    return advanceChainUntil(UInt64.valueOf(slot));
-  }
-
-  public SignedBlockAndState advanceChainUntil(final UInt64 slot) {
-    UInt64 currentSlot = chainBuilder.getLatestSlot();
+    long currentSlot = chainBuilder.getLatestSlot().longValue();
     SignedBlockAndState latestSigneBlockAndState = chainBuilder.getLatestBlockAndState();
-    while (currentSlot.isLessThan(slot)) {
-      currentSlot = currentSlot.increment();
+    while (currentSlot < slot) {
+      currentSlot++;
       latestSigneBlockAndState = advanceChain(currentSlot);
     }
     return latestSigneBlockAndState;

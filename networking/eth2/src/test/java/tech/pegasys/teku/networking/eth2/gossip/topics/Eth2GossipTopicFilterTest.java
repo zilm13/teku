@@ -14,17 +14,15 @@
 package tech.pegasys.teku.networking.eth2.gossip.topics;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static tech.pegasys.teku.networking.eth2.gossip.encoding.GossipEncoding.SSZ_SNAPPY;
-import static tech.pegasys.teku.networking.eth2.gossip.topics.GossipTopicName.getAttestationSubnetTopicName;
-import static tech.pegasys.teku.networking.eth2.gossip.topics.GossipTopicName.getSyncCommitteeSubnetTopicName;
-import static tech.pegasys.teku.spec.constants.NetworkConstants.SYNC_COMMITTEE_SUBNET_COUNT;
+import static tech.pegasys.teku.networking.eth2.gossip.topics.TopicNames.getAttestationSubnetTopicName;
 
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tech.pegasys.teku.networking.eth2.gossip.BlockGossipManager;
 import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.spec.TestSpecFactory;
 import tech.pegasys.teku.spec.datastructures.state.Fork;
@@ -35,14 +33,14 @@ import tech.pegasys.teku.storage.client.RecentChainData;
 import tech.pegasys.teku.util.config.Constants;
 
 class Eth2GossipTopicFilterTest {
-  protected Spec spec = TestSpecFactory.createMinimalAltair();
+  protected Spec spec = TestSpecFactory.createMinimalPhase0();
   private final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
   private final ForkInfo forkInfo = dataStructureUtil.randomForkInfo();
   private final Fork nextFork = dataStructureUtil.randomFork();
   private final RecentChainData recentChainData = mock(RecentChainData.class);
   private final Bytes4 nextForkDigest =
       spec.atEpoch(nextFork.getEpoch())
-          .miscHelpers()
+          .getBeaconStateUtil()
           .computeForkDigest(nextFork.getCurrent_version(), forkInfo.getGenesisValidatorsRoot());
 
   private final Eth2GossipTopicFilter filter =
@@ -50,8 +48,8 @@ class Eth2GossipTopicFilterTest {
 
   @BeforeEach
   void setUp() {
-    when(recentChainData.getCurrentForkInfo()).thenReturn(Optional.of(forkInfo));
-    when(recentChainData.getNextFork(forkInfo.getFork())).thenReturn(Optional.of(nextFork));
+    when(recentChainData.getHeadForkInfo()).thenReturn(Optional.of(forkInfo));
+    when(recentChainData.getNextFork()).thenReturn(Optional.of(nextFork));
   }
 
   @Test
@@ -61,20 +59,13 @@ class Eth2GossipTopicFilterTest {
 
   @Test
   void shouldNotRequireNextForkToBePresent() {
-    when(recentChainData.getNextFork(any())).thenReturn(Optional.empty());
-    assertThat(filter.isRelevantTopic(getTopicName(GossipTopicName.BEACON_BLOCK))).isTrue();
+    when(recentChainData.getNextFork()).thenReturn(Optional.empty());
+    assertThat(filter.isRelevantTopic(getTopicName(BlockGossipManager.TOPIC_NAME))).isTrue();
   }
 
   @Test
   void shouldConsiderTopicsForNextForkRelevant() {
-    assertThat(filter.isRelevantTopic(getNextForkTopicName(GossipTopicName.BEACON_BLOCK))).isTrue();
-  }
-
-  @Test
-  void shouldConsiderTopicsForSignedContributionAndProofRelevant() {
-    assertThat(
-            filter.isRelevantTopic(
-                getNextForkTopicName(GossipTopicName.SYNC_COMMITTEE_CONTRIBUTION_AND_PROOF)))
+    assertThat(filter.isRelevantTopic(getNextForkTopicName(BlockGossipManager.TOPIC_NAME)))
         .isTrue();
   }
 
@@ -88,33 +79,18 @@ class Eth2GossipTopicFilterTest {
   }
 
   @Test
-  void shouldConsiderAllSyncCommitteeSubnetsRelevant() {
-    for (int i = 0; i < SYNC_COMMITTEE_SUBNET_COUNT; i++) {
-      assertThat(filter.isRelevantTopic(getTopicName(getSyncCommitteeSubnetTopicName(i)))).isTrue();
-    }
-  }
-
-  @Test
   void shouldNotAllowTopicsWithUnknownForkDigest() {
     final String irrelevantTopic =
-        GossipTopics.getTopic(
-            Bytes4.fromHexString("0x11223344"), GossipTopicName.BEACON_BLOCK, SSZ_SNAPPY);
+        TopicNames.getTopic(
+            Bytes4.fromHexString("0x11223344"), BlockGossipManager.TOPIC_NAME, SSZ_SNAPPY);
     assertThat(filter.isRelevantTopic(irrelevantTopic)).isFalse();
   }
 
-  private String getTopicName(final GossipTopicName name) {
-    return GossipTopics.getTopic(forkInfo.getForkDigest(), name, SSZ_SNAPPY);
-  }
-
   private String getTopicName(final String name) {
-    return GossipTopics.getTopic(forkInfo.getForkDigest(), name, SSZ_SNAPPY);
-  }
-
-  private String getNextForkTopicName(final GossipTopicName name) {
-    return GossipTopics.getTopic(nextForkDigest, name, SSZ_SNAPPY);
+    return TopicNames.getTopic(forkInfo.getForkDigest(), name, SSZ_SNAPPY);
   }
 
   private String getNextForkTopicName(final String name) {
-    return GossipTopics.getTopic(nextForkDigest, name, SSZ_SNAPPY);
+    return TopicNames.getTopic(nextForkDigest, name, SSZ_SNAPPY);
   }
 }

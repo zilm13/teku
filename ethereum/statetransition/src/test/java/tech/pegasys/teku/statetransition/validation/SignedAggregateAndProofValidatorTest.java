@@ -19,9 +19,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static tech.pegasys.teku.core.CommitteeAssignmentUtil.get_committee_assignment;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ONE;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ZERO;
 import static tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil.compute_epoch_at_slot;
+import static tech.pegasys.teku.spec.datastructures.util.CommitteeUtil.isAggregator;
 import static tech.pegasys.teku.util.config.Constants.SLOTS_PER_EPOCH;
 
 import java.util.List;
@@ -38,7 +40,6 @@ import tech.pegasys.teku.core.ChainBuilder;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.Spec;
-import tech.pegasys.teku.spec.SpecVersion;
 import tech.pegasys.teku.spec.TestSpecFactory;
 import tech.pegasys.teku.spec.datastructures.attestation.ValidateableAttestation;
 import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlockAndState;
@@ -96,7 +97,6 @@ class SignedAggregateAndProofValidatorTest {
   private static final List<BLSKeyPair> VALIDATOR_KEYS =
       new MockStartValidatorKeyPairFactory().generateKeyPairs(0, 1024);
   private final Spec spec = TestSpecFactory.createMinimalPhase0();
-  private final SpecVersion genesisSpec = spec.getGenesisSpec();
   private final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
   private final StorageSystem storageSystem =
       InMemoryStorageSystemBuilder.buildDefault(StateStorageMode.ARCHIVE);
@@ -408,12 +408,9 @@ class SignedAggregateAndProofValidatorTest {
     // Sanity check
     final int committeeLength = committeeAssignment.getCommittee().size();
     final int aggregatorModulo =
-        genesisSpec.getValidatorsUtil().getAggregatorModulo(committeeLength);
+        spec.atEpoch(ZERO).getCommitteeUtil().getAggregatorModulo(committeeLength);
     assertThat(aggregatorModulo).isGreaterThan(1);
-    assertThat(
-            genesisSpec
-                .getValidatorsUtil()
-                .isAggregator(aggregate.getMessage().getSelection_proof(), aggregatorModulo))
+    assertThat(isAggregator(aggregate.getMessage().getSelection_proof(), aggregatorModulo))
         .isFalse();
 
     assertThat(validator.validate(ValidateableAttestation.aggregateFromValidator(aggregate)))
@@ -493,6 +490,6 @@ class SignedAggregateAndProofValidatorTest {
 
   private CommitteeAssignment getCommitteeAssignment(
       final StateAndBlockSummary chainHead, final int aggregatorIndex, final UInt64 epoch) {
-    return spec.getCommitteeAssignment(chainHead.getState(), epoch, aggregatorIndex).orElseThrow();
+    return get_committee_assignment(chainHead.getState(), epoch, aggregatorIndex).orElseThrow();
   }
 }

@@ -21,9 +21,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import tech.pegasys.teku.infrastructure.collections.LimitedSet;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.spec.datastructures.operations.AttesterSlashing;
 import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
+import tech.pegasys.teku.spec.logic.common.operations.validation.AttesterSlashingStateTransitionValidator;
 import tech.pegasys.teku.spec.logic.common.operations.validation.OperationInvalidReason;
 import tech.pegasys.teku.storage.client.RecentChainData;
 
@@ -32,11 +32,13 @@ public class AttesterSlashingValidator implements OperationValidator<AttesterSla
 
   private final RecentChainData recentChainData;
   private final Set<UInt64> seenIndices = LimitedSet.create(VALID_VALIDATOR_SET_SIZE);
-  private final Spec spec;
+  private final AttesterSlashingStateTransitionValidator transitionValidator;
 
-  public AttesterSlashingValidator(RecentChainData recentChainData, final Spec spec) {
+  public AttesterSlashingValidator(
+      RecentChainData recentChainData,
+      AttesterSlashingStateTransitionValidator attesterSlashingStateTransitionValidator) {
     this.recentChainData = recentChainData;
-    this.spec = spec;
+    this.transitionValidator = attesterSlashingStateTransitionValidator;
   }
 
   @Override
@@ -61,7 +63,7 @@ public class AttesterSlashingValidator implements OperationValidator<AttesterSla
 
   @Override
   public boolean validateForStateTransition(BeaconState state, AttesterSlashing slashing) {
-    Optional<OperationInvalidReason> invalidReason = spec.validateAttesterSlashing(state, slashing);
+    Optional<OperationInvalidReason> invalidReason = transitionValidator.validate(state, slashing);
 
     if (invalidReason.isPresent()) {
       LOG.trace(

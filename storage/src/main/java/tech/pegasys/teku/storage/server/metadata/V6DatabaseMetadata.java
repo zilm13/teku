@@ -25,7 +25,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.Optional;
-import tech.pegasys.teku.storage.server.kvstore.KvStoreConfiguration;
+import tech.pegasys.teku.storage.server.rocksdb.RocksDbConfiguration;
 import tech.pegasys.teku.util.serialization.JsonExplicit;
 
 /**
@@ -53,15 +53,15 @@ public class V6DatabaseMetadata {
   @JsonExplicit
   public static class SingleDBMetadata {
     @JsonProperty("configuration")
-    private KvStoreConfiguration configuration;
+    private RocksDbConfiguration configuration;
 
     public SingleDBMetadata() {}
 
-    public SingleDBMetadata(KvStoreConfiguration configuration) {
+    public SingleDBMetadata(RocksDbConfiguration configuration) {
       this.configuration = configuration;
     }
 
-    public KvStoreConfiguration getConfiguration() {
+    public RocksDbConfiguration getConfiguration() {
       return configuration;
     }
 
@@ -75,24 +75,24 @@ public class V6DatabaseMetadata {
   @JsonExplicit
   public static class SeparateDBMetadata {
     @JsonProperty("hotDbConfiguration")
-    private KvStoreConfiguration hotDbConfiguration;
+    private RocksDbConfiguration hotDbConfiguration;
 
     @JsonProperty("archiveDbConfiguration")
-    private KvStoreConfiguration archiveDbConfiguration;
+    private RocksDbConfiguration archiveDbConfiguration;
 
     public SeparateDBMetadata() {}
 
     public SeparateDBMetadata(
-        KvStoreConfiguration hotDbConfiguration, KvStoreConfiguration archiveDbConfiguration) {
+        RocksDbConfiguration hotDbConfiguration, RocksDbConfiguration archiveDbConfiguration) {
       this.hotDbConfiguration = hotDbConfiguration;
       this.archiveDbConfiguration = archiveDbConfiguration;
     }
 
-    public KvStoreConfiguration getHotDbConfiguration() {
+    public RocksDbConfiguration getHotDbConfiguration() {
       return hotDbConfiguration;
     }
 
-    public KvStoreConfiguration getArchiveDbConfiguration() {
+    public RocksDbConfiguration getArchiveDbConfiguration() {
       return archiveDbConfiguration;
     }
 
@@ -115,22 +115,22 @@ public class V6DatabaseMetadata {
 
   public V6DatabaseMetadata() {}
 
-  private V6DatabaseMetadata(KvStoreConfiguration singleDbConfiguration) {
+  private V6DatabaseMetadata(RocksDbConfiguration singleDbConfiguration) {
     this.singleDb = new SingleDBMetadata(singleDbConfiguration);
   }
 
   private V6DatabaseMetadata(
-      KvStoreConfiguration hotDbConfiguration, KvStoreConfiguration archiveDbConfiguration) {
+      RocksDbConfiguration hotDbConfiguration, RocksDbConfiguration archiveDbConfiguration) {
     this.separateDb = new SeparateDBMetadata(hotDbConfiguration, archiveDbConfiguration);
   }
 
   public static V6DatabaseMetadata singleDBDefault() {
-    return new V6DatabaseMetadata(KvStoreConfiguration.v6SingleDefaults());
+    return new V6DatabaseMetadata(RocksDbConfiguration.v6SingleDefaults());
   }
 
   public static V6DatabaseMetadata separateDBDefault() {
     return new V6DatabaseMetadata(
-        KvStoreConfiguration.v5HotDefaults(), KvStoreConfiguration.v5ArchiveDefaults());
+        RocksDbConfiguration.v5HotDefaults(), RocksDbConfiguration.v5ArchiveDefaults());
   }
 
   public Optional<SingleDBMetadata> getSingleDbConfiguration() {

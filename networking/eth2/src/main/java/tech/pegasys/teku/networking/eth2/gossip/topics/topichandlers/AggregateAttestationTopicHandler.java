@@ -15,13 +15,14 @@ package tech.pegasys.teku.networking.eth2.gossip.topics.topichandlers;
 
 import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.networking.eth2.gossip.encoding.GossipEncoding;
-import tech.pegasys.teku.networking.eth2.gossip.topics.GossipTopicName;
 import tech.pegasys.teku.networking.eth2.gossip.topics.OperationProcessor;
 import tech.pegasys.teku.spec.datastructures.attestation.ValidateableAttestation;
 import tech.pegasys.teku.spec.datastructures.operations.SignedAggregateAndProof;
 import tech.pegasys.teku.ssz.type.Bytes4;
 
 public class AggregateAttestationTopicHandler {
+
+  public static String TOPIC_NAME = "beacon_aggregate_and_proof";
 
   public static Eth2TopicHandler<?> createHandler(
       final AsyncRunner asyncRunner,
@@ -37,7 +38,7 @@ public class AggregateAttestationTopicHandler {
         convertingProcessor,
         gossipEncoding,
         forkDigest,
-        GossipTopicName.BEACON_AGGREGATE_AND_PROOF,
+        TOPIC_NAME,
         SignedAggregateAndProof.SSZ_SCHEMA);
   }
 }

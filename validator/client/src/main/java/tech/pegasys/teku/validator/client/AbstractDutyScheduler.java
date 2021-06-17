@@ -20,34 +20,25 @@ import java.util.function.BiConsumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.tuweni.bytes.Bytes32;
-import org.hyperledger.besu.plugin.services.MetricsSystem;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.validator.api.ValidatorTimingChannel;
 
 public abstract class AbstractDutyScheduler implements ValidatorTimingChannel {
   private static final Logger LOG = LogManager.getLogger();
-  private final MetricsSystem metricsSystem;
-  private final String dutyType;
   private final Spec spec;
   private final boolean useDependentRoots;
-  private final DutyLoader<?> epochDutiesScheduler;
+  private final DutyLoader epochDutiesScheduler;
   private final int lookAheadEpochs;
 
-  private UInt64 lastProductionSlot;
-
-  protected final NavigableMap<UInt64, PendingDuties> dutiesByEpoch = new TreeMap<>();
+  protected final NavigableMap<UInt64, EpochDuties> dutiesByEpoch = new TreeMap<>();
   private Optional<UInt64> currentEpoch = Optional.empty();
 
   protected AbstractDutyScheduler(
-      final MetricsSystem metricsSystem,
-      final String dutyType,
-      final DutyLoader<?> epochDutiesScheduler,
+      final DutyLoader epochDutiesScheduler,
       final int lookAheadEpochs,
       final boolean useDependentRoots,
       final Spec spec) {
-    this.metricsSystem = metricsSystem;
-    this.dutyType = dutyType;
     this.epochDutiesScheduler = epochDutiesScheduler;
     this.lookAheadEpochs = lookAheadEpochs;
     this.useDependentRoots = useDependentRoots;
@@ -55,10 +46,10 @@ public abstract class AbstractDutyScheduler implements ValidatorTimingChannel {
   }
 
   protected void notifyEpochDuties(
-      final BiConsumer<PendingDuties, UInt64> action, final UInt64 slot) {
-    final PendingDuties pendingDuties = dutiesByEpoch.get(spec.computeEpochAtSlot(slot));
-    if (pendingDuties != null) {
-      action.accept(pendingDuties, slot);
+      final BiConsumer<EpochDuties, UInt64> action, final UInt64 slot) {
+    final EpochDuties epochDuties = dutiesByEpoch.get(spec.computeEpochAtSlot(slot));
+    if (epochDuties != null) {
+      action.accept(epochDuties, slot);
     }
   }
 
@@ -130,18 +121,18 @@ public abstract class AbstractDutyScheduler implements ValidatorTimingChannel {
     }
   }
 
-  private PendingDuties createEpochDuties(final UInt64 epochNumber) {
-    return PendingDuties.calculateDuties(metricsSystem, epochDutiesScheduler, epochNumber);
+  private EpochDuties createEpochDuties(final UInt64 epochNumber) {
+    return EpochDuties.calculateDuties(epochDutiesScheduler, epochNumber);
   }
 
   private void removePriorEpochs(final UInt64 epochNumber) {
-    final NavigableMap<UInt64, PendingDuties> toRemove = dutiesByEpoch.headMap(epochNumber, false);
-    toRemove.values().forEach(PendingDuties::cancel);
+    final NavigableMap<UInt64, EpochDuties> toRemove = dutiesByEpoch.headMap(epochNumber, false);
+    toRemove.values().forEach(EpochDuties::cancel);
     toRemove.clear();
   }
 
-  private void invalidateEpochs(final NavigableMap<UInt64, PendingDuties> toInvalidate) {
-    toInvalidate.values().forEach(PendingDuties::recalculate);
+  private void invalidateEpochs(final NavigableMap<UInt64, EpochDuties> toInvalidate) {
+    toInvalidate.values().forEach(EpochDuties::recalculate);
   }
 
   protected Optional<UInt64> getCurrentEpoch() {
@@ -163,41 +154,6 @@ public abstract class AbstractDutyScheduler implements ValidatorTimingChannel {
   @Override
   public void onAttestationCreationDue(final UInt64 slot) {}
 
-  protected void onProductionDue(final UInt64 slot) {
-    // Check slot being null for the edge case of genesis slot (i.e. slot 0)
-    if (lastProductionSlot != null && slot.compareTo(lastProductionSlot) <= 0) {
-      LOG.debug(
-          "Not performing {} duties for slot {} because last production slot {} is beyond that.",
-          dutyType,
-          slot,
-          lastProductionSlot);
-      return;
-    }
-
-    if (!isAbleToVerifyEpoch(slot)) {
-      LOG.info(
-          "Not performing {} duties for slot {} because it is too far ahead of the current slot {}",
-          dutyType,
-          slot,
-          getCurrentEpoch().map(UInt64::toString).orElse("UNDEFINED"));
-      return;
-    }
-
-    lastProductionSlot = slot;
-    notifyEpochDuties(PendingDuties::onProductionDue, slot);
-  }
-
   @Override
-  public void onAttestationAggregationDue(final UInt64 slot) {
-    if (!isAbleToVerifyEpoch(slot)) {
-      LOG.info(
-          "Not performing {} aggregation duties for slot {} because it is too far ahead of the current slot {}",
-          dutyType,
-          slot,
-          getCurrentEpoch().map(UInt64::toString).orElse("UNDEFINED"));
-      return;
-    }
-
-    notifyEpochDuties(PendingDuties::onAggregationDue, slot);
-  }
+  public void onAttestationAggregationDue(final UInt64 slot) {}
 }

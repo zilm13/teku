@@ -14,7 +14,10 @@
 package tech.pegasys.teku.weaksubjectivity;
 
 import static tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil.compute_epoch_at_slot;
+import static tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil.get_current_epoch;
+import static tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil.get_total_active_balance;
 import static tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil.get_validator_churn_limit;
+import static tech.pegasys.teku.spec.datastructures.util.ValidatorsUtil.get_active_validator_indices;
 
 import com.google.common.annotations.VisibleForTesting;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
@@ -45,9 +48,8 @@ public class WeakSubjectivityCalculator {
   }
 
   public static WeakSubjectivityCalculator create(final WeakSubjectivityConfig config) {
-    final Spec spec = config.getSpec();
     return new WeakSubjectivityCalculator(
-        spec, config.getSafetyDecay(), StateCalculator.getDefaultCalculator(spec));
+        config.getSpec(), config.getSafetyDecay(), StateCalculator.DEFAULT);
   }
 
   /**
@@ -117,21 +119,19 @@ public class WeakSubjectivityCalculator {
   }
 
   interface StateCalculator {
-    static StateCalculator getDefaultCalculator(final Spec spec) {
-      return new StateCalculator() {
-        @Override
-        public int getActiveValidators(final BeaconState state) {
-          final UInt64 currentEpoch = spec.getCurrentEpoch(state);
-          return spec.getActiveValidatorIndices(state, currentEpoch).size();
-        }
+    StateCalculator DEFAULT =
+        new StateCalculator() {
+          @Override
+          public int getActiveValidators(final BeaconState state) {
+            return get_active_validator_indices(state, get_current_epoch(state)).size();
+          }
 
-        @Override
-        public UInt64 getTotalActiveValidatorBalance(
-            final BeaconState state, final int activeValidatorCount) {
-          return spec.getTotalActiveBalance(state);
-        }
-      };
-    }
+          @Override
+          public UInt64 getTotalActiveValidatorBalance(
+              final BeaconState state, final int activeValidatorCount) {
+            return get_total_active_balance(state);
+          }
+        };
 
     static StateCalculator createStaticCalculator(
         final int activeValidators, final UInt64 totalActiveValidatorBalance) {

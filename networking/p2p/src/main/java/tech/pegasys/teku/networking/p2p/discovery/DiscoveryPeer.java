@@ -25,20 +25,17 @@ public class DiscoveryPeer {
   private final Bytes publicKey;
   private final InetSocketAddress nodeAddress;
   private final Optional<EnrForkId> enrForkId;
-  private final SszBitvector persistentAttestationSubnets;
-  private final SszBitvector syncCommitteeSubnets;
+  private final SszBitvector persistentSubnets;
 
   public DiscoveryPeer(
       final Bytes publicKey,
       final InetSocketAddress nodeAddress,
       final Optional<EnrForkId> enrForkId,
-      final SszBitvector persistentAttestationSubnets,
-      final SszBitvector syncCommitteeSubnets) {
+      final SszBitvector persistentSubnets) {
     this.publicKey = publicKey;
     this.nodeAddress = nodeAddress;
     this.enrForkId = enrForkId;
-    this.persistentAttestationSubnets = persistentAttestationSubnets;
-    this.syncCommitteeSubnets = syncCommitteeSubnets;
+    this.persistentSubnets = persistentSubnets;
   }
 
   public Bytes getPublicKey() {
@@ -53,12 +50,8 @@ public class DiscoveryPeer {
     return enrForkId;
   }
 
-  public SszBitvector getPersistentAttestationSubnets() {
-    return persistentAttestationSubnets;
-  }
-
-  public SszBitvector getSyncCommitteeSubnets() {
-    return syncCommitteeSubnets;
+  public SszBitvector getPersistentSubnets() {
+    return persistentSubnets;
   }
 
   @Override
@@ -69,18 +62,13 @@ public class DiscoveryPeer {
     return Objects.equal(getPublicKey(), that.getPublicKey())
         && Objects.equal(getNodeAddress(), that.getNodeAddress())
         && Objects.equal(getEnrForkId(), that.getEnrForkId())
-        && Objects.equal(getPersistentAttestationSubnets(), that.getPersistentAttestationSubnets())
-        && Objects.equal(getSyncCommitteeSubnets(), that.getSyncCommitteeSubnets());
+        && Objects.equal(getPersistentSubnets(), that.getPersistentSubnets());
   }
 
   @Override
   public int hashCode() {
     return Objects.hashCode(
-        getPublicKey(),
-        getNodeAddress(),
-        getEnrForkId(),
-        getPersistentAttestationSubnets(),
-        getSyncCommitteeSubnets());
+        getPublicKey(), getNodeAddress(), getEnrForkId(), getPersistentSubnets());
   }
 
   @Override
@@ -89,8 +77,7 @@ public class DiscoveryPeer {
         .add("publicKey", publicKey)
         .add("nodeAddress", nodeAddress)
         .add("enrForkId", enrForkId)
-        .add("persistentSubnets", persistentAttestationSubnets)
-        .add("syncCommitteeSubnets", syncCommitteeSubnets)
+        .add("persistentSubnets", persistentSubnets)
         .toString();
   }
 }

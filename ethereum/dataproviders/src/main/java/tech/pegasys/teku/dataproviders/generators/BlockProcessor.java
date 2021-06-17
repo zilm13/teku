@@ -28,7 +28,7 @@ class BlockProcessor {
   public BeaconState process(final BeaconState preState, final SignedBeaconBlock block) {
 
     try {
-      final BeaconState postState = spec.replayValidatedBlock(preState, block);
+      final BeaconState postState = spec.initiateStateTransition(preState, block, false);
       assertBlockAndStateMatch(block, postState);
       return postState;
     } catch (StateTransitionException e) {

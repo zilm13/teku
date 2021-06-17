@@ -18,11 +18,12 @@ import static tech.pegasys.teku.api.response.v1.beacon.ValidatorResponse.getVali
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ONE;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ZERO;
 import static tech.pegasys.teku.spec.config.SpecConfig.FAR_FUTURE_EPOCH;
+import static tech.pegasys.teku.spec.datastructures.util.ValidatorsUtil.getValidatorIndex;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.Lists;
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -33,12 +34,11 @@ import java.util.stream.IntStream;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.api.blockselector.BlockSelectorFactory;
 import tech.pegasys.teku.api.exceptions.BadRequestException;
-import tech.pegasys.teku.api.response.SszResponse;
+import tech.pegasys.teku.api.response.StateSszResponse;
 import tech.pegasys.teku.api.response.v1.beacon.BlockHeader;
 import tech.pegasys.teku.api.response.v1.beacon.EpochCommitteeResponse;
 import tech.pegasys.teku.api.response.v1.beacon.FinalityCheckpointsResponse;
 import tech.pegasys.teku.api.response.v1.beacon.GenesisData;
-import tech.pegasys.teku.api.response.v1.beacon.StateSyncCommittees;
 import tech.pegasys.teku.api.response.v1.beacon.ValidatorBalanceResponse;
 import tech.pegasys.teku.api.response.v1.beacon.ValidatorResponse;
 import tech.pegasys.teku.api.response.v1.beacon.ValidatorStatus;
@@ -54,9 +54,8 @@ import tech.pegasys.teku.api.stateselector.StateSelectorFactory;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.Spec;
-import tech.pegasys.teku.spec.SpecMilestone;
 import tech.pegasys.teku.spec.datastructures.state.CommitteeAssignment;
-import tech.pegasys.teku.spec.datastructures.state.SyncCommittee;
+import tech.pegasys.teku.spec.datastructures.state.ForkInfo;
 import tech.pegasys.teku.ssz.Merkleizable;
 import tech.pegasys.teku.storage.client.ChainDataUnavailableException;
 import tech.pegasys.teku.storage.client.CombinedChainDataClient;
@@ -67,7 +66,6 @@ public class ChainDataProvider {
   private final StateSelectorFactory defaultStateSelectorFactory;
   private final Spec spec;
   private final CombinedChainDataClient combinedChainDataClient;
-  private final SchemaObjectProvider schemaObjectProvider;
 
   private final RecentChainData recentChainData;
 
@@ -78,7 +76,6 @@ public class ChainDataProvider {
     this.spec = spec;
     this.combinedChainDataClient = combinedChainDataClient;
     this.recentChainData = recentChainData;
-    this.schemaObjectProvider = new SchemaObjectProvider(spec);
     this.defaultBlockSelectorFactory = new BlockSelectorFactory(combinedChainDataClient);
     this.defaultStateSelectorFactory = new StateSelectorFactory(combinedChainDataClient);
   }
@@ -114,26 +111,6 @@ public class ChainDataProvider {
         .defaultBlockSelector(slotParameter)
         .getSingleBlock()
         .thenApply(maybeBlock -> maybeBlock.map(SignedBeaconBlock::new));
-  }
-
-  public SafeFuture<Optional<SignedBeaconBlock>> getBlockV2(final String slotParameter) {
-    return defaultBlockSelectorFactory
-        .defaultBlockSelector(slotParameter)
-        .getSingleBlock()
-        .thenApply(maybeBlock -> maybeBlock.map(schemaObjectProvider::getSignedBeaconBlock));
-  }
-
-  public SafeFuture<Optional<SszResponse>> getBlockSsz(final String slotParameter) {
-    return defaultBlockSelectorFactory
-        .defaultBlockSelector(slotParameter)
-        .getSingleBlock()
-        .thenApply(
-            maybeBlock ->
-                maybeBlock.map(
-                    block ->
-                        new SszResponse(
-                            new ByteArrayInputStream(block.sszSerialize().toArrayUnsafe()),
-                            block.hashTreeRoot().toUnprefixedHexString())));
   }
 
   public SafeFuture<Optional<Root>> getBlockRoot(final String slotParameter) {
@@ -179,10 +156,10 @@ public class ChainDataProvider {
     return defaultStateSelectorFactory
         .defaultStateSelector(stateIdParam)
         .getState()
-        .thenApply(maybeState -> maybeState.map(schemaObjectProvider::getBeaconState));
+        .thenApply(state -> state.map(BeaconState::new));
   }
 
-  public SafeFuture<Optional<SszResponse>> getBeaconStateSsz(final String stateIdParam) {
+  public SafeFuture<Optional<StateSszResponse>> getBeaconStateSsz(final String stateIdParam) {
     return defaultStateSelectorFactory
         .defaultStateSelector(stateIdParam)
         .getState()
@@ -190,26 +167,12 @@ public class ChainDataProvider {
             maybeState ->
                 maybeState.map(
                     state ->
-                        new SszResponse(
+                        new StateSszResponse(
                             new ByteArrayInputStream(state.sszSerialize().toArrayUnsafe()),
                             state.hashTreeRoot().toUnprefixedHexString())));
   }
 
-  public SafeFuture<Set<SignedBeaconBlock>> getAllBlocksAtSlot(final String slot) {
-    if (slot.startsWith("0x")) {
-      throw new BadRequestException(
-          String.format("block roots are not currently supported: %s", slot));
-    } else {
-      return defaultBlockSelectorFactory
-          .nonCanonicalBlocksSelector(UInt64.valueOf(slot))
-          .getBlock()
-          .thenApply(
-              blockList ->
-                  blockList.stream().map(SignedBeaconBlock::new).collect(Collectors.toSet()));
-    }
-  }
-
-  public SafeFuture<Optional<SszResponse>> getBeaconStateSszByBlockRoot(
+  public SafeFuture<Optional<StateSszResponse>> getBeaconStateSszByBlockRoot(
       final String blockRootParam) {
     return defaultStateSelectorFactory
         .byBlockRootStateSelector(blockRootParam)
@@ -218,13 +181,13 @@ public class ChainDataProvider {
             maybeState ->
                 maybeState.map(
                     state ->
-                        new SszResponse(
+                        new StateSszResponse(
                             new ByteArrayInputStream(state.sszSerialize().toArrayUnsafe()),
                             state.hashTreeRoot().toUnprefixedHexString())));
   }
 
   public boolean isFinalized(final SignedBeaconBlock signedBeaconBlock) {
-    return combinedChainDataClient.isFinalized(signedBeaconBlock.getMessage().slot);
+    return combinedChainDataClient.isFinalized(signedBeaconBlock.message.slot);
   }
 
   public boolean isFinalized(final UInt64 slot) {
@@ -259,7 +222,7 @@ public class ChainDataProvider {
     if (validatorParameter.toLowerCase().startsWith("0x")) {
       try {
         BLSPubKey publicKey = BLSPubKey.fromHexString(validatorParameter);
-        return spec.getValidatorIndex(state, publicKey.asBLSPublicKey());
+        return getValidatorIndex(state, publicKey.asBLSPublicKey());
       } catch (PublicKeyException ex) {
         throw new BadRequestException(String.format("Invalid public key: %s", validatorParameter));
       }
@@ -453,48 +416,11 @@ public class ChainDataProvider {
     return SafeFuture.completedFuture(Optional.of(result));
   }
 
-  public SafeFuture<Optional<StateSyncCommittees>> getStateSyncCommittees(
-      final String stateIdParam, final Optional<UInt64> epoch) {
-    return defaultStateSelectorFactory
-        .defaultStateSelector(stateIdParam)
-        .getState()
-        .thenApply(maybeState -> maybeState.map(state -> getSyncCommitteesFromState(state, epoch)));
-  }
+  public List<Fork> getForkSchedule() {
+    final Optional<ForkInfo> maybeForkInfo = recentChainData.getForkInfoAtCurrentTime();
 
-  private StateSyncCommittees getSyncCommitteesFromState(
-      final tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState state,
-      final Optional<UInt64> epochQueryParam) {
-    final UInt64 epoch = epochQueryParam.orElse(spec.computeEpochAtSlot(state.getSlot()));
-    final UInt64 slot = spec.computeStartSlotAtEpoch(epoch);
-
-    final Optional<SyncCommittee> maybeCommittee =
-        spec.getSyncCommitteeUtil(slot).map(util -> util.getSyncCommittee(state, epoch));
-    // * if the requested epoch is outside of valid range, an illegalArgumentException is raised
-    // * if getSyncCommitteeUtil was not present, maybeCommittee will be empty,
-    //   indicating the state is pre-altair, and in this case, an empty committees list can be
-    // returned
-    if (maybeCommittee.isEmpty()) {
-      return new StateSyncCommittees(List.of(), List.of());
-    }
-
-    final SyncCommittee committee = maybeCommittee.get();
-    final List<UInt64> committeeIndices =
-        committee.getPubkeys().stream()
-            .flatMap(pubkey -> spec.getValidatorIndex(state, pubkey.getBLSPublicKey()).stream())
-            .map(UInt64::valueOf)
-            .collect(toList());
-
-    return new StateSyncCommittees(
-        committeeIndices,
-        Lists.partition(
-            committeeIndices, spec.atEpoch(epoch).getConfig().getTargetCommitteeSize()));
-  }
-
-  public SpecMilestone getMilestoneAtSlot(final UInt64 slot) {
-    return spec.atSlot(slot).getMilestone();
-  }
-
-  public SpecMilestone getMilestoneAtEpoch(final UInt64 epoch) {
-    return spec.atEpoch(epoch).getMilestone();
+    return maybeForkInfo
+        .map(forkInfo -> List.of(new Fork(forkInfo.getFork())))
+        .orElse(Collections.emptyList());
   }
 }

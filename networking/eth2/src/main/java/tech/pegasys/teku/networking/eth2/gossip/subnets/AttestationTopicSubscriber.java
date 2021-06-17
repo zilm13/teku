@@ -20,39 +20,31 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.networking.eth2.Eth2P2PNetwork;
-import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.datastructures.util.CommitteeUtil;
 import tech.pegasys.teku.spec.datastructures.validator.SubnetSubscription;
 import tech.pegasys.teku.util.time.channels.SlotEventsChannel;
 
 public class AttestationTopicSubscriber implements SlotEventsChannel {
-  private static final Logger LOG = LogManager.getLogger();
   private final Map<Integer, UInt64> subnetIdToUnsubscribeSlot = new HashMap<>();
   private final Set<Integer> persistentSubnetIdSet = new HashSet<>();
   private final Eth2P2PNetwork eth2P2PNetwork;
-  private final Spec spec;
 
-  public AttestationTopicSubscriber(final Spec spec, final Eth2P2PNetwork eth2P2PNetwork) {
-    this.spec = spec;
+  public AttestationTopicSubscriber(final Eth2P2PNetwork eth2P2PNetwork) {
     this.eth2P2PNetwork = eth2P2PNetwork;
   }
 
   public synchronized void subscribeToCommitteeForAggregation(
       final int committeeIndex, final UInt64 committeesAtSlot, final UInt64 aggregationSlot) {
     final int subnetId =
-        spec.computeSubnetForCommittee(
+        CommitteeUtil.computeSubnetForCommittee(
             aggregationSlot, UInt64.valueOf(committeeIndex), committeesAtSlot);
     final UInt64 currentUnsubscriptionSlot = subnetIdToUnsubscribeSlot.getOrDefault(subnetId, ZERO);
     if (currentUnsubscriptionSlot.equals(ZERO)) {
       eth2P2PNetwork.subscribeToAttestationSubnetId(subnetId);
     }
-    final UInt64 unsubscribeSlot = currentUnsubscriptionSlot.max(aggregationSlot);
-    LOG.trace(
-        "Subscribing to subnet {} with unsubscribe due at slot {}", subnetId, unsubscribeSlot);
-    subnetIdToUnsubscribeSlot.put(subnetId, unsubscribeSlot);
+    subnetIdToUnsubscribeSlot.put(subnetId, currentUnsubscriptionSlot.max(aggregationSlot));
   }
 
   public synchronized void subscribeToPersistentSubnets(
@@ -91,7 +83,6 @@ public class AttestationTopicSubscriber implements SlotEventsChannel {
       if (entry.getValue().compareTo(slot) < 0) {
         iterator.remove();
         int subnetId = entry.getKey();
-        LOG.trace("Unsubscribing from subnet {}", subnetId);
         eth2P2PNetwork.unsubscribeFromAttestationSubnetId(subnetId);
 
         if (persistentSubnetIdSet.contains(subnetId)) {

@@ -17,27 +17,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static tech.pegasys.teku.ssz.SszDataAssert.assertThatSszData;
 
-import java.util.Collections;
-import java.util.List;
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.spec.constants.NetworkConstants;
-import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.metadata.MetadataMessage;
-import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.metadata.versions.altair.MetadataMessageSchemaAltair;
-import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.metadata.versions.phase0.MetadataMessageSchemaPhase0;
-import tech.pegasys.teku.util.config.Constants;
+import tech.pegasys.teku.ssz.schema.collections.SszBitvectorSchema;
 
 class MetadataMessageTest {
 
-  private static final MetadataMessageSchemaPhase0 PHASE0_SCHEMA =
-      new MetadataMessageSchemaPhase0();
-  private static final MetadataMessageSchemaAltair ALTAIR_SCHEMA =
-      new MetadataMessageSchemaAltair();
   private static final Bytes EXPECTED_SSZ =
       Bytes.fromHexString("0x23000000000000000100000000000080");
   private static final MetadataMessage MESSAGE =
-      PHASE0_SCHEMA.create(UInt64.valueOf(0x23), List.of(0, 63), Collections.emptyList());
+      new MetadataMessage(UInt64.valueOf(0x23), SszBitvectorSchema.create(64).ofBits(0, 63));
 
   @Test
   public void shouldSerializeToSsz() {
@@ -47,29 +37,23 @@ class MetadataMessageTest {
 
   @Test
   public void shouldDeserializeFromSsz() {
-    MetadataMessage result = PHASE0_SCHEMA.sszDeserialize(EXPECTED_SSZ);
+    MetadataMessage result = MetadataMessage.SSZ_SCHEMA.sszDeserialize(EXPECTED_SSZ);
     assertThatSszData(result).isEqualByAllMeansTo(MESSAGE);
   }
 
   @Test
-  public void shouldRejectOutOfBoundsAttnets() {
+  public void shouldRejectTooShortBitlist() {
     assertThatThrownBy(
             () ->
-                PHASE0_SCHEMA.create(
-                    UInt64.valueOf(15),
-                    List.of(Constants.ATTESTATION_SUBNET_COUNT),
-                    Collections.emptyList()))
-        .isInstanceOf(IndexOutOfBoundsException.class);
+                new MetadataMessage(UInt64.valueOf(15), SszBitvectorSchema.create(63).getDefault()))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
-  public void shouldRejectOutOfBoundsSyncnets() {
+  public void shouldRejectTooLongBitlist() {
     assertThatThrownBy(
             () ->
-                ALTAIR_SCHEMA.create(
-                    UInt64.valueOf(15),
-                    Collections.emptyList(),
-                    List.of(NetworkConstants.SYNC_COMMITTEE_SUBNET_COUNT)))
-        .isInstanceOf(IndexOutOfBoundsException.class);
+                new MetadataMessage(UInt64.valueOf(15), SszBitvectorSchema.create(65).getDefault()))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 }

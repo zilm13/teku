@@ -20,9 +20,10 @@ import org.apache.logging.log4j.util.Strings;
 import picocli.CommandLine;
 import tech.pegasys.teku.cli.converter.PicoCliVersionProvider;
 import tech.pegasys.teku.cli.options.ValidatorClientDataOptions;
-import tech.pegasys.teku.cli.util.SlashingProtectionCommandUtils;
 import tech.pegasys.teku.data.SlashingProtectionImporter;
 import tech.pegasys.teku.infrastructure.logging.SubCommandLogger;
+import tech.pegasys.teku.service.serviceutils.layout.DataDirLayout;
+import tech.pegasys.teku.validator.client.ValidatorClientService;
 
 @CommandLine.Command(
     name = "import",
@@ -52,8 +53,7 @@ public class ImportCommand implements Runnable {
 
   @Override
   public void run() {
-    final Path slashProtectionPath =
-        SlashingProtectionCommandUtils.getSlashingProtectionPath(dataOptions);
+    final Path slashProtectionPath = getSlashingProtectionPath(dataOptions);
     File importFile = new File(fromFileName);
     verifyImportFileExists(importFile);
     prepareOutputPath(slashProtectionPath.toFile());
@@ -87,5 +87,10 @@ public class ImportCommand implements Runnable {
       SUB_COMMAND_LOG.exit(
           1, "Path " + outputPath.toString() + " is not a directory or can't be written to.");
     }
+  }
+
+  private Path getSlashingProtectionPath(final ValidatorClientDataOptions dataOptions) {
+    final DataDirLayout dataDirLayout = DataDirLayout.createFrom(dataOptions.getDataConfig());
+    return ValidatorClientService.getSlashingProtectionPath(dataDirLayout);
   }
 }

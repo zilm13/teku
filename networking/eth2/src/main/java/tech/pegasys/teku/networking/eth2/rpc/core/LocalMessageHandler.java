@@ -17,10 +17,5 @@ import java.util.Optional;
 import tech.pegasys.teku.networking.eth2.peers.Eth2Peer;
 
 public interface LocalMessageHandler<I, O> {
-  void onIncomingMessage(
-      final String protocolId, Optional<Eth2Peer> peer, I message, ResponseCallback<O> callback);
-
-  default Optional<RpcException> validateRequest(String protocolId, I request) {
-    return Optional.empty();
-  }
+  void onIncomingMessage(Optional<Eth2Peer> peer, I message, ResponseCallback<O> callback);
 }

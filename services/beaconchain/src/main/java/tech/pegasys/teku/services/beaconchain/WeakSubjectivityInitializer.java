@@ -23,7 +23,6 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
-import tech.pegasys.teku.infrastructure.http.UrlSanitizer;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.spec.datastructures.state.AnchorPoint;
@@ -36,7 +35,7 @@ import tech.pegasys.teku.storage.events.WeakSubjectivityUpdate;
 import tech.pegasys.teku.util.config.InvalidConfigurationException;
 import tech.pegasys.teku.weaksubjectivity.config.WeakSubjectivityConfig;
 
-public class WeakSubjectivityInitializer {
+class WeakSubjectivityInitializer {
 
   private static final Logger LOG = LogManager.getLogger();
 
@@ -44,9 +43,8 @@ public class WeakSubjectivityInitializer {
       final Spec spec, final Optional<String> initialStateResource) {
     return initialStateResource.map(
         stateResource -> {
-          final String sanitizedResource = UrlSanitizer.sanitizePotentialUrl(stateResource);
           try {
-            STATUS_LOG.loadingInitialStateResource(sanitizedResource);
+            STATUS_LOG.loadingInitialStateResource(stateResource);
             final BeaconState state = ChainDataLoader.loadState(spec, stateResource);
             final AnchorPoint anchor = AnchorPoint.fromInitialState(spec, state);
             STATUS_LOG.loadedInitialStateResource(
@@ -59,7 +57,7 @@ public class WeakSubjectivityInitializer {
           } catch (IOException e) {
             LOG.error("Failed to load initial state", e);
             throw new InvalidConfigurationException(
-                "Failed to load initial state from " + sanitizedResource + ": " + e.getMessage());
+                "Failed to load initial state from " + stateResource + ": " + e.getMessage());
           }
         });
   }

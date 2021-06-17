@@ -26,12 +26,9 @@ public interface PeerScorer {
     return scoreExistingPeer(peer.getId());
   }
 
-  int scoreCandidatePeer(
-      final SszBitvector attSubnetSubscriptions,
-      final SszBitvector syncCommitteeSubnetSubscriptions);
+  int scoreCandidatePeer(SszBitvector subscriptions);
 
   default int scoreCandidatePeer(final DiscoveryPeer candidate) {
-    return scoreCandidatePeer(
-        candidate.getPersistentAttestationSubnets(), candidate.getSyncCommitteeSubnets());
+    return scoreCandidatePeer(candidate.getPersistentSubnets());
   }
 }

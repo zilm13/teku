@@ -24,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.StubAsyncRunner;
+import tech.pegasys.teku.networking.eth2.gossip.ProposerSlashingGossipManager;
 import tech.pegasys.teku.networking.eth2.gossip.encoding.GossipEncoding;
 import tech.pegasys.teku.networking.eth2.gossip.topics.topichandlers.Eth2TopicHandler;
 import tech.pegasys.teku.spec.datastructures.operations.ProposerSlashing;
@@ -52,7 +53,7 @@ public class ProposerSlashingTopicHandlerTest {
           processor,
           gossipEncoding,
           dataStructureUtil.randomForkInfo().getForkDigest(),
-          GossipTopicName.PROPOSER_SLASHING,
+          ProposerSlashingGossipManager.TOPIC_NAME,
           ProposerSlashing.SSZ_SCHEMA);
 
   @BeforeEach
@@ -115,7 +116,7 @@ public class ProposerSlashingTopicHandlerTest {
             processor,
             gossipEncoding,
             forkDigest,
-            GossipTopicName.PROPOSER_SLASHING,
+            ProposerSlashingGossipManager.TOPIC_NAME,
             ProposerSlashing.SSZ_SCHEMA);
     assertThat(topicHandler.getTopic()).isEqualTo("/eth2/11223344/proposer_slashing/ssz_snappy");
   }

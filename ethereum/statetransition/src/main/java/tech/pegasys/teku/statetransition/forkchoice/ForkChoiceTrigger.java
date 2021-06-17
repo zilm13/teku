@@ -25,13 +25,11 @@ public interface ForkChoiceTrigger {
         : new OriginalForkChoiceTrigger(forkChoice);
   }
 
-  void onSlotStartedWhileSyncing(final UInt64 slot);
+  void onSlotStartedWhileSyncing(final UInt64 nodeSlot);
 
-  void onSlotStarted(final UInt64 slot);
+  void onSlotStarted(final UInt64 nodeSlot);
 
-  void onAttestationsDueForSlot(final UInt64 slot);
+  void onAttestationsDueForSlot(final UInt64 nodeSlot);
 
   SafeFuture<Void> prepareForBlockProduction(final UInt64 slot);
-
-  SafeFuture<Void> prepareForAttestationProduction(final UInt64 slot);
 }

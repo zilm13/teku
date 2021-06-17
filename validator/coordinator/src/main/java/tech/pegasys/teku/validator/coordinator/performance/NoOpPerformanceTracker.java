@@ -13,11 +13,9 @@
 
 package tech.pegasys.teku.validator.coordinator.performance;
 
-import java.util.Set;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.spec.datastructures.operations.Attestation;
-import tech.pegasys.teku.spec.datastructures.operations.versions.altair.SyncCommitteeSignature;
 
 public class NoOpPerformanceTracker implements PerformanceTracker {
 
@@ -32,15 +30,6 @@ public class NoOpPerformanceTracker implements PerformanceTracker {
 
   @Override
   public void reportBlockProductionAttempt(UInt64 epoch) {}
-
-  @Override
-  public void saveExpectedSyncCommitteeParticipant(
-      final int validatorIndex,
-      final Set<Integer> syncCommitteeIndices,
-      final UInt64 periodEndEpoch) {}
-
-  @Override
-  public void saveProducedSyncCommitteeSignature(final SyncCommitteeSignature signature) {}
 
   @Override
   public void onSlot(UInt64 slot) {}

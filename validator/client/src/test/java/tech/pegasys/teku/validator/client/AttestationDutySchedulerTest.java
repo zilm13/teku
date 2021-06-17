@@ -44,23 +44,16 @@ import tech.pegasys.teku.spec.datastructures.operations.AttestationData;
 import tech.pegasys.teku.validator.api.AttesterDuties;
 import tech.pegasys.teku.validator.api.AttesterDuty;
 import tech.pegasys.teku.validator.client.duties.AggregationDuty;
-import tech.pegasys.teku.validator.client.duties.AttestationDutyFactory;
 import tech.pegasys.teku.validator.client.duties.AttestationProductionDuty;
 import tech.pegasys.teku.validator.client.duties.BeaconCommitteeSubscriptions;
-import tech.pegasys.teku.validator.client.duties.DutyResult;
-import tech.pegasys.teku.validator.client.duties.SlotBasedScheduledDuties;
+import tech.pegasys.teku.validator.client.duties.ScheduledDuties;
 import tech.pegasys.teku.validator.client.loader.OwnedValidators;
 
 public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
   private final BeaconCommitteeSubscriptions beaconCommitteeSubscriptions =
       mock(BeaconCommitteeSubscriptions.class);
 
-  private final AttestationDutyFactory attestationDutyFactory = mock(AttestationDutyFactory.class);
-
-  @SuppressWarnings("unchecked")
-  private final SlotBasedScheduledDuties<AttestationProductionDuty, AggregationDuty>
-      scheduledDuties = mock(SlotBasedScheduledDuties.class);
-
+  private final ScheduledDuties scheduledDuties = mock(ScheduledDuties.class);
   private final StubMetricsSystem metricsSystem2 = new StubMetricsSystem();
   private final Spec spec = TestSpecFactory.createMinimalPhase0();
 
@@ -72,10 +65,6 @@ public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
         .thenReturn(
             completedFuture(
                 Optional.of(new AttesterDuties(dataStructureUtil.randomBytes32(), emptyList()))));
-    when(scheduledDuties.performProductionDuty(any()))
-        .thenReturn(SafeFuture.completedFuture(DutyResult.NO_OP));
-    when(scheduledDuties.performAggregationDuty(any()))
-        .thenReturn(SafeFuture.completedFuture(DutyResult.NO_OP));
   }
 
   @Test
@@ -368,14 +357,14 @@ public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
   public void shouldNotProcessAggregationIfEpochIsUnknown() {
     createDutySchedulerWithMockDuties();
     dutyScheduler.onAttestationAggregationDue(ONE);
-    verify(scheduledDuties, never()).performProductionDuty(ZERO);
+    verify(scheduledDuties, never()).performAggregation(ZERO);
   }
 
   @Test
   public void shouldNotProcessAttestationIfEpochIsUnknown() {
     createDutySchedulerWithMockDuties();
     dutyScheduler.onAttestationCreationDue(ONE);
-    verify(scheduledDuties, never()).performProductionDuty(ZERO);
+    verify(scheduledDuties, never()).produceAttestations(ZERO);
   }
 
   @Test
@@ -385,7 +374,7 @@ public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
     final UInt64 slot = spec.computeStartSlotAtEpoch(UInt64.valueOf(LOOKAHEAD_EPOCHS + 1));
     dutyScheduler.onSlot(ONE); // epoch 0
     dutyScheduler.onAttestationAggregationDue(slot);
-    verify(scheduledDuties, never()).performAggregationDuty(slot);
+    verify(scheduledDuties, never()).performAggregation(slot);
   }
 
   @Test
@@ -395,7 +384,7 @@ public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
     final UInt64 slot = spec.computeStartSlotAtEpoch(UInt64.valueOf(LOOKAHEAD_EPOCHS + 1));
     dutyScheduler.onSlot(ONE); // epoch 0
     dutyScheduler.onAttestationCreationDue(slot);
-    verify(scheduledDuties, never()).performProductionDuty(slot);
+    verify(scheduledDuties, never()).produceAttestations(slot);
   }
 
   @Test
@@ -406,7 +395,7 @@ public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
         spec.computeStartSlotAtEpoch(UInt64.valueOf(LOOKAHEAD_EPOCHS + 1)).decrement();
     dutyScheduler.onSlot(ONE); // epoch 0
     dutyScheduler.onAttestationAggregationDue(slot);
-    verify(scheduledDuties).performAggregationDuty(slot);
+    verify(scheduledDuties).performAggregation(slot);
   }
 
   @Test
@@ -417,7 +406,7 @@ public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
         spec.computeStartSlotAtEpoch(UInt64.valueOf(LOOKAHEAD_EPOCHS + 1)).decrement();
     dutyScheduler.onSlot(ONE); // epoch 0
     dutyScheduler.onAttestationCreationDue(slot);
-    verify(scheduledDuties).performProductionDuty(slot);
+    verify(scheduledDuties).produceAttestations(slot);
   }
 
   @Test
@@ -436,13 +425,13 @@ public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
     dutyScheduler.onAttestationCreationDue(ZERO);
     dutyScheduler.onAttestationAggregationDue(ZERO);
     // Duties haven't been loaded yet.
-    verify(scheduledDuties, never()).performProductionDuty(ZERO);
-    verify(scheduledDuties, never()).performAggregationDuty(ZERO);
+    verify(scheduledDuties, never()).produceAttestations(ZERO);
+    verify(scheduledDuties, never()).performAggregation(ZERO);
 
     epoch0Duties.complete(
         Optional.of(new AttesterDuties(dataStructureUtil.randomBytes32(), emptyList())));
-    verify(scheduledDuties).performProductionDuty(ZERO);
-    verify(scheduledDuties).performAggregationDuty(ZERO);
+    verify(scheduledDuties).produceAttestations(ZERO);
+    verify(scheduledDuties).performAggregation(ZERO);
   }
 
   @Test
@@ -461,7 +450,7 @@ public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
 
     final AttestationProductionDuty attestationDuty = mock(AttestationProductionDuty.class);
     when(attestationDuty.performDuty()).thenReturn(new SafeFuture<>());
-    when(attestationDutyFactory.createProductionDuty(attestationProductionSlot, validator1))
+    when(dutyFactory.createAttestationProductionDuty(attestationProductionSlot))
         .thenReturn(attestationDuty);
 
     // Load duties
@@ -519,8 +508,7 @@ public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
 
     final AttestationProductionDuty attestationDuty = mock(AttestationProductionDuty.class);
     when(attestationDuty.performDuty()).thenReturn(new SafeFuture<>());
-    when(attestationDutyFactory.createProductionDuty(attestationSlot, validator1))
-        .thenReturn(attestationDuty);
+    when(dutyFactory.createAttestationProductionDuty(attestationSlot)).thenReturn(attestationDuty);
 
     // Load duties
     dutyScheduler.onSlot(spec.computeStartSlotAtEpoch(ZERO));
@@ -587,8 +575,7 @@ public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
 
     final AttestationProductionDuty attestationDuty = mock(AttestationProductionDuty.class);
     when(attestationDuty.performDuty()).thenReturn(new SafeFuture<>());
-    when(attestationDutyFactory.createProductionDuty(attestationSlot, validator1))
-        .thenReturn(attestationDuty);
+    when(dutyFactory.createAttestationProductionDuty(attestationSlot)).thenReturn(attestationDuty);
 
     // Load duties
     dutyScheduler.onSlot(spec.computeStartSlotAtEpoch(ZERO));
@@ -655,8 +642,7 @@ public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
 
     final AttestationProductionDuty attestationDuty = mock(AttestationProductionDuty.class);
     when(attestationDuty.performDuty()).thenReturn(new SafeFuture<>());
-    when(attestationDutyFactory.createProductionDuty(attestationSlot, validator1))
-        .thenReturn(attestationDuty);
+    when(dutyFactory.createAttestationProductionDuty(attestationSlot)).thenReturn(attestationDuty);
 
     // Load duties
     dutyScheduler.onSlot(spec.computeStartSlotAtEpoch(ZERO));
@@ -734,10 +720,8 @@ public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
     final SafeFuture<Optional<AttestationData>> unsignedAttestationFuture = new SafeFuture<>();
     final AggregationDuty aggregationDuty = mock(AggregationDuty.class);
     final AttestationProductionDuty attestationDuty = mock(AttestationProductionDuty.class);
-    when(attestationDutyFactory.createProductionDuty(attestationSlot, validator1))
-        .thenReturn(attestationDuty);
-    when(attestationDutyFactory.createAggregationDuty(attestationSlot, validator1))
-        .thenReturn(aggregationDuty);
+    when(dutyFactory.createAttestationProductionDuty(attestationSlot)).thenReturn(attestationDuty);
+    when(dutyFactory.createAggregationDuty(attestationSlot)).thenReturn(aggregationDuty);
     when(aggregationDuty.performDuty()).thenReturn(new SafeFuture<>());
     when(attestationDuty.addValidator(
             validator1,
@@ -752,7 +736,7 @@ public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
     dutyScheduler.onSlot(epochStartSlot);
 
     // Only validator1 should have had an aggregation duty created for it
-    verify(attestationDutyFactory).createAggregationDuty(attestationSlot, validator1);
+    verify(dutyFactory).createAggregationDuty(attestationSlot);
     // And should have added validator1 to each duty
     verify(aggregationDuty)
         .addValidator(
@@ -818,7 +802,7 @@ public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
         new AttestationDutyLoader(
             validatorApiChannel,
             forkProvider,
-            dependentRoot -> new SlotBasedScheduledDuties<>(attestationDutyFactory, dependentRoot),
+            dependentRoot -> new ScheduledDuties(dutyFactory, dependentRoot, metricsSystem),
             new OwnedValidators(Map.of(VALIDATOR1_KEY, validator1, VALIDATOR2_KEY, validator2)),
             validatorIndexProvider,
             beaconCommitteeSubscriptions,
@@ -826,7 +810,7 @@ public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
     dutyScheduler =
         new AttestationDutyScheduler(
             metricsSystem,
-            new RetryingDutyLoader<>(asyncRunner, attestationDutyLoader),
+            new RetryingDutyLoader(asyncRunner, attestationDutyLoader),
             useDependentRoots,
             spec);
   }
@@ -844,7 +828,7 @@ public class AttestationDutySchedulerTest extends AbstractDutySchedulerTest {
     dutyScheduler =
         new AttestationDutyScheduler(
             metricsSystem2,
-            new RetryingDutyLoader<>(asyncRunner, attestationDutyLoader),
+            new RetryingDutyLoader(asyncRunner, attestationDutyLoader),
             false,
             spec);
   }

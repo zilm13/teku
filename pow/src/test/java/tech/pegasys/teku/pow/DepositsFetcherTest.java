@@ -36,20 +36,19 @@ import org.web3j.protocol.core.DefaultBlockParameter;
 import org.web3j.protocol.core.methods.response.EthBlock;
 import org.web3j.protocol.core.methods.response.Log;
 import org.web3j.utils.Numeric;
-import tech.pegasys.teku.ethereum.pow.api.DepositsFromBlockEvent;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.StubAsyncRunner;
 import tech.pegasys.teku.pow.api.Eth1EventsChannel;
 import tech.pegasys.teku.pow.contract.DepositContract;
-import tech.pegasys.teku.pow.exception.Eth1RequestException;
-import tech.pegasys.teku.pow.exception.RejectedRequestException;
+import tech.pegasys.teku.pow.contract.RejectedRequestException;
+import tech.pegasys.teku.pow.event.DepositsFromBlockEvent;
 
 public class DepositsFetcherTest {
 
   private static final int MAX_BLOCK_RANGE = 10_000;
   private final Eth1Provider eth1Provider = mock(Eth1Provider.class);
   private final Eth1EventsChannel eth1EventsChannel = mock(Eth1EventsChannel.class);
-  private final DepositEventsAccessor depositEventsAccessor = mock(DepositEventsAccessor.class);
+  private final DepositContract depositContract = mock(DepositContract.class);
   private final Eth1BlockFetcher eth1BlockFetcher = mock(Eth1BlockFetcher.class);
   private final StubAsyncRunner asyncRunner = new StubAsyncRunner();
 
@@ -57,7 +56,7 @@ public class DepositsFetcherTest {
       new DepositFetcher(
           eth1Provider,
           eth1EventsChannel,
-          depositEventsAccessor,
+          depositContract,
           eth1BlockFetcher,
           asyncRunner,
           MAX_BLOCK_RANGE);
@@ -105,7 +104,7 @@ public class DepositsFetcherTest {
     final SafeFuture<List<DepositContract.DepositEventEventResponse>> batch3Response =
         new SafeFuture<>();
 
-    when(depositEventsAccessor.depositEventInRange(any(), any()))
+    when(depositContract.depositEventInRange(any(), any()))
         .thenReturn(batch1Response)
         .thenReturn(batch2Response)
         .thenReturn(batch3Response);
@@ -114,28 +113,28 @@ public class DepositsFetcherTest {
         depositFetcher.fetchDepositsInRange(fromBlockNumber, toBlockNumber);
     assertThat(result).isNotDone();
 
-    verify(depositEventsAccessor)
+    verify(depositContract)
         .depositEventInRange(
             refEq(DefaultBlockParameter.valueOf(fromBlockNumber)),
             refEq(DefaultBlockParameter.valueOf(batch1End)));
-    verifyNoMoreInteractions(depositEventsAccessor);
+    verifyNoMoreInteractions(depositContract);
 
     batch1Response.complete(emptyList());
-    verify(depositEventsAccessor)
+    verify(depositContract)
         .depositEventInRange(
             refEq(DefaultBlockParameter.valueOf(batch2Start)),
             refEq(DefaultBlockParameter.valueOf(batch2End)));
-    verifyNoMoreInteractions(depositEventsAccessor);
+    verifyNoMoreInteractions(depositContract);
 
     batch2Response.complete(emptyList());
-    verify(depositEventsAccessor)
+    verify(depositContract)
         .depositEventInRange(
             refEq(DefaultBlockParameter.valueOf(batch3Start)),
             refEq(DefaultBlockParameter.valueOf(toBlockNumber)));
-    verifyNoMoreInteractions(depositEventsAccessor);
+    verifyNoMoreInteractions(depositContract);
 
     batch3Response.complete(emptyList());
-    verifyNoMoreInteractions(depositEventsAccessor);
+    verifyNoMoreInteractions(depositContract);
   }
 
   @Test
@@ -150,7 +149,7 @@ public class DepositsFetcherTest {
     final SafeFuture<List<DepositContract.DepositEventEventResponse>> request3Response =
         new SafeFuture<>();
 
-    when(depositEventsAccessor.depositEventInRange(any(), any()))
+    when(depositContract.depositEventInRange(any(), any()))
         .thenReturn(request1Response)
         .thenReturn(request2Response)
         .thenReturn(request3Response);
@@ -160,37 +159,35 @@ public class DepositsFetcherTest {
     assertThat(result).isNotDone();
 
     // First tries to request a full size batch
-    verify(depositEventsAccessor)
+    verify(depositContract)
         .depositEventInRange(
             refEq(DefaultBlockParameter.valueOf(fromBlockNumber)),
             refEq(DefaultBlockParameter.valueOf(BigInteger.valueOf(MAX_BLOCK_RANGE))));
-    verifyNoMoreInteractions(depositEventsAccessor);
+    verifyNoMoreInteractions(depositContract);
 
     // But there are too many results
-    final Eth1RequestException err = new Eth1RequestException();
-    err.addSuppressed(new RejectedRequestException(-32005, "Nah mate"));
-    request1Response.completeExceptionally(err);
+    request1Response.completeExceptionally(new RejectedRequestException("Nah mate"));
 
     // So it halves the batch size and retries
     asyncRunner.executeQueuedActions();
     final BigInteger endSuccessfulRange =
         fromBlockNumber.add(BigInteger.valueOf(MAX_BLOCK_RANGE / 2));
-    verify(depositEventsAccessor)
+    verify(depositContract)
         .depositEventInRange(
             refEq(DefaultBlockParameter.valueOf(fromBlockNumber)),
             refEq(DefaultBlockParameter.valueOf(endSuccessfulRange)));
-    verifyNoMoreInteractions(depositEventsAccessor);
+    verifyNoMoreInteractions(depositContract);
 
     // And that works
     request2Response.complete(emptyList());
 
     // So it increases the batch size by 10% to avoid getting stuck with a very small batch size
     asyncRunner.executeQueuedActions();
-    verify(depositEventsAccessor)
+    verify(depositContract)
         .depositEventInRange(
             refEq(DefaultBlockParameter.valueOf(endSuccessfulRange.add(BigInteger.ONE))),
             refEq(DefaultBlockParameter.valueOf(toBlockNumber)));
-    verifyNoMoreInteractions(depositEventsAccessor);
+    verifyNoMoreInteractions(depositContract);
   }
 
   private void mockBlockForEth1Provider(String blockHash, long blockNumber, long timestamp) {
@@ -206,7 +203,7 @@ public class DepositsFetcherTest {
       long fromBlockNumber, long toBlockNumber) {
     SafeFuture<List<DepositContract.DepositEventEventResponse>> safeFuture = new SafeFuture<>();
     doReturn(safeFuture)
-        .when(depositEventsAccessor)
+        .when(depositContract)
         .depositEventInRange(
             argThat(
                 argument ->

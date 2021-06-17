@@ -16,6 +16,7 @@ package tech.pegasys.teku.benchmarks.gen;
 import static org.mockito.Mockito.mock;
 import static tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil.get_committee_count_per_slot;
 import static tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil.get_current_epoch;
+import static tech.pegasys.teku.spec.datastructures.util.CommitteeUtil.get_beacon_committee;
 
 import com.google.common.eventbus.EventBus;
 import java.io.File;
@@ -112,7 +113,7 @@ public class Generator {
               "Processed: "
                   + currentSlot
                   + ", "
-                  + getCommittees(spec, postState.getState())
+                  + getCommittees(postState.getState())
                   + ", "
                   + (System.currentTimeMillis() - s)
                   + " ms");
@@ -153,12 +154,12 @@ public class Generator {
     }
   }
 
-  String getCommittees(final Spec spec, BeaconState state) {
+  String getCommittees(BeaconState state) {
     UInt64 cnt = get_committee_count_per_slot(state, get_current_epoch(state));
     List<List<Integer>> committees = new ArrayList<>();
     for (UInt64 index = UInt64.ZERO; index.compareTo(cnt) < 0; index = index.plus(UInt64.ONE)) {
 
-      committees.add(spec.getBeaconCommittee(state, state.getSlot(), index));
+      committees.add(get_beacon_committee(state, state.getSlot(), index));
     }
 
     return "["

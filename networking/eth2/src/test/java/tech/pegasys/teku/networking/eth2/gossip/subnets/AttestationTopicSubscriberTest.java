@@ -21,14 +21,13 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ONE;
+import static tech.pegasys.teku.spec.datastructures.util.CommitteeUtil.computeSubnetForCommittee;
 
 import java.util.Collections;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.networking.eth2.Eth2P2PNetwork;
-import tech.pegasys.teku.spec.Spec;
-import tech.pegasys.teku.spec.TestSpecFactory;
 import tech.pegasys.teku.spec.datastructures.validator.SubnetSubscription;
 
 class AttestationTopicSubscriberTest {
@@ -36,15 +35,14 @@ class AttestationTopicSubscriberTest {
   private static final UInt64 COMMITTEES_AT_SLOT = UInt64.valueOf(20);
   private final Eth2P2PNetwork eth2P2PNetwork = mock(Eth2P2PNetwork.class);
 
-  private final Spec spec = TestSpecFactory.createDefault();
   private final AttestationTopicSubscriber subscriber =
-      new AttestationTopicSubscriber(spec, eth2P2PNetwork);
+      new AttestationTopicSubscriber(eth2P2PNetwork);
 
   @Test
   public void shouldSubscribeToSubnet() {
     final int committeeId = 10;
     final int subnetId =
-        spec.computeSubnetForCommittee(ONE, UInt64.valueOf(committeeId), COMMITTEES_AT_SLOT);
+        computeSubnetForCommittee(ONE, UInt64.valueOf(committeeId), COMMITTEES_AT_SLOT);
     subscriber.subscribeToCommitteeForAggregation(committeeId, COMMITTEES_AT_SLOT, ONE);
 
     verify(eth2P2PNetwork).subscribeToAttestationSubnetId(subnetId);
@@ -55,8 +53,7 @@ class AttestationTopicSubscriberTest {
     final int committeeId = 12;
     final UInt64 aggregationSlot = UInt64.valueOf(10);
     final int subnetId =
-        spec.computeSubnetForCommittee(
-            aggregationSlot, UInt64.valueOf(committeeId), COMMITTEES_AT_SLOT);
+        computeSubnetForCommittee(aggregationSlot, UInt64.valueOf(committeeId), COMMITTEES_AT_SLOT);
 
     subscriber.subscribeToCommitteeForAggregation(committeeId, COMMITTEES_AT_SLOT, aggregationSlot);
     subscriber.onSlot(aggregationSlot.plus(ONE));
@@ -69,7 +66,7 @@ class AttestationTopicSubscriberTest {
     final int committeeId = 16;
     final UInt64 aggregationSlot = UInt64.valueOf(10);
     final int subnetId =
-        spec.computeSubnetForCommittee(ONE, UInt64.valueOf(committeeId), COMMITTEES_AT_SLOT);
+        computeSubnetForCommittee(ONE, UInt64.valueOf(committeeId), COMMITTEES_AT_SLOT);
 
     subscriber.subscribeToCommitteeForAggregation(subnetId, COMMITTEES_AT_SLOT, aggregationSlot);
     subscriber.onSlot(aggregationSlot);
@@ -83,12 +80,11 @@ class AttestationTopicSubscriberTest {
     final UInt64 firstSlot = UInt64.valueOf(10);
     final UInt64 secondSlot = UInt64.valueOf(18);
     final int subnetId =
-        spec.computeSubnetForCommittee(firstSlot, UInt64.valueOf(committeeId), COMMITTEES_AT_SLOT);
+        computeSubnetForCommittee(firstSlot, UInt64.valueOf(committeeId), COMMITTEES_AT_SLOT);
     // Sanity check second subscription is for the same subnet ID.
     assertThat(subnetId)
         .isEqualTo(
-            spec.computeSubnetForCommittee(
-                secondSlot, UInt64.valueOf(committeeId), COMMITTEES_AT_SLOT));
+            computeSubnetForCommittee(secondSlot, UInt64.valueOf(committeeId), COMMITTEES_AT_SLOT));
 
     subscriber.subscribeToCommitteeForAggregation(committeeId, COMMITTEES_AT_SLOT, firstSlot);
     subscriber.subscribeToCommitteeForAggregation(committeeId, COMMITTEES_AT_SLOT, secondSlot);
@@ -106,11 +102,10 @@ class AttestationTopicSubscriberTest {
     final UInt64 firstSlot = UInt64.valueOf(10);
     final UInt64 secondSlot = UInt64.valueOf(18);
     final int subnetId =
-        spec.computeSubnetForCommittee(firstSlot, UInt64.valueOf(committeeId), COMMITTEES_AT_SLOT);
+        computeSubnetForCommittee(firstSlot, UInt64.valueOf(committeeId), COMMITTEES_AT_SLOT);
     // Sanity check the two subscriptions are for the same subnet
     assertThat(
-            spec.computeSubnetForCommittee(
-                secondSlot, UInt64.valueOf(committeeId), COMMITTEES_AT_SLOT))
+            computeSubnetForCommittee(secondSlot, UInt64.valueOf(committeeId), COMMITTEES_AT_SLOT))
         .isEqualTo(subnetId);
 
     subscriber.subscribeToCommitteeForAggregation(committeeId, COMMITTEES_AT_SLOT, secondSlot);
@@ -148,10 +143,10 @@ class AttestationTopicSubscriberTest {
 
     verify(eth2P2PNetwork)
         .subscribeToAttestationSubnetId(
-            spec.computeSubnetForCommittee(someSlot, UInt64.valueOf(1), COMMITTEES_AT_SLOT));
+            computeSubnetForCommittee(someSlot, UInt64.valueOf(1), COMMITTEES_AT_SLOT));
     verify(eth2P2PNetwork)
         .subscribeToAttestationSubnetId(
-            spec.computeSubnetForCommittee(someSlot, UInt64.valueOf(2), COMMITTEES_AT_SLOT));
+            computeSubnetForCommittee(someSlot, UInt64.valueOf(2), COMMITTEES_AT_SLOT));
 
     subscriber.subscribeToPersistentSubnets(subnetSubscription);
 
@@ -184,7 +179,7 @@ class AttestationTopicSubscriberTest {
     final UInt64 firstSlot = UInt64.valueOf(10);
     final UInt64 secondSlot = UInt64.valueOf(15);
     final int subnetId =
-        spec.computeSubnetForCommittee(secondSlot, UInt64.valueOf(committeeId), COMMITTEES_AT_SLOT);
+        computeSubnetForCommittee(secondSlot, UInt64.valueOf(committeeId), COMMITTEES_AT_SLOT);
     subscriber.subscribeToCommitteeForAggregation(committeeId, COMMITTEES_AT_SLOT, secondSlot);
     Set<SubnetSubscription> subnetSubscriptions =
         Set.of(new SubnetSubscription(subnetId, firstSlot));

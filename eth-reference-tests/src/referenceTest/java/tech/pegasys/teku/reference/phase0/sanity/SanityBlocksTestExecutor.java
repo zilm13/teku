@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import tech.pegasys.teku.bls.BLSSignatureVerifier;
 import tech.pegasys.teku.ethtests.finder.TestDefinition;
 import tech.pegasys.teku.reference.BlsSetting;
 import tech.pegasys.teku.reference.TestExecutor;
@@ -87,13 +86,7 @@ public class SanityBlocksTestExecutor implements TestExecutor {
     try {
       BeaconState result = preState;
       for (SignedBeaconBlock block : blocks) {
-        result =
-            spec.processBlock(
-                result,
-                block,
-                metaData.getBlsSetting() == IGNORED
-                    ? BLSSignatureVerifier.NO_OP
-                    : BLSSignatureVerifier.SIMPLE);
+        result = spec.initiateStateTransition(result, block, metaData.getBlsSetting() != IGNORED);
       }
       return result;
     } catch (StateTransitionException e) {

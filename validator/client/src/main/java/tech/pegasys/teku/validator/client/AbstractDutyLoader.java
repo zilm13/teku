@@ -15,27 +15,33 @@ package tech.pegasys.teku.validator.client;
 
 import java.util.Collection;
 import java.util.Optional;
+import java.util.function.Function;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.validator.client.duties.ScheduledDuties;
 import tech.pegasys.teku.validator.client.loader.OwnedValidators;
 
-public abstract class AbstractDutyLoader<D, S extends ScheduledDuties> implements DutyLoader<S> {
+public abstract class AbstractDutyLoader<D> implements DutyLoader {
 
   private static final Logger LOG = LogManager.getLogger();
+  protected final Function<Bytes32, ScheduledDuties> scheduledDutiesFactory;
   protected final OwnedValidators validators;
   private final ValidatorIndexProvider validatorIndexProvider;
 
   protected AbstractDutyLoader(
-      final OwnedValidators validators, final ValidatorIndexProvider validatorIndexProvider) {
+      final Function<Bytes32, ScheduledDuties> scheduledDutiesFactory,
+      final OwnedValidators validators,
+      final ValidatorIndexProvider validatorIndexProvider) {
+    this.scheduledDutiesFactory = scheduledDutiesFactory;
     this.validators = validators;
     this.validatorIndexProvider = validatorIndexProvider;
   }
 
   @Override
-  public SafeFuture<Optional<S>> loadDutiesForEpoch(final UInt64 epoch) {
+  public SafeFuture<Optional<ScheduledDuties>> loadDutiesForEpoch(final UInt64 epoch) {
     LOG.trace("Requesting attestation duties for epoch {}", epoch);
     return validatorIndexProvider
         .getValidatorIndices(validators.getPublicKeys())
@@ -51,7 +57,7 @@ public abstract class AbstractDutyLoader<D, S extends ScheduledDuties> implement
                               () ->
                                   new NodeDataUnavailableException(
                                       "Duties could not be calculated because chain data was not yet available")))
-                  .thenCompose(duties -> scheduleAllDuties(epoch, duties))
+                  .thenCompose(this::scheduleAllDuties)
                   .thenApply(Optional::of);
             });
   }
@@ -59,5 +65,5 @@ public abstract class AbstractDutyLoader<D, S extends ScheduledDuties> implement
   protected abstract SafeFuture<Optional<D>> requestDuties(
       final UInt64 epoch, final Collection<Integer> validatorIndices);
 
-  protected abstract SafeFuture<S> scheduleAllDuties(UInt64 epoch, D duties);
+  protected abstract SafeFuture<ScheduledDuties> scheduleAllDuties(final D duties);
 }

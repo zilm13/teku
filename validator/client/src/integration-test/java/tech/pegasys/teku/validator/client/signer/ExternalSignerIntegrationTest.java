@@ -20,6 +20,12 @@ import static org.mockserver.matchers.MatchType.STRICT;
 import static org.mockserver.model.HttpRequest.request;
 import static org.mockserver.model.HttpResponse.response;
 import static org.mockserver.model.JsonBody.json;
+import static tech.pegasys.teku.core.signatures.SigningRootUtil.signingRootForRandaoReveal;
+import static tech.pegasys.teku.core.signatures.SigningRootUtil.signingRootForSignAggregateAndProof;
+import static tech.pegasys.teku.core.signatures.SigningRootUtil.signingRootForSignAggregationSlot;
+import static tech.pegasys.teku.core.signatures.SigningRootUtil.signingRootForSignAttestationData;
+import static tech.pegasys.teku.core.signatures.SigningRootUtil.signingRootForSignBlock;
+import static tech.pegasys.teku.core.signatures.SigningRootUtil.signingRootForSignVoluntaryExit;
 import static tech.pegasys.teku.infrastructure.http.HttpStatusCodes.SC_PRECONDITION_FAILED;
 import static tech.pegasys.teku.validator.client.signer.ExternalSigner.slashableAttestationMessage;
 import static tech.pegasys.teku.validator.client.signer.ExternalSigner.slashableBlockMessage;
@@ -44,7 +50,6 @@ import tech.pegasys.teku.api.schema.Fork;
 import tech.pegasys.teku.bls.BLSKeyPair;
 import tech.pegasys.teku.bls.BLSSignature;
 import tech.pegasys.teku.bls.BLSTestUtil;
-import tech.pegasys.teku.core.signatures.SigningRootUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.ThrottlingTaskQueue;
 import tech.pegasys.teku.infrastructure.metrics.StubCounter;
@@ -74,7 +79,6 @@ public class ExternalSignerIntegrationTest {
   private final StubMetricsSystem metricsSystem = new StubMetricsSystem();
   private final ThrottlingTaskQueue queue =
       new ThrottlingTaskQueue(8, metricsSystem, TekuMetricCategory.VALIDATOR, "externalSignerTest");
-  private final SigningRootUtil signingRootUtil = new SigningRootUtil(spec);
 
   private ClientAndServer client;
   private ExternalSigner externalSigner;
@@ -197,7 +201,7 @@ public class ExternalSignerIntegrationTest {
 
     final SigningRequestBody signingRequestBody =
         new SigningRequestBody(
-            signingRootUtil.signingRootForSignBlock(block, fork),
+            signingRootForSignBlock(block, fork),
             SignType.BLOCK,
             Map.of(
                 "fork_info",
@@ -224,7 +228,7 @@ public class ExternalSignerIntegrationTest {
     assertThat(response).isEqualTo(expectedSignature);
     final SigningRequestBody signingRequestBody =
         new SigningRequestBody(
-            signingRootUtil.signingRootForSignAttestationData(attestationData, fork),
+            signingRootForSignAttestationData(attestationData, fork),
             SignType.ATTESTATION,
             Map.of(
                 "fork_info",
@@ -251,7 +255,7 @@ public class ExternalSignerIntegrationTest {
 
     final SigningRequestBody signingRequestBody =
         new SigningRequestBody(
-            signingRootUtil.signingRootForRandaoReveal(epoch, fork),
+            signingRootForRandaoReveal(epoch, fork),
             SignType.RANDAO_REVEAL,
             Map.of("fork_info", createForkInfo(), "randao_reveal", Map.of("epoch", epoch)));
     verifySignRequest(KEYPAIR.getPublicKey().toString(), signingRequestBody);
@@ -274,7 +278,7 @@ public class ExternalSignerIntegrationTest {
 
     final SigningRequestBody signingRequestBody =
         new SigningRequestBody(
-            signingRootUtil.signingRootForSignAggregationSlot(slot, fork),
+            signingRootForSignAggregationSlot(slot, fork),
             SignType.AGGREGATION_SLOT,
             Map.of("fork_info", createForkInfo(), "aggregation_slot", Map.of("slot", slot)));
     verifySignRequest(KEYPAIR.getPublicKey().toString(), signingRequestBody);
@@ -297,7 +301,7 @@ public class ExternalSignerIntegrationTest {
 
     final SigningRequestBody signingRequestBody =
         new SigningRequestBody(
-            signingRootUtil.signingRootForSignAggregateAndProof(aggregateAndProof, fork),
+            signingRootForSignAggregateAndProof(aggregateAndProof, fork),
             SignType.AGGREGATE_AND_PROOF,
             Map.of(
                 "fork_info",
@@ -321,7 +325,7 @@ public class ExternalSignerIntegrationTest {
 
     final SigningRequestBody signingRequestBody =
         new SigningRequestBody(
-            signingRootUtil.signingRootForSignVoluntaryExit(voluntaryExit, fork),
+            signingRootForSignVoluntaryExit(voluntaryExit, fork),
             SignType.VOLUNTARY_EXIT,
             Map.of(
                 "fork_info",

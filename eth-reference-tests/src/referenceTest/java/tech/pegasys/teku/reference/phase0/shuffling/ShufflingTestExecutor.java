@@ -15,6 +15,7 @@ package tech.pegasys.teku.reference.phase0.shuffling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static tech.pegasys.teku.reference.TestDataUtils.loadYaml;
+import static tech.pegasys.teku.spec.datastructures.util.CommitteeUtil.shuffle_list;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableMap;
@@ -41,7 +42,7 @@ public class ShufflingTestExecutor implements TestExecutor {
                     .isEqualTo(shufflingData.getMapping(index)));
 
     final int[] inputs = IntStream.range(0, shufflingData.getCount()).toArray();
-    miscHelpers.shuffleList(inputs, seed);
+    shuffle_list(inputs, seed);
     assertThat(inputs).isEqualTo(shufflingData.getMapping());
   }
 

@@ -22,18 +22,21 @@ import static tech.pegasys.teku.beaconrestapi.RestApiConstants.HEADER_ACCEPT_OCT
 import java.io.IOException;
 import okhttp3.Response;
 import org.apache.tuweni.bytes.Bytes;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.api.response.v1.debug.GetStateResponse;
 import tech.pegasys.teku.beaconrestapi.AbstractDataBackedRestAPIIntegrationTest;
 import tech.pegasys.teku.beaconrestapi.handlers.v1.debug.GetState;
-import tech.pegasys.teku.spec.SpecMilestone;
 import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
 
 public class GetStateIntegrationTest extends AbstractDataBackedRestAPIIntegrationTest {
+  @BeforeEach
+  public void setup() {
+    startRestAPIAtGenesis();
+  }
 
   @Test
   public void shouldGetStateAsJson() throws IOException {
-    startRestAPIAtGenesis(SpecMilestone.PHASE0);
     final Response response = get("head", HEADER_ACCEPT_JSON);
     assertThat(response.code()).isEqualTo(SC_OK);
     final GetStateResponse stateResponse =
@@ -43,7 +46,6 @@ public class GetStateIntegrationTest extends AbstractDataBackedRestAPIIntegratio
 
   @Test
   public void shouldGetStateAsJsonWithoutHeader() throws IOException {
-    startRestAPIAtGenesis(SpecMilestone.PHASE0);
     final Response response = get("head");
     assertThat(response.code()).isEqualTo(SC_OK);
     final GetStateResponse stateResponse =
@@ -53,7 +55,6 @@ public class GetStateIntegrationTest extends AbstractDataBackedRestAPIIntegratio
 
   @Test
   public void shouldGetStateAsOctetStream() throws IOException {
-    startRestAPIAtGenesis(SpecMilestone.PHASE0);
     final Response response = get("head", HEADER_ACCEPT_OCTET);
     assertThat(response.code()).isEqualTo(SC_OK);
     final BeaconState state =
@@ -64,9 +65,8 @@ public class GetStateIntegrationTest extends AbstractDataBackedRestAPIIntegratio
   }
 
   @Test
-  public void shouldRejectAltairStateRequestsForJson() throws IOException {
-    startRestAPIAtGenesis(SpecMilestone.ALTAIR);
-    final Response response = get("head");
+  public void shouldRejectUnsupportedAcceptTypes() throws IOException {
+    final Response response = get("head", "invalid");
     assertThat(response.code()).isEqualTo(SC_BAD_REQUEST);
   }
 

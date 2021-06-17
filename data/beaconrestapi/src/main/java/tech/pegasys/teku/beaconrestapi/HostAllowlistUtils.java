@@ -22,17 +22,13 @@ import java.util.Optional;
 
 public class HostAllowlistUtils {
 
-  public static boolean isHostAuthorized(final List<String> allowlist, String hostHeader) {
+  static boolean isHostAuthorized(final List<String> allowlist, String hostHeader) {
     Optional<String> optionalHost = getAndValidateHostHeader(hostHeader);
     return allowlist.contains("*")
         || (optionalHost.isPresent() && hostIsInAllowlist(allowlist, optionalHost.get()));
   }
 
   static Optional<String> getAndValidateHostHeader(final String hostHeader) {
-    if (hostHeader == null || hostHeader.isBlank()) {
-      return Optional.empty();
-    }
-
     final Iterable<String> splitHostHeader = Splitter.on(':').split(hostHeader);
     final long hostPieces = stream(splitHostHeader).count();
     if (hostPieces > 1) {
@@ -46,6 +42,6 @@ public class HostAllowlistUtils {
 
   static boolean hostIsInAllowlist(final List<String> allowlist, final String hostHeader) {
     return allowlist.stream()
-        .anyMatch(allowlistEntry -> allowlistEntry.equalsIgnoreCase(hostHeader));
+        .anyMatch(allowlistEntry -> allowlistEntry.toLowerCase().equals(hostHeader.toLowerCase()));
   }
 }

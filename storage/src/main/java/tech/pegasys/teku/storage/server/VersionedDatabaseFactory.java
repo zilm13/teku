@@ -25,15 +25,14 @@ import org.apache.logging.log4j.Logger;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.spec.datastructures.eth1.Eth1Address;
-import tech.pegasys.teku.storage.server.kvstore.KvStoreConfiguration;
-import tech.pegasys.teku.storage.server.kvstore.schema.V4SchemaHot;
-import tech.pegasys.teku.storage.server.kvstore.schema.V6SchemaFinalized;
-import tech.pegasys.teku.storage.server.leveldb.LevelDbDatabaseFactory;
 import tech.pegasys.teku.storage.server.metadata.V5DatabaseMetadata;
 import tech.pegasys.teku.storage.server.metadata.V6DatabaseMetadata;
 import tech.pegasys.teku.storage.server.network.DatabaseNetwork;
 import tech.pegasys.teku.storage.server.noop.NoOpDatabase;
-import tech.pegasys.teku.storage.server.rocksdb.RocksDbDatabaseFactory;
+import tech.pegasys.teku.storage.server.rocksdb.RocksDbConfiguration;
+import tech.pegasys.teku.storage.server.rocksdb.RocksDbDatabase;
+import tech.pegasys.teku.storage.server.rocksdb.schema.V4SchemaHot;
+import tech.pegasys.teku.storage.server.rocksdb.schema.V6SchemaFinalized;
 
 public class VersionedDatabaseFactory implements DatabaseFactory {
   private static final Logger LOG = LogManager.getLogger();
@@ -216,10 +215,10 @@ public class VersionedDatabaseFactory implements DatabaseFactory {
     try {
       DatabaseNetwork.init(
           getNetworkFile(), spec.getGenesisSpecConfig().getGenesisForkVersion(), eth1Address);
-      return RocksDbDatabaseFactory.createV4(
+      return RocksDbDatabase.createV4(
           metricsSystem,
-          KvStoreConfiguration.v4Settings(dbDirectory.toPath()),
-          KvStoreConfiguration.v4Settings(v5ArchiveDirectory.toPath()),
+          RocksDbConfiguration.v4Settings(dbDirectory.toPath()),
+          RocksDbConfiguration.v4Settings(v5ArchiveDirectory.toPath()),
           stateStorageMode,
           stateStorageFrequency,
           storeNonCanonicalBlocks,
@@ -240,7 +239,7 @@ public class VersionedDatabaseFactory implements DatabaseFactory {
           V5DatabaseMetadata.init(getMetadataFile(), V5DatabaseMetadata.v5Defaults());
       DatabaseNetwork.init(
           getNetworkFile(), spec.getGenesisSpecConfig().getGenesisForkVersion(), eth1Address);
-      return RocksDbDatabaseFactory.createV4(
+      return RocksDbDatabase.createV4(
           metricsSystem,
           metaData.getHotDbConfiguration().withDatabaseDir(dbDirectory.toPath()),
           metaData.getArchiveDbConfiguration().withDatabaseDir(v5ArchiveDirectory.toPath()),
@@ -275,12 +274,12 @@ public class VersionedDatabaseFactory implements DatabaseFactory {
       DatabaseNetwork.init(
           getNetworkFile(), spec.getGenesisSpecConfig().getGenesisForkVersion(), eth1Address);
 
-      final KvStoreConfiguration hotOrSingleDBConfiguration =
+      final RocksDbConfiguration hotOrSingleDBConfiguration =
           metaData.isSingleDB()
               ? metaData.getSingleDbConfiguration().get().getConfiguration()
               : metaData.getSeparateDbConfiguration().get().getHotDbConfiguration();
 
-      final Optional<KvStoreConfiguration> finalizedConfiguration =
+      final Optional<RocksDbConfiguration> finalizedConfiguration =
           v6ArchiveDirectory.map(
               dir ->
                   metaData
@@ -289,7 +288,7 @@ public class VersionedDatabaseFactory implements DatabaseFactory {
                       .getArchiveDbConfiguration()
                       .withDatabaseDir(dir.toPath()));
 
-      return RocksDbDatabaseFactory.createV6(
+      return RocksDbDatabase.createV6(
           metricsSystem,
           hotOrSingleDBConfiguration.withDatabaseDir(dbDirectory.toPath()),
           finalizedConfiguration,
@@ -315,7 +314,7 @@ public class VersionedDatabaseFactory implements DatabaseFactory {
           V5DatabaseMetadata.init(getMetadataFile(), V5DatabaseMetadata.v5Defaults());
       DatabaseNetwork.init(
           getNetworkFile(), spec.getGenesisSpecConfig().getGenesisForkVersion(), eth1Address);
-      return LevelDbDatabaseFactory.createLevelDb(
+      return RocksDbDatabase.createLevelDb(
           metricsSystem,
           metaData.getHotDbConfiguration().withDatabaseDir(dbDirectory.toPath()),
           metaData.getArchiveDbConfiguration().withDatabaseDir(v5ArchiveDirectory.toPath()),
@@ -350,12 +349,12 @@ public class VersionedDatabaseFactory implements DatabaseFactory {
       DatabaseNetwork.init(
           getNetworkFile(), spec.getGenesisSpecConfig().getGenesisForkVersion(), eth1Address);
 
-      final KvStoreConfiguration hotOrSingleDBConfiguration =
+      final RocksDbConfiguration hotOrSingleDBConfiguration =
           metaData.isSingleDB()
               ? metaData.getSingleDbConfiguration().orElseThrow().getConfiguration()
               : metaData.getSeparateDbConfiguration().orElseThrow().getHotDbConfiguration();
 
-      final Optional<KvStoreConfiguration> finalizedConfiguration =
+      final Optional<RocksDbConfiguration> finalizedConfiguration =
           v6ArchiveDirectory.map(
               dir ->
                   metaData
@@ -364,7 +363,7 @@ public class VersionedDatabaseFactory implements DatabaseFactory {
                       .getArchiveDbConfiguration()
                       .withDatabaseDir(dir.toPath()));
 
-      return LevelDbDatabaseFactory.createLevelDbV2(
+      return RocksDbDatabase.createLevelDbV2(
           metricsSystem,
           hotOrSingleDBConfiguration.withDatabaseDir(dbDirectory.toPath()),
           finalizedConfiguration,

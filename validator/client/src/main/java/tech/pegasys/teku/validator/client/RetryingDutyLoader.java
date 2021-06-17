@@ -24,26 +24,26 @@ import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.validator.api.NodeSyncingException;
 import tech.pegasys.teku.validator.client.duties.ScheduledDuties;
 
-public class RetryingDutyLoader<S extends ScheduledDuties> implements DutyLoader<S> {
+public class RetryingDutyLoader implements DutyLoader {
   private static final Logger LOG = LogManager.getLogger();
 
-  private final DutyLoader<S> delegate;
+  private final DutyLoader delegate;
   private final AsyncRunner asyncRunner;
 
-  public RetryingDutyLoader(final AsyncRunner asyncRunner, final DutyLoader<S> delegate) {
+  public RetryingDutyLoader(final AsyncRunner asyncRunner, final DutyLoader delegate) {
     this.delegate = delegate;
     this.asyncRunner = asyncRunner;
   }
 
   @Override
-  public SafeFuture<Optional<S>> loadDutiesForEpoch(final UInt64 epoch) {
-    final SafeFuture<Optional<S>> duties = new SafeFuture<>();
+  public SafeFuture<Optional<ScheduledDuties>> loadDutiesForEpoch(final UInt64 epoch) {
+    final SafeFuture<Optional<ScheduledDuties>> duties = new SafeFuture<>();
     requestDuties(epoch, duties).propagateTo(duties);
     return duties;
   }
 
-  private SafeFuture<Optional<S>> requestDuties(
-      final UInt64 epoch, final SafeFuture<Optional<S>> cancellable) {
+  private SafeFuture<Optional<ScheduledDuties>> requestDuties(
+      final UInt64 epoch, final SafeFuture<Optional<ScheduledDuties>> cancellable) {
     LOG.trace("Request duties for epoch {}", epoch);
     return delegate
         .loadDutiesForEpoch(epoch)

@@ -86,7 +86,7 @@ class BalanceAttackMitigationForkChoiceTriggerTest {
   }
 
   @Test
-  void prepareForBlockProduction_shouldBeCompleteWhenLastForkChoiceForLaterSlot() {
+  void requireForkChoiceCompleteForSlot_shouldBeCompleteWhenLastForkChoiceForLaterSlot() {
     trigger.onSlotStartedWhileSyncing(UInt64.valueOf(3));
 
     final SafeFuture<Void> result = trigger.prepareForBlockProduction(UInt64.ONE);
@@ -94,7 +94,7 @@ class BalanceAttackMitigationForkChoiceTriggerTest {
   }
 
   @Test
-  void prepareForBlockProduction_shouldCompleteWhenCurrentRunCompletesIfSlotIsTheSame() {
+  void requireForkChoiceCompleteForSlot_shouldCompleteWhenCurrentRunCompletesIfSlotIsTheSame() {
     trigger.onSlotStartedWhileSyncing(UInt64.valueOf(2));
     verify(forkChoice).processHead(UInt64.ONE);
 
@@ -107,7 +107,7 @@ class BalanceAttackMitigationForkChoiceTriggerTest {
   }
 
   @Test
-  void prepareForBlockProduction_shouldRunForkChoiceWhenSlotIsGreaterThanLastRun() {
+  void requiredForkChoiceCompleteForSlot_shouldRunForkChoiceWhenSlotIsGreaterThanLastRun() {
     trigger.onSlotStartedWhileSyncing(UInt64.ONE);
     verify(forkChoice).processHead(UInt64.ZERO);
 

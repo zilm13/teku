@@ -75,7 +75,7 @@ public class ValidatorStatusFactoryPhase0 extends AbstractValidatorStatusFactory
                   updates.previousEpochTargetAttester = true;
 
                   updates.previousEpochHeadAttester =
-                      beaconStateAccessors
+                      beaconStateUtil
                           .getBlockRootAtSlot(state, data.getSlot())
                           .equals(data.getBeacon_block_root());
                 }

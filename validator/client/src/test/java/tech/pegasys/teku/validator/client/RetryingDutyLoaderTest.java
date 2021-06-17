@@ -30,15 +30,11 @@ import tech.pegasys.teku.validator.client.duties.ScheduledDuties;
 class RetryingDutyLoaderTest {
 
   private final StubAsyncRunner asyncRunner = new StubAsyncRunner();
-
-  @SuppressWarnings("unchecked")
-  private final DutyLoader<ScheduledDuties> delegate = mock(DutyLoader.class);
-
+  private final DutyLoader delegate = mock(DutyLoader.class);
   private final ScheduledDuties scheduledDuties = mock(ScheduledDuties.class);
   private final Optional<ScheduledDuties> scheduledDutiesOptional = Optional.of(scheduledDuties);
 
-  private final RetryingDutyLoader<ScheduledDuties> dutyLoader =
-      new RetryingDutyLoader<>(asyncRunner, delegate);
+  private final RetryingDutyLoader dutyLoader = new RetryingDutyLoader(asyncRunner, delegate);
 
   @Test
   public void shouldReturnDutiesWhenLoadedSuccessfully() {

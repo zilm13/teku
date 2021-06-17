@@ -24,15 +24,12 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.core.ChainBuilder;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.spec.Spec;
-import tech.pegasys.teku.spec.TestSpecFactory;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBlockAndState;
 import tech.pegasys.teku.spec.datastructures.hashtree.HashTree;
 
 public class BlockTreeTest {
-  private final Spec spec = TestSpecFactory.createDefault();
-  final ChainBuilder chainBuilder = ChainBuilder.create(spec);
+  final ChainBuilder chainBuilder = ChainBuilder.createDefault();
 
   @Test
   public void create_missingSlotLookup() {

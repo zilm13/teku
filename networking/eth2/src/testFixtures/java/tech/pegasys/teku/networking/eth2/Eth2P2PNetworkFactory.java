@@ -51,7 +51,6 @@ import tech.pegasys.teku.networking.eth2.gossip.forks.GossipForkManager;
 import tech.pegasys.teku.networking.eth2.gossip.forks.versions.GossipForkSubscriptionsPhase0;
 import tech.pegasys.teku.networking.eth2.gossip.subnets.AttestationSubnetTopicProvider;
 import tech.pegasys.teku.networking.eth2.gossip.subnets.PeerSubnetSubscriptions;
-import tech.pegasys.teku.networking.eth2.gossip.subnets.SyncCommitteeSubnetTopicProvider;
 import tech.pegasys.teku.networking.eth2.gossip.topics.Eth2GossipTopicFilter;
 import tech.pegasys.teku.networking.eth2.gossip.topics.OperationProcessor;
 import tech.pegasys.teku.networking.eth2.gossip.topics.ProcessedAttestationSubscriptionProvider;
@@ -78,7 +77,6 @@ import tech.pegasys.teku.spec.datastructures.operations.AttesterSlashing;
 import tech.pegasys.teku.spec.datastructures.operations.ProposerSlashing;
 import tech.pegasys.teku.spec.datastructures.operations.SignedVoluntaryExit;
 import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
-import tech.pegasys.teku.spec.schemas.SchemaDefinitionsSupplier;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
 import tech.pegasys.teku.statetransition.block.VerifiedBlockOperationsListener;
 import tech.pegasys.teku.storage.api.StorageQueryChannel;
@@ -91,7 +89,7 @@ import tech.pegasys.teku.util.config.Constants;
 
 public class Eth2P2PNetworkFactory {
 
-  private static final Logger LOG = LogManager.getLogger();
+  protected static final Logger LOG = LogManager.getLogger();
   protected static final NoOpMetricsSystem METRICS_SYSTEM = new NoOpMetricsSystem();
   private static final int MIN_PORT = 6000;
   private static final int MAX_PORT = 9000;
@@ -127,8 +125,7 @@ public class Eth2P2PNetworkFactory {
     protected ProcessedAttestationSubscriptionProvider processedAttestationSubscriptionProvider;
     protected VerifiedBlockAttestationsSubscriptionProvider
         verifiedBlockAttestationsSubscriptionProvider;
-    protected Function<RpcMethod<?, ?, ?>, Stream<RpcMethod<?, ?, ?>>> rpcMethodsModifier =
-        Stream::of;
+    protected Function<RpcMethod, Stream<RpcMethod>> rpcMethodsModifier = Stream::of;
     protected List<PeerHandler> peerHandlers = new ArrayList<>();
     protected RpcEncoding rpcEncoding = RpcEncoding.SSZ_SNAPPY;
     protected GossipEncoding gossipEncoding = GossipEncoding.SSZ_SNAPPY;
@@ -175,9 +172,7 @@ public class Eth2P2PNetworkFactory {
     protected Eth2P2PNetwork buildNetwork(final P2PConfig config) {
       {
         // Setup eth2 handlers
-        final SubnetSubscriptionService attestationSubnetService = new SubnetSubscriptionService();
-        final SubnetSubscriptionService syncCommitteeSubnetService =
-            new SubnetSubscriptionService();
+        final AttestationSubnetService attestationSubnetService = new AttestationSubnetService();
         final Eth2PeerManager eth2PeerManager =
             Eth2PeerManager.create(
                 asyncRunner,
@@ -185,7 +180,6 @@ public class Eth2P2PNetworkFactory {
                 historicalChainData,
                 METRICS_SYSTEM,
                 attestationSubnetService,
-                syncCommitteeSubnetService,
                 rpcEncoding,
                 requiredCheckpoint,
                 eth2RpcPingInterval,
@@ -196,7 +190,7 @@ public class Eth2P2PNetworkFactory {
                 50,
                 spec);
 
-        List<RpcMethod<?, ?, ?>> rpcMethods =
+        List<RpcMethod> rpcMethods =
             eth2PeerManager.getBeaconChainMethods().all().stream()
                 .flatMap(rpcMethodsModifier)
                 .collect(toList());
@@ -209,10 +203,8 @@ public class Eth2P2PNetworkFactory {
                 metricsSystem,
                 StubTimeProvider.withTimeInSeconds(1000),
                 Constants.REPUTATION_MANAGER_CAPACITY);
-        final AttestationSubnetTopicProvider attestationSubnetTopicProvider =
+        final AttestationSubnetTopicProvider subnetTopicProvider =
             new AttestationSubnetTopicProvider(recentChainData, gossipEncoding);
-        final SyncCommitteeSubnetTopicProvider syncCommitteeTopicProvider =
-            new SyncCommitteeSubnetTopicProvider(recentChainData, gossipEncoding);
         final GossipTopicFilter gossipTopicsFilter =
             new Eth2GossipTopicFilter(recentChainData, gossipEncoding, spec);
         final KeyValueStore<String, Bytes> keyValueStore = new MemKeyValueStore<>();
@@ -222,8 +214,6 @@ public class Eth2P2PNetworkFactory {
                 discoConfig.getMinPeers(),
                 discoConfig.getMaxPeers(),
                 discoConfig.getMinRandomlySelectedPeers());
-        final SchemaDefinitionsSupplier currentSchemaDefinitions =
-            () -> config.getSpec().getGenesisSchemaDefinitions();
         final DiscoveryNetwork<?> network =
             DiscoveryNetwork.create(
                 metricsSystem,
@@ -243,24 +233,20 @@ public class Eth2P2PNetworkFactory {
                     targetPeerRange,
                     gossipNetwork ->
                         PeerSubnetSubscriptions.create(
-                            currentSchemaDefinitions,
                             gossipNetwork,
-                            attestationSubnetTopicProvider,
-                            syncCommitteeTopicProvider,
-                            syncCommitteeSubnetService,
+                            subnetTopicProvider,
                             config.getTargetSubnetSubscriberCount()),
                     reputationManager,
                     Collections::shuffle),
                 config.getDiscoveryConfig(),
                 config.getNetworkConfig(),
-                config.getSpec(),
-                currentSchemaDefinitions);
+                config.getSpec());
 
         final GossipForkManager.Builder gossipForkManagerBuilder =
             GossipForkManager.builder().spec(spec).recentChainData(recentChainData);
         gossipForkManagerBuilder.fork(
             new GossipForkSubscriptionsPhase0(
-                spec.getForkSchedule().getFork(UInt64.ZERO),
+                spec.getForkManifest().get(UInt64.ZERO),
                 spec,
                 asyncRunner,
                 metricsSystem,
@@ -287,7 +273,6 @@ public class Eth2P2PNetworkFactory {
             eventChannels,
             recentChainData,
             attestationSubnetService,
-            syncCommitteeSubnetService,
             gossipEncoding,
             GossipConfigurator.NOOP,
             processedAttestationSubscriptionProvider);
@@ -520,7 +505,7 @@ public class Eth2P2PNetworkFactory {
     }
 
     public Eth2P2PNetworkBuilder rpcMethodsModifier(
-        Function<RpcMethod<?, ?, ?>, Stream<RpcMethod<?, ?, ?>>> rpcMethodsModifier) {
+        Function<RpcMethod, Stream<RpcMethod>> rpcMethodsModifier) {
       checkNotNull(rpcMethodsModifier);
       this.rpcMethodsModifier = rpcMethodsModifier;
       return this;

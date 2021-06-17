@@ -102,11 +102,6 @@ class EventSourceHandler implements EventHandler {
 
   private void handleHeadEvent(final String data) throws JsonProcessingException {
     final HeadEvent headEvent = jsonProvider.jsonToObject(data, HeadEvent.class);
-    validatorTimingChannel.onHeadUpdate(
-        headEvent.slot,
-        headEvent.previousDutyDependentRoot,
-        headEvent.currentDutyDependentRoot,
-        headEvent.block);
     validatorTimingChannel.onAttestationCreationDue(headEvent.slot);
   }
 

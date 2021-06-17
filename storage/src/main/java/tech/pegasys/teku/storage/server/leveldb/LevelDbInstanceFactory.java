@@ -23,19 +23,19 @@ import org.hyperledger.besu.plugin.services.metrics.MetricCategory;
 import org.iq80.leveldb.DB;
 import org.iq80.leveldb.Options;
 import tech.pegasys.teku.storage.server.DatabaseStorageException;
-import tech.pegasys.teku.storage.server.kvstore.KvStoreAccessor;
-import tech.pegasys.teku.storage.server.kvstore.KvStoreConfiguration;
-import tech.pegasys.teku.storage.server.kvstore.schema.KvStoreColumn;
+import tech.pegasys.teku.storage.server.rocksdb.RocksDbConfiguration;
+import tech.pegasys.teku.storage.server.rocksdb.core.RocksDbAccessor;
+import tech.pegasys.teku.storage.server.rocksdb.schema.RocksDbColumn;
 
 public class LevelDbInstanceFactory {
-  public static KvStoreAccessor create(
+  public static RocksDbAccessor create(
       final MetricsSystem metricsSystem,
       final MetricCategory metricCategory,
-      final KvStoreConfiguration configuration,
-      final Collection<KvStoreColumn<?, ?>> columns)
+      final RocksDbConfiguration configuration,
+      final Collection<RocksDbColumn<?, ?>> columns)
       throws DatabaseStorageException {
     checkArgument(
-        columns.stream().map(KvStoreColumn::getId).distinct().count() == columns.size(),
+        columns.stream().map(RocksDbColumn::getId).distinct().count() == columns.size(),
         "Column IDs are not distinct");
     final Options options =
         new Options().createIfMissing(true).maxOpenFiles(configuration.getMaxOpenFiles());

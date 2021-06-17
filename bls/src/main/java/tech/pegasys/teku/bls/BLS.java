@@ -31,6 +31,7 @@ import tech.pegasys.teku.bls.impl.DeserializeException;
 import tech.pegasys.teku.bls.impl.PublicKey;
 import tech.pegasys.teku.bls.impl.PublicKeyMessagePair;
 import tech.pegasys.teku.bls.impl.blst.BlstLoader;
+import tech.pegasys.teku.bls.impl.mikuli.MikuliBLS12381;
 
 /**
  * Implements the standard BLS functions used in Eth2 as defined in
@@ -59,7 +60,8 @@ public class BLS {
       BLS_IMPL = BlstLoader.INSTANCE.get();
       LOG.info("BLS: loaded BLST library");
     } else {
-      throw new RuntimeException("Failed to load Blst library.");
+      BLS_IMPL = MikuliBLS12381.INSTANCE;
+      LOG.info("BLS: loaded Mikuli library");
     }
   }
 

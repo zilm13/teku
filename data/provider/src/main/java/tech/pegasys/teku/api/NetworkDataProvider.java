@@ -18,7 +18,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import tech.pegasys.teku.api.response.v1.node.Direction;
 import tech.pegasys.teku.api.response.v1.node.State;
-import tech.pegasys.teku.api.response.v1.teku.PeerScore;
 import tech.pegasys.teku.api.schema.Metadata;
 import tech.pegasys.teku.networking.eth2.Eth2P2PNetwork;
 import tech.pegasys.teku.networking.eth2.peers.Eth2Peer;
@@ -84,10 +83,6 @@ public class NetworkDataProvider {
     return network.streamPeers().map(this::toPeer).collect(Collectors.toList());
   }
 
-  public List<PeerScore> getPeerScores() {
-    return network.streamPeers().map(this::toPeerScore).collect(Collectors.toList());
-  }
-
   public Optional<tech.pegasys.teku.api.response.v1.node.Peer> getPeerById(final String peerId) {
     final NodeId nodeId = network.parseNodeId(peerId);
     return network.getPeer(nodeId).map(this::toPeer);
@@ -101,12 +96,5 @@ public class NetworkDataProvider {
         eth2Peer.connectionInitiatedLocally() ? Direction.outbound : Direction.inbound;
 
     return new tech.pegasys.teku.api.response.v1.node.Peer(peerId, null, address, state, direction);
-  }
-
-  private <R> PeerScore toPeerScore(final Eth2Peer eth2Peer) {
-    final String peerId = eth2Peer.getId().toBase58();
-    final Double gossipScore = eth2Peer.getGossipScore();
-
-    return new PeerScore(peerId, gossipScore);
   }
 }

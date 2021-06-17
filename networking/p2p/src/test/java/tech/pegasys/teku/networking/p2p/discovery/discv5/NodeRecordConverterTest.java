@@ -16,8 +16,8 @@ package tech.pegasys.teku.networking.p2p.discovery.discv5;
 import static org.assertj.core.api.Assertions.assertThat;
 import static tech.pegasys.teku.networking.p2p.discovery.DiscoveryNetwork.ATTESTATION_SUBNET_ENR_FIELD;
 import static tech.pegasys.teku.networking.p2p.discovery.DiscoveryNetwork.ETH2_ENR_FIELD;
-import static tech.pegasys.teku.networking.p2p.discovery.DiscoveryNetwork.SYNC_COMMITTEE_SUBNET_ENR_FIELD;
 import static tech.pegasys.teku.networking.p2p.discovery.discv5.NodeRecordConverter.convertToDiscoveryPeer;
+import static tech.pegasys.teku.util.config.Constants.ATTESTATION_SUBNET_COUNT;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -32,29 +32,21 @@ import org.ethereum.beacon.discovery.schema.NodeRecord;
 import org.ethereum.beacon.discovery.schema.NodeRecordFactory;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.networking.p2p.discovery.DiscoveryPeer;
-import tech.pegasys.teku.spec.Spec;
-import tech.pegasys.teku.spec.TestSpecFactory;
 import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.EnrForkId;
-import tech.pegasys.teku.spec.schemas.SchemaDefinitions;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.ssz.collections.SszBitvector;
 import tech.pegasys.teku.ssz.schema.collections.SszBitvectorSchema;
 
 class NodeRecordConverterTest {
 
-  private static final Spec SPEC = TestSpecFactory.createMinimalAltair();
-  private static final SchemaDefinitions SCHEMA_DEFINITIONS = SPEC.getGenesisSchemaDefinitions();
   private static final Bytes PUB_KEY =
       Bytes.fromHexString("0x0295A5A50F083697FF8557F3C6FE0CDF8E8EC2141D15F19A5A45571ED9C38CE181");
   private static final Bytes IPV6_LOCALHOST =
       Bytes.fromHexString("0x00000000000000000000000000000001");
   private static final Optional<EnrForkId> ENR_FORK_ID = Optional.empty();
   private static final SszBitvectorSchema<?> ATT_SUBNET_SCHEMA =
-      SCHEMA_DEFINITIONS.getAttnetsENRFieldSchema();
-  private static final SszBitvector ATTNETS = ATT_SUBNET_SCHEMA.getDefault();
-  private static final SszBitvectorSchema<?> SYNCNETS_SCHEMA =
-      SCHEMA_DEFINITIONS.getSyncnetsENRFieldSchema();
-  private static final SszBitvector SYNCNETS = SYNCNETS_SCHEMA.getDefault();
+      SszBitvectorSchema.create(ATTESTATION_SUBNET_COUNT);
+  private static final SszBitvector PERSISTENT_SUBNETS = ATT_SUBNET_SCHEMA.getDefault();
 
   @Test
   public void shouldConvertRealEnrToDiscoveryPeer() throws Exception {
@@ -69,9 +61,8 @@ class NodeRecordConverterTest {
                 "0x03B86ED9F747A7FA99963F39E3B176B45E9E863108A2D145EA3A4E76D8D0935194"),
             new InetSocketAddress(InetAddress.getByAddress(new byte[] {127, 0, 0, 1}), 9000),
             Optional.empty(),
-            ATTNETS,
-            SYNCNETS);
-    assertThat(convertToDiscoveryPeer(nodeRecord, SCHEMA_DEFINITIONS)).contains(expectedPeer);
+            PERSISTENT_SUBNETS);
+    assertThat(convertToDiscoveryPeer(nodeRecord)).contains(expectedPeer);
   }
 
   @Test
@@ -103,7 +94,7 @@ class NodeRecordConverterTest {
                 new EnrField(EnrField.IP_V6, IPV6_LOCALHOST), new EnrField(EnrField.TCP, 30303)))
         .contains(
             new DiscoveryPeer(
-                PUB_KEY, new InetSocketAddress("::1", 30303), ENR_FORK_ID, ATTNETS, SYNCNETS));
+                PUB_KEY, new InetSocketAddress("::1", 30303), ENR_FORK_ID, PERSISTENT_SUBNETS));
   }
 
   @Test
@@ -132,8 +123,7 @@ class NodeRecordConverterTest {
                 PUB_KEY,
                 new InetSocketAddress("129.24.31.22", 1234),
                 ENR_FORK_ID,
-                ATTNETS,
-                SYNCNETS));
+                PERSISTENT_SUBNETS));
   }
 
   @Test
@@ -144,11 +134,11 @@ class NodeRecordConverterTest {
     assertThat(result)
         .contains(
             new DiscoveryPeer(
-                PUB_KEY, new InetSocketAddress("::1", 1234), ENR_FORK_ID, ATTNETS, SYNCNETS));
+                PUB_KEY, new InetSocketAddress("::1", 1234), ENR_FORK_ID, PERSISTENT_SUBNETS));
   }
 
   @Test
-  public void shouldConvertAttnets() {
+  public void shouldConvertPersistentSubnetsList() {
     SszBitvector persistentSubnets = ATT_SUBNET_SCHEMA.ofBits(1, 8, 14, 32);
     Bytes encodedPersistentSubnets = persistentSubnets.sszSerialize();
     final Optional<DiscoveryPeer> result =
@@ -159,15 +149,11 @@ class NodeRecordConverterTest {
     assertThat(result)
         .contains(
             new DiscoveryPeer(
-                PUB_KEY,
-                new InetSocketAddress("::1", 1234),
-                ENR_FORK_ID,
-                persistentSubnets,
-                SYNCNETS));
+                PUB_KEY, new InetSocketAddress("::1", 1234), ENR_FORK_ID, persistentSubnets));
   }
 
   @Test
-  public void shouldUseEmptyAttnetsWhenFieldValueIsInvalid() {
+  public void shouldUseEmptySubnetListWhenFieldValueIsInvalid() {
     SszBitvector persistentSubnets = SszBitvectorSchema.create(4).ofBits(1, 2); // Incorrect length
     Bytes encodedPersistentSubnets = persistentSubnets.sszSerialize();
     final Optional<DiscoveryPeer> result =
@@ -181,40 +167,7 @@ class NodeRecordConverterTest {
                 PUB_KEY,
                 new InetSocketAddress("::1", 1234),
                 ENR_FORK_ID,
-                ATT_SUBNET_SCHEMA.getDefault(),
-                SYNCNETS));
-  }
-
-  @Test
-  public void shouldConvertSyncnets() {
-    SszBitvector syncnets = SYNCNETS_SCHEMA.ofBits(1, 3);
-    Bytes encodedSyncnets = syncnets.sszSerialize();
-    final Optional<DiscoveryPeer> result =
-        convertNodeRecordWithFields(
-            new EnrField(EnrField.IP_V6, IPV6_LOCALHOST),
-            new EnrField(EnrField.TCP_V6, 1234),
-            new EnrField(SYNC_COMMITTEE_SUBNET_ENR_FIELD, encodedSyncnets));
-    assertThat(result)
-        .contains(
-            new DiscoveryPeer(
-                PUB_KEY, new InetSocketAddress("::1", 1234), ENR_FORK_ID, ATTNETS, syncnets));
-  }
-
-  @Test
-  public void shouldUseEmptySyncnetsFieldValueIsInvalid() {
-    SszBitvector syncnets =
-        SszBitvectorSchema.create(SYNCNETS_SCHEMA.getLength() * 2L)
-            .ofBits(1, 4); // Incorrect length
-    Bytes encodedSyncnets = syncnets.sszSerialize();
-    final Optional<DiscoveryPeer> result =
-        convertNodeRecordWithFields(
-            new EnrField(EnrField.IP_V6, IPV6_LOCALHOST),
-            new EnrField(EnrField.TCP_V6, 1234),
-            new EnrField(SYNC_COMMITTEE_SUBNET_ENR_FIELD, encodedSyncnets));
-    assertThat(result)
-        .contains(
-            new DiscoveryPeer(
-                PUB_KEY, new InetSocketAddress("::1", 1234), ENR_FORK_ID, ATTNETS, SYNCNETS));
+                ATT_SUBNET_SCHEMA.getDefault()));
   }
 
   @Test
@@ -232,8 +185,7 @@ class NodeRecordConverterTest {
                 PUB_KEY,
                 new InetSocketAddress("::1", 1234),
                 Optional.of(enrForkId),
-                ATTNETS,
-                SYNCNETS));
+                PERSISTENT_SUBNETS));
   }
 
   @Test
@@ -247,11 +199,11 @@ class NodeRecordConverterTest {
     assertThat(result)
         .contains(
             new DiscoveryPeer(
-                PUB_KEY, new InetSocketAddress("::1", 1234), Optional.empty(), ATTNETS, SYNCNETS));
+                PUB_KEY, new InetSocketAddress("::1", 1234), Optional.empty(), PERSISTENT_SUBNETS));
   }
 
   private Optional<DiscoveryPeer> convertNodeRecordWithFields(final EnrField... fields) {
-    return convertToDiscoveryPeer(createNodeRecord(fields), SCHEMA_DEFINITIONS);
+    return convertToDiscoveryPeer(createNodeRecord(fields));
   }
 
   private NodeRecord createNodeRecord(final EnrField... fields) {

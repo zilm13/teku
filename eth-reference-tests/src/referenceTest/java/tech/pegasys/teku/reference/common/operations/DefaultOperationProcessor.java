@@ -13,7 +13,6 @@
 
 package tech.pegasys.teku.reference.common.operations;
 
-import tech.pegasys.teku.bls.BLSSignatureVerifier;
 import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlockSummary;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBodySchema;
@@ -27,7 +26,7 @@ import tech.pegasys.teku.spec.datastructures.operations.SignedVoluntaryExit;
 import tech.pegasys.teku.spec.datastructures.state.beaconstate.MutableBeaconState;
 import tech.pegasys.teku.spec.logic.common.block.BlockProcessor;
 import tech.pegasys.teku.spec.logic.common.statetransition.exceptions.BlockProcessingException;
-import tech.pegasys.teku.spec.logic.versions.merge.block.BlockProcessorMerge;
+import tech.pegasys.teku.spec.logic.versions.rayonism.block.BlockProcessorRayonism;
 
 public class DefaultOperationProcessor implements OperationProcessor {
   private final Spec spec;
@@ -43,62 +42,49 @@ public class DefaultOperationProcessor implements OperationProcessor {
   public void processAttesterSlashing(
       final MutableBeaconState state, final AttesterSlashing attesterSlashings)
       throws BlockProcessingException {
-    spec.getBlockProcessor(state.getSlot())
-        .processAttesterSlashings(
-            state, beaconBlockBodySchema.getAttesterSlashingsSchema().of(attesterSlashings));
+    spec.processAttesterSlashings(
+        state, beaconBlockBodySchema.getAttesterSlashingsSchema().of(attesterSlashings));
   }
 
   @Override
   public void processProposerSlashing(
       final MutableBeaconState state, final ProposerSlashing proposerSlashing)
       throws BlockProcessingException {
-    spec.getBlockProcessor(state.getSlot())
-        .processProposerSlashings(
-            state,
-            beaconBlockBodySchema.getProposerSlashingsSchema().of(proposerSlashing),
-            BLSSignatureVerifier.SIMPLE);
+    spec.processProposerSlashings(
+        state, beaconBlockBodySchema.getProposerSlashingsSchema().of(proposerSlashing));
   }
 
   @Override
   public void processBlockHeader(
       final MutableBeaconState state, final BeaconBlockSummary blockHeader)
       throws BlockProcessingException {
-    spec.getBlockProcessor(state.getSlot()).processBlockHeader(state, blockHeader);
+    spec.processBlockHeader(state, blockHeader);
   }
 
   @Override
   public void processDeposit(final MutableBeaconState state, final Deposit deposit)
       throws BlockProcessingException {
-    spec.getBlockProcessor(state.getSlot())
-        .processDeposits(state, beaconBlockBodySchema.getDepositsSchema().of(deposit));
+    spec.processDeposits(state, beaconBlockBodySchema.getDepositsSchema().of(deposit));
   }
 
   @Override
   public void processVoluntaryExit(
       final MutableBeaconState state, final SignedVoluntaryExit voluntaryExit)
       throws BlockProcessingException {
-    spec.getBlockProcessor(state.getSlot())
-        .processVoluntaryExits(
-            state,
-            beaconBlockBodySchema.getVoluntaryExitsSchema().of(voluntaryExit),
-            BLSSignatureVerifier.SIMPLE);
+    spec.processVoluntaryExits(
+        state, beaconBlockBodySchema.getVoluntaryExitsSchema().of(voluntaryExit));
   }
 
   @Override
   public void processAttestation(final MutableBeaconState state, final Attestation attestation)
       throws BlockProcessingException {
-    spec.getBlockProcessor(state.getSlot())
-        .processAttestations(
-            state,
-            beaconBlockBodySchema.getAttestationsSchema().of(attestation),
-            BLSSignatureVerifier.SIMPLE);
+    spec.processAttestations(state, beaconBlockBodySchema.getAttestationsSchema().of(attestation));
   }
 
   @Override
   public void processSyncCommittee(final MutableBeaconState state, final SyncAggregate aggregate)
       throws BlockProcessingException {
-    spec.getBlockProcessor(state.getSlot())
-        .processSyncCommittee(state, aggregate, BLSSignatureVerifier.SIMPLE);
+    spec.atSlot(state.getSlot()).getBlockProcessor().processSyncCommittee(state, aggregate);
   }
 
   @Override
@@ -106,7 +92,7 @@ public class DefaultOperationProcessor implements OperationProcessor {
       MutableBeaconState state, ExecutionPayload executionPayload, Boolean executionValid)
       throws BlockProcessingException {
     BlockProcessor blockProcessor =
-        BlockProcessorMerge.required(spec.atSlot(state.getSlot()).getBlockProcessor())
+        BlockProcessorRayonism.required(spec.atSlot(state.getSlot()).getBlockProcessor())
             .forProcessExecutionPayloadReferenceTest(executionValid);
 
     blockProcessor.processExecutionPayload(state, executionPayload);

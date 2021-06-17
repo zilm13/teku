@@ -77,7 +77,8 @@ public class ForkChoiceTestExecutor implements TestExecutor {
         TestDataUtils.loadSsz(
             testDefinition,
             "anchor_block.ssz_snappy",
-            testDefinition.getSpec()::deserializeBeaconBlock);
+            testDefinition.getSpec().getGenesisSchemaDefinitions().getBeaconBlockSchema()
+                ::sszDeserialize);
     return SignedBeaconBlock.create(testDefinition.getSpec(), anchorBlock, BLSSignature.empty());
   }
 

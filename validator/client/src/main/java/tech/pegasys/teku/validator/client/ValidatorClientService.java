@@ -14,9 +14,6 @@
 package tech.pegasys.teku.validator.client;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import tech.pegasys.teku.core.signatures.LocalSlashingProtector;
 import tech.pegasys.teku.core.signatures.SlashingProtector;
@@ -30,17 +27,13 @@ import tech.pegasys.teku.service.serviceutils.Service;
 import tech.pegasys.teku.service.serviceutils.ServiceConfig;
 import tech.pegasys.teku.service.serviceutils.layout.DataDirLayout;
 import tech.pegasys.teku.spec.Spec;
-import tech.pegasys.teku.spec.SpecMilestone;
 import tech.pegasys.teku.validator.api.ValidatorApiChannel;
 import tech.pegasys.teku.validator.api.ValidatorTimingChannel;
 import tech.pegasys.teku.validator.beaconnode.BeaconNodeApi;
 import tech.pegasys.teku.validator.beaconnode.GenesisDataProvider;
-import tech.pegasys.teku.validator.client.duties.AttestationDutyFactory;
 import tech.pegasys.teku.validator.client.duties.BeaconCommitteeSubscriptions;
-import tech.pegasys.teku.validator.client.duties.BlockDutyFactory;
-import tech.pegasys.teku.validator.client.duties.SlotBasedScheduledDuties;
-import tech.pegasys.teku.validator.client.duties.synccommittee.ChainHeadTracker;
-import tech.pegasys.teku.validator.client.duties.synccommittee.SyncCommitteeScheduledDuties;
+import tech.pegasys.teku.validator.client.duties.ScheduledDuties;
+import tech.pegasys.teku.validator.client.duties.ValidatorDutyFactory;
 import tech.pegasys.teku.validator.client.loader.OwnedValidators;
 import tech.pegasys.teku.validator.client.loader.PublicKeyLoader;
 import tech.pegasys.teku.validator.client.loader.ValidatorLoader;
@@ -54,13 +47,14 @@ public class ValidatorClientService extends Service {
   private final ForkProvider forkProvider;
   private final Spec spec;
 
-  private final List<ValidatorTimingChannel> validatorTimingChannels = new ArrayList<>();
+  private ValidatorTimingChannel attestationTimingChannel;
+  private ValidatorTimingChannel blockProductionTimingChannel;
   private ValidatorStatusLogger validatorStatusLogger;
   private ValidatorIndexProvider validatorIndexProvider;
 
   private final SafeFuture<Void> initializationComplete = new SafeFuture<>();
 
-  private final MetricsSystem metricsSystem;
+  private MetricsSystem metricsSystem;
 
   private ValidatorClientService(
       final EventChannels eventChannels,
@@ -97,7 +91,8 @@ public class ValidatorClientService extends Service {
     final ValidatorApiChannel validatorApiChannel = beaconNodeApi.getValidatorApi();
     final GenesisDataProvider genesisDataProvider =
         new GenesisDataProvider(asyncRunner, validatorApiChannel);
-    final ForkProvider forkProvider = new ForkProvider(config.getSpec(), genesisDataProvider);
+    final ForkProvider forkProvider =
+        new ForkProvider(asyncRunner, validatorApiChannel, genesisDataProvider);
 
     final ValidatorLoader validatorLoader = createValidatorLoader(config, asyncRunner, services);
 
@@ -143,55 +138,36 @@ public class ValidatorClientService extends Service {
     validatorLoader.loadValidators();
     final OwnedValidators validators = validatorLoader.getOwnedValidators();
     this.validatorIndexProvider = new ValidatorIndexProvider(validators, validatorApiChannel);
-    final BlockDutyFactory blockDutyFactory =
-        new BlockDutyFactory(forkProvider, validatorApiChannel, spec);
-    final AttestationDutyFactory attestationDutyFactory =
-        new AttestationDutyFactory(forkProvider, validatorApiChannel);
+    final ValidatorDutyFactory validatorDutyFactory =
+        new ValidatorDutyFactory(forkProvider, validatorApiChannel, spec);
     final BeaconCommitteeSubscriptions beaconCommitteeSubscriptions =
         new BeaconCommitteeSubscriptions(validatorApiChannel);
-    final DutyLoader<?> attestationDutyLoader =
-        new RetryingDutyLoader<>(
+    final DutyLoader attestationDutyLoader =
+        new RetryingDutyLoader(
             asyncRunner,
             new AttestationDutyLoader(
                 validatorApiChannel,
                 forkProvider,
                 dependentRoot ->
-                    new SlotBasedScheduledDuties<>(attestationDutyFactory, dependentRoot),
+                    new ScheduledDuties(validatorDutyFactory, dependentRoot, metricsSystem),
                 validators,
                 validatorIndexProvider,
                 beaconCommitteeSubscriptions,
                 spec));
-    final DutyLoader<?> blockDutyLoader =
-        new RetryingDutyLoader<>(
+    final DutyLoader blockDutyLoader =
+        new RetryingDutyLoader(
             asyncRunner,
             new BlockProductionDutyLoader(
                 validatorApiChannel,
-                dependentRoot -> new SlotBasedScheduledDuties<>(blockDutyFactory, dependentRoot),
+                dependentRoot ->
+                    new ScheduledDuties(validatorDutyFactory, dependentRoot, metricsSystem),
                 validators,
                 validatorIndexProvider));
     final boolean useDependentRoots = config.getValidatorConfig().useDependentRoots();
-    validatorTimingChannels.add(
-        new BlockDutyScheduler(metricsSystem, blockDutyLoader, useDependentRoots, spec));
-    validatorTimingChannels.add(
-        new AttestationDutyScheduler(
-            metricsSystem, attestationDutyLoader, useDependentRoots, spec));
-
-    if (spec.isMilestoneSupported(SpecMilestone.ALTAIR)) {
-      final ChainHeadTracker chainHeadTracker = new ChainHeadTracker();
-      validatorTimingChannels.add(chainHeadTracker);
-      final DutyLoader<SyncCommitteeScheduledDuties> syncCommitteeDutyLoader =
-          new RetryingDutyLoader<>(
-              asyncRunner,
-              new SyncCommitteeDutyLoader(
-                  validators,
-                  validatorIndexProvider,
-                  spec,
-                  validatorApiChannel,
-                  chainHeadTracker,
-                  forkProvider));
-      validatorTimingChannels.add(
-          new SyncCommitteeScheduler(metricsSystem, spec, syncCommitteeDutyLoader, new Random()));
-    }
+    this.attestationTimingChannel =
+        new AttestationDutyScheduler(metricsSystem, attestationDutyLoader, useDependentRoots, spec);
+    this.blockProductionTimingChannel =
+        new BlockDutyScheduler(metricsSystem, blockDutyLoader, useDependentRoots, spec);
     addValidatorCountMetric(metricsSystem, validators);
     this.validatorStatusLogger =
         new DefaultValidatorStatusLogger(validators, validatorApiChannel, asyncRunner);
@@ -215,13 +191,15 @@ public class ValidatorClientService extends Service {
     return initializationComplete.thenCompose(
         (__) -> {
           SystemSignalListener.registerReloadConfigListener(validatorLoader::loadValidators);
+          forkProvider.start().reportExceptions();
           validatorIndexProvider.lookupValidators();
           eventChannels.subscribe(
               ValidatorTimingChannel.class,
               new ValidatorTimingActions(
                   validatorStatusLogger,
                   validatorIndexProvider,
-                  validatorTimingChannels,
+                  blockProductionTimingChannel,
+                  attestationTimingChannel,
                   spec,
                   metricsSystem));
           validatorStatusLogger.printInitialValidatorStatuses().reportExceptions();

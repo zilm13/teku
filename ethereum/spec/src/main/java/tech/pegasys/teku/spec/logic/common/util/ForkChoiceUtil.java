@@ -34,30 +34,29 @@ import tech.pegasys.teku.spec.datastructures.operations.Attestation;
 import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
 import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
 import tech.pegasys.teku.spec.datastructures.util.AttestationProcessingResult;
-import tech.pegasys.teku.spec.logic.common.block.BlockProcessor;
-import tech.pegasys.teku.spec.logic.common.helpers.BeaconStateAccessors;
 import tech.pegasys.teku.spec.logic.common.helpers.MiscHelpers;
+import tech.pegasys.teku.spec.logic.common.statetransition.StateTransition;
 import tech.pegasys.teku.spec.logic.common.statetransition.exceptions.StateTransitionException;
 import tech.pegasys.teku.spec.logic.common.statetransition.results.BlockImportResult;
 
 public class ForkChoiceUtil {
 
   private final SpecConfig specConfig;
-  private final BeaconStateAccessors beaconStateAccessors;
+  private final BeaconStateUtil beaconStateUtil;
   private final AttestationUtil attestationUtil;
-  private final BlockProcessor blockProcessor;
+  private final StateTransition stateTransition;
   private final MiscHelpers miscHelpers;
 
   public ForkChoiceUtil(
       final SpecConfig specConfig,
-      final BeaconStateAccessors beaconStateAccessors,
+      final BeaconStateUtil beaconStateUtil,
       final AttestationUtil attestationUtil,
-      final BlockProcessor blockProcessor,
+      final StateTransition stateTransition,
       final MiscHelpers miscHelpers) {
     this.specConfig = specConfig;
-    this.beaconStateAccessors = beaconStateAccessors;
+    this.beaconStateUtil = beaconStateUtil;
     this.attestationUtil = attestationUtil;
-    this.blockProcessor = blockProcessor;
+    this.stateTransition = stateTransition;
     this.miscHelpers = miscHelpers;
   }
 
@@ -87,7 +86,7 @@ public class ForkChoiceUtil {
 
   public UInt64 computeSlotsSinceEpochStart(UInt64 slot) {
     final UInt64 epoch = miscHelpers.computeEpochAtSlot(slot);
-    final UInt64 epochStartSlot = miscHelpers.computeStartSlotAtEpoch(epoch);
+    final UInt64 epochStartSlot = beaconStateUtil.computeStartSlotAtEpoch(epoch);
     return slot.minus(epochStartSlot);
   }
 
@@ -263,7 +262,7 @@ public class ForkChoiceUtil {
     }
 
     // LMD vote must be consistent with FFG vote target
-    final UInt64 target_slot = miscHelpers.computeStartSlotAtEpoch(target.getEpoch());
+    final UInt64 target_slot = beaconStateUtil.computeStartSlotAtEpoch(target.getEpoch());
     if (getAncestor(forkChoiceStrategy, attestation.getData().getBeacon_block_root(), target_slot)
         .map(ancestorRoot -> !ancestorRoot.equals(target.getRoot()))
         .orElse(true)) {
@@ -323,8 +322,8 @@ public class ForkChoiceUtil {
     // Check the block is valid and compute the post-state
     try {
       state =
-          blockProcessor.processAndValidateBlock(
-              signedBlock, blockSlotState, indexedAttestationCache);
+          stateTransition.processAndValidateBlock(
+              signedBlock, blockSlotState, true, indexedAttestationCache);
     } catch (StateTransitionException e) {
       return BlockImportResult.failedStateTransition(e);
     }
@@ -387,7 +386,7 @@ public class ForkChoiceUtil {
       return Optional.of(BlockImportResult.FAILED_INVALID_ANCESTRY);
     }
     if (blockSlot.isGreaterThan(SpecConfig.GENESIS_SLOT)
-        && !beaconStateAccessors
+        && !beaconStateUtil
             .getBlockRootAtSlot(blockSlotState, blockSlot.minus(1))
             .equals(block.getParentRoot())) {
       // Block is at same slot as its parent or the parent root doesn't match the state
@@ -445,7 +444,7 @@ public class ForkChoiceUtil {
     }
 
     UInt64 justifiedSlot =
-        miscHelpers.computeStartSlotAtEpoch(store.getJustifiedCheckpoint().getEpoch());
+        beaconStateUtil.computeStartSlotAtEpoch(store.getJustifiedCheckpoint().getEpoch());
     return hasAncestorAtSlot(
         forkChoiceStrategy,
         new_justified_checkpoint.getRoot(),

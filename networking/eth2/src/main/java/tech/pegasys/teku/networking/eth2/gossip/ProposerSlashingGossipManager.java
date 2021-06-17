@@ -15,7 +15,6 @@ package tech.pegasys.teku.networking.eth2.gossip;
 
 import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.networking.eth2.gossip.encoding.GossipEncoding;
-import tech.pegasys.teku.networking.eth2.gossip.topics.GossipTopicName;
 import tech.pegasys.teku.networking.eth2.gossip.topics.OperationProcessor;
 import tech.pegasys.teku.networking.p2p.gossip.GossipNetwork;
 import tech.pegasys.teku.spec.datastructures.operations.ProposerSlashing;
@@ -23,6 +22,7 @@ import tech.pegasys.teku.spec.datastructures.state.ForkInfo;
 import tech.pegasys.teku.ssz.schema.SszSchema;
 
 public class ProposerSlashingGossipManager extends AbstractGossipManager<ProposerSlashing> {
+  public static String TOPIC_NAME = "proposer_slashing";
 
   public ProposerSlashingGossipManager(
       final AsyncRunner asyncRunner,
@@ -31,14 +31,7 @@ public class ProposerSlashingGossipManager extends AbstractGossipManager<Propose
       final ForkInfo forkInfo,
       final OperationProcessor<ProposerSlashing> processor,
       final GossipPublisher<ProposerSlashing> publisher) {
-    super(
-        GossipTopicName.PROPOSER_SLASHING,
-        asyncRunner,
-        gossipNetwork,
-        gossipEncoding,
-        forkInfo,
-        processor,
-        publisher);
+    super(TOPIC_NAME, asyncRunner, gossipNetwork, gossipEncoding, forkInfo, processor, publisher);
   }
 
   @Override

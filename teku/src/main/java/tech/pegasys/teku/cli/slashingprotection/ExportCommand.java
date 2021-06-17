@@ -19,9 +19,10 @@ import org.apache.logging.log4j.util.Strings;
 import picocli.CommandLine;
 import tech.pegasys.teku.cli.converter.PicoCliVersionProvider;
 import tech.pegasys.teku.cli.options.ValidatorClientDataOptions;
-import tech.pegasys.teku.cli.util.SlashingProtectionCommandUtils;
 import tech.pegasys.teku.data.SlashingProtectionExporter;
 import tech.pegasys.teku.infrastructure.logging.SubCommandLogger;
+import tech.pegasys.teku.service.serviceutils.layout.DataDirLayout;
+import tech.pegasys.teku.validator.client.ValidatorClientService;
 
 @CommandLine.Command(
     name = "export",
@@ -51,10 +52,8 @@ public class ExportCommand implements Runnable {
   @Override
   public void run() {
 
-    final Path slashProtectionPath =
-        SlashingProtectionCommandUtils.getSlashingProtectionPath(dataOptions);
-    SlashingProtectionCommandUtils.verifySlashingProtectionPathExists(
-        SUB_COMMAND_LOG, slashProtectionPath);
+    final Path slashProtectionPath = getSlashingProtectionPath(dataOptions);
+    verifySlashingProtectionPathExists(slashProtectionPath);
 
     SlashingProtectionExporter slashingProtectionExporter =
         new SlashingProtectionExporter(SUB_COMMAND_LOG);
@@ -68,5 +67,20 @@ public class ExportCommand implements Runnable {
     } catch (IOException e) {
       SUB_COMMAND_LOG.exit(1, "Failed to export slashing protection data.", e);
     }
+  }
+
+  private void verifySlashingProtectionPathExists(final Path slashProtectionPath) {
+    if (!slashProtectionPath.toFile().exists() || !slashProtectionPath.toFile().isDirectory()) {
+      SUB_COMMAND_LOG.exit(
+          1,
+          "Unable to locate the path containing slashing protection data. Expected "
+              + slashProtectionPath.toString()
+              + " to be a directory containing slashing protection yml files.");
+    }
+  }
+
+  private Path getSlashingProtectionPath(final ValidatorClientDataOptions dataOptions) {
+    final DataDirLayout dataDirLayout = DataDirLayout.createFrom(dataOptions.getDataConfig());
+    return ValidatorClientService.getSlashingProtectionPath(dataDirLayout);
   }
 }

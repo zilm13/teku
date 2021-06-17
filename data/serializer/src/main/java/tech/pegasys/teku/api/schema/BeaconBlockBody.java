@@ -21,12 +21,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.spec.SpecVersion;
-import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBodyBuilder;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBodySchema;
+import tech.pegasys.teku.spec.datastructures.blocks.blockbody.versions.rayonism.BeaconBlockBodyRayonism;
 
 public class BeaconBlockBody {
   @Schema(type = "string", format = "byte", description = DESCRIPTION_BYTES96)
@@ -42,6 +41,7 @@ public class BeaconBlockBody {
   public final List<Attestation> attestations;
   public final List<Deposit> deposits;
   public final List<SignedVoluntaryExit> voluntary_exits;
+  public final ExecutionPayload execution_payload;
 
   @JsonCreator
   public BeaconBlockBody(
@@ -52,7 +52,8 @@ public class BeaconBlockBody {
       @JsonProperty("attester_slashings") final List<AttesterSlashing> attester_slashings,
       @JsonProperty("attestations") final List<Attestation> attestations,
       @JsonProperty("deposits") final List<Deposit> deposits,
-      @JsonProperty("voluntary_exits") final List<SignedVoluntaryExit> voluntary_exits) {
+      @JsonProperty("voluntary_exits") final List<SignedVoluntaryExit> voluntary_exits,
+      @JsonProperty("execution_payload") final ExecutionPayload execution_payload) {
     this.randao_reveal = randao_reveal;
     this.eth1_data = eth1_data;
     this.graffiti = graffiti;
@@ -61,6 +62,7 @@ public class BeaconBlockBody {
     this.attestations = attestations;
     this.deposits = deposits;
     this.voluntary_exits = voluntary_exits;
+    this.execution_payload = execution_payload;
   }
 
   public BeaconBlockBody(
@@ -83,15 +85,18 @@ public class BeaconBlockBody {
         body.getVoluntary_exits().stream()
             .map(SignedVoluntaryExit::new)
             .collect(Collectors.toList());
+    this.execution_payload =
+        body.toVersionRayonism()
+            .map(BeaconBlockBodyRayonism::getExecution_payload)
+            .map(ExecutionPayload::new)
+            .orElse(null);
   }
 
   public tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBody
-      asInternalBeaconBlockBody(
-          final SpecVersion spec, Consumer<BeaconBlockBodyBuilder> builderRef) {
+      asInternalBeaconBlockBody(final SpecVersion spec) {
     BeaconBlockBodySchema<?> schema = spec.getSchemaDefinitions().getBeaconBlockBodySchema();
     return schema.createBlockBody(
         builder -> {
-          builderRef.accept(builder);
           builder
               .randaoReveal(randao_reveal.asInternalBLSSignature())
               .eth1Data(
@@ -118,12 +123,14 @@ public class BeaconBlockBody {
                   voluntary_exits.stream()
                       .map(SignedVoluntaryExit::asInternalSignedVoluntaryExit)
                       .collect(schema.getVoluntaryExitsSchema().collector()));
+          if (execution_payload != null) {
+            schema
+                .toVersionRayonism()
+                .ifPresent(
+                    schemaMerge ->
+                        builder.executionPayload(execution_payload::asInternalExecutionPayload));
+          }
         });
-  }
-
-  public tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBody
-      asInternalBeaconBlockBody(final SpecVersion spec) {
-    return asInternalBeaconBlockBody(spec, (builder) -> {});
   }
 
   @Override

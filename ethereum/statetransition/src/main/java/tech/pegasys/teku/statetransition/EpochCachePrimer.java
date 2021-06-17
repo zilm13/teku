@@ -84,6 +84,8 @@ public class EpochCachePrimer {
         .forEach(
             slot ->
                 UInt64.range(UInt64.ZERO, committeeCount)
-                    .forEach(index -> spec.getBeaconCommittee(state, slot, index)));
+                    .forEach(
+                        index ->
+                            spec.getBeaconStateUtil(slot).getBeaconCommittee(state, slot, index)));
   }
 }

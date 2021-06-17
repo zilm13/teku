@@ -16,8 +16,6 @@ package tech.pegasys.teku.spec.util;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import tech.pegasys.teku.spec.Spec;
-import tech.pegasys.teku.spec.SpecMilestone;
-import tech.pegasys.teku.spec.SpecVersion;
 import tech.pegasys.teku.spec.datastructures.state.PendingAttestation;
 import tech.pegasys.teku.spec.datastructures.state.beaconstate.versions.phase0.BeaconStatePhase0;
 import tech.pegasys.teku.spec.datastructures.state.beaconstate.versions.phase0.BeaconStateSchemaPhase0;
@@ -32,7 +30,7 @@ public class BeaconStateBuilderPhase0
   private SszList<PendingAttestation> currentEpochAttestations;
 
   private BeaconStateBuilderPhase0(
-      final SpecVersion spec,
+      final Spec spec,
       final DataStructureUtil dataStructureUtil,
       final int defaultValidatorCount,
       final int defaultItemsInSSZLists) {
@@ -41,7 +39,7 @@ public class BeaconStateBuilderPhase0
 
   @Override
   protected BeaconStatePhase0 getEmptyState() {
-    return BeaconStateSchemaPhase0.create(spec.getConfig()).createEmpty();
+    return BeaconStateSchemaPhase0.create(spec.getGenesisSpecConfig()).createEmpty();
   }
 
   @Override
@@ -56,14 +54,12 @@ public class BeaconStateBuilderPhase0
       final int defaultValidatorCount,
       final int defaultItemsInSSZLists) {
     return new BeaconStateBuilderPhase0(
-        spec.forMilestone(SpecMilestone.PHASE0),
-        dataStructureUtil,
-        defaultValidatorCount,
-        defaultItemsInSSZLists);
+        spec, dataStructureUtil, defaultValidatorCount, defaultItemsInSSZLists);
   }
 
   private BeaconStateSchemaPhase0 getBeaconStateSchema() {
-    return (BeaconStateSchemaPhase0) spec.getSchemaDefinitions().getBeaconStateSchema();
+    return (BeaconStateSchemaPhase0)
+        spec.getGenesisSpec().getSchemaDefinitions().getBeaconStateSchema();
   }
 
   @Override

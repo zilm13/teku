@@ -24,7 +24,6 @@ import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.api.schema.BLSPubKey;
 import tech.pegasys.teku.api.schema.BeaconState;
 import tech.pegasys.teku.api.schema.ValidatorsRequest;
-import tech.pegasys.teku.api.schema.phase0.BeaconStatePhase0;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.ssz.collections.SszBitlist;
@@ -82,22 +81,6 @@ class JsonProviderTest {
   }
 
   @Test
-  public void doubleShouldSerializeAndDeserialize() throws JsonProcessingException {
-    Double fewDecimals = 1.4;
-    final String serializedFewDecimals = jsonProvider.objectToJSON(fewDecimals);
-    final Double deserializedFewDecimals =
-        jsonProvider.jsonToObject(serializedFewDecimals, Double.class);
-    assertThat(fewDecimals).isEqualTo(deserializedFewDecimals);
-
-    Double multipleDecimals = 1.41234;
-    Double truncatedMultipleDecimals = 1.4123;
-    final String serializedMultipleDecimals = jsonProvider.objectToJSON(multipleDecimals);
-    final Double deserializedMultipleDecimals =
-        jsonProvider.jsonToObject(serializedMultipleDecimals, Double.class);
-    assertThat(truncatedMultipleDecimals).isEqualTo(deserializedMultipleDecimals);
-  }
-
-  @Test
   public void stringShouldSerializeToJson() throws JsonProcessingException {
     String data = "test";
     assertEquals(Q + data + Q, jsonProvider.objectToJSON(data));
@@ -107,7 +90,7 @@ class JsonProviderTest {
   void beaconStateJsonTest() throws JsonProcessingException {
     tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState stateInternal =
         dataStructureUtil.randomBeaconState(UInt64.valueOf(16));
-    BeaconState state = new BeaconStatePhase0(stateInternal);
+    BeaconState state = new BeaconState(stateInternal);
     String jsonState = jsonProvider.objectToJSON(state);
     assertTrue(jsonState.length() > 0);
   }

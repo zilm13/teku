@@ -33,16 +33,13 @@ import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.networking.eth2.peers.RespondingEth2Peer;
 import tech.pegasys.teku.networking.eth2.rpc.core.InvalidResponseException;
-import tech.pegasys.teku.spec.Spec;
-import tech.pegasys.teku.spec.TestSpecFactory;
 import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlockSummary;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBlockAndState;
 import tech.pegasys.teku.storage.api.StorageUpdateChannel;
 
 public class HistoricalBatchFetcherTest {
-  private final Spec spec = TestSpecFactory.createDefault();
-  private final ChainBuilder chainBuilder = ChainBuilder.create(spec);
+  private final ChainBuilder chainBuilder = ChainBuilder.createDefault();
   private ChainBuilder forkBuilder;
 
   @SuppressWarnings("unchecked")
@@ -79,7 +76,7 @@ public class HistoricalBatchFetcherTest {
     lastBlockInBatch = chainBuilder.getLatestBlockAndState().getBlock();
     firstBlockInBatch = blockBatch.get(0);
 
-    peer = RespondingEth2Peer.create(spec, chainBuilder);
+    peer = RespondingEth2Peer.create(chainBuilder);
     fetcher =
         new HistoricalBatchFetcher(
             storageUpdateChannel,
@@ -127,7 +124,7 @@ public class HistoricalBatchFetcherTest {
 
   @Test
   public void run_requestBatchWithSkippedSlots() {
-    final ChainBuilder chain = ChainBuilder.create(spec);
+    final ChainBuilder chain = ChainBuilder.createDefault();
     final int batchSize = 20;
     final SignedBlockAndState genesis = chain.generateGenesis();
     chain.generateBlockAtSlot(5);
@@ -142,7 +139,7 @@ public class HistoricalBatchFetcherTest {
             .map(SignedBlockAndState::getBlock)
             .collect(Collectors.toList());
 
-    peer = RespondingEth2Peer.create(spec, chain);
+    peer = RespondingEth2Peer.create(chain);
     fetcher =
         new HistoricalBatchFetcher(
             storageUpdateChannel,
@@ -197,7 +194,7 @@ public class HistoricalBatchFetcherTest {
 
   @Test
   public void run_peerReturnBlockFromADifferentChain() {
-    peer = RespondingEth2Peer.create(spec, forkBuilder);
+    peer = RespondingEth2Peer.create(forkBuilder);
     fetcher =
         new HistoricalBatchFetcher(
             storageUpdateChannel,

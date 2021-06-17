@@ -20,6 +20,7 @@ dependencies {
   referenceTestImplementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml'
   referenceTestImplementation 'org.apache.tuweni:tuweni-bytes'
   referenceTestImplementation 'org.apache.tuweni:tuweni-junit'
+  referenceTestImplementation 'org.miracl.milagro.amcl:milagro-crypto-java'
   referenceTestImplementation 'org.xerial.snappy:snappy-java'
 }
 

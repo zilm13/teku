@@ -45,22 +45,18 @@ import tech.pegasys.teku.networking.p2p.network.P2PNetwork;
 import tech.pegasys.teku.networking.p2p.network.config.NetworkConfig;
 import tech.pegasys.teku.networking.p2p.peer.Peer;
 import tech.pegasys.teku.spec.Spec;
-import tech.pegasys.teku.spec.SpecVersion;
 import tech.pegasys.teku.spec.TestSpecFactory;
 import tech.pegasys.teku.spec.config.SpecConfig;
 import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.EnrForkId;
 import tech.pegasys.teku.spec.datastructures.state.Fork;
 import tech.pegasys.teku.spec.datastructures.state.ForkInfo;
-import tech.pegasys.teku.spec.schemas.SchemaDefinitions;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
-import tech.pegasys.teku.ssz.collections.SszBitvector;
 import tech.pegasys.teku.ssz.schema.collections.SszBitvectorSchema;
 import tech.pegasys.teku.ssz.type.Bytes4;
 import tech.pegasys.teku.storage.store.MemKeyValueStore;
 
 class DiscoveryNetworkTest {
   private final Spec spec = TestSpecFactory.createMinimalPhase0();
-  private final SchemaDefinitions schemaDefinitions = spec.getGenesisSchemaDefinitions();
   private final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
 
   @SuppressWarnings("unchecked")
@@ -70,8 +66,7 @@ class DiscoveryNetworkTest {
   private final ConnectionManager connectionManager = mock(ConnectionManager.class);
 
   private final DiscoveryNetwork<Peer> discoveryNetwork =
-      new DiscoveryNetwork<>(
-          p2pNetwork, discoveryService, connectionManager, spec, spec::getGenesisSchemaDefinitions);
+      new DiscoveryNetwork<>(p2pNetwork, discoveryService, connectionManager, spec);
 
   @Test
   public void shouldStartConnectionManagerAfterP2pAndDiscoveryStarted() {
@@ -161,8 +156,7 @@ class DiscoveryNetworkTest {
             peerSelectionStrategy,
             discoveryConfig,
             networkConfig,
-            spec,
-            spec::getGenesisSchemaDefinitions);
+            spec);
     assertThat(network.getEnr()).isEmpty();
   }
 
@@ -265,24 +259,20 @@ class DiscoveryNetworkTest {
 
   @Test
   public void setForkInfoAtInitialization() {
-    final SpecVersion genesisSpec = spec.getGenesisSpec();
-    final Bytes4 genesisForkVersion = genesisSpec.getConfig().getGenesisForkVersion();
+    final Bytes4 genesisForkVersion = spec.getGenesisSpecConfig().getGenesisForkVersion();
     final EnrForkId enrForkId =
         new EnrForkId(
-            genesisSpec.miscHelpers().computeForkDigest(genesisForkVersion, Bytes32.ZERO),
+            spec.getGenesisBeaconStateUtil().computeForkDigest(genesisForkVersion, Bytes32.ZERO),
             genesisForkVersion,
             SpecConfig.FAR_FUTURE_EPOCH);
     verify(discoveryService).updateCustomENRField("eth2", enrForkId.sszSerialize());
   }
 
   public DiscoveryPeer createDiscoveryPeer(Optional<EnrForkId> maybeForkId) {
-    final SszBitvector syncCommitteeSubnets =
-        schemaDefinitions.getSyncnetsENRFieldSchema().getDefault();
     return new DiscoveryPeer(
         BLSPublicKey.empty().toSSZBytes(),
         InetSocketAddress.createUnresolved("yo", 9999),
         maybeForkId,
-        SszBitvectorSchema.create(ATTESTATION_SUBNET_COUNT).getDefault(),
-        syncCommitteeSubnets);
+        SszBitvectorSchema.create(ATTESTATION_SUBNET_COUNT).getDefault());
   }
 }

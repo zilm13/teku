@@ -55,9 +55,9 @@ public final class BLSKeyPair {
   }
 
   /**
-   * Construct from an implementation-specific key pair.
+   * Construct from a Mikuli key pair.
    *
-   * @param keyPair an implementation-specific key pair
+   * @param keyPair a Mikuli key pair
    */
   private BLSKeyPair(KeyPair keyPair) {
     this(new BLSPublicKey(keyPair.getPublicKey()), new BLSSecretKey(keyPair.getSecretKey()));

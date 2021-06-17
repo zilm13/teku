@@ -30,7 +30,6 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
-import tech.pegasys.teku.bls.BLSSignatureVerifier;
 import tech.pegasys.teku.cli.converter.PicoCliVersionProvider;
 import tech.pegasys.teku.cli.options.Eth2NetworkOptions;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
@@ -78,7 +77,7 @@ public class TransitionCommand implements Runnable {
           if (blocks != null) {
             for (String blockPath : blocks) {
               SignedBeaconBlock block = readBlock(spec, blockPath);
-              state = spec.processBlock(state, block, BLSSignatureVerifier.SIMPLE);
+              state = spec.initiateStateTransition(state, block);
             }
           }
           return state;

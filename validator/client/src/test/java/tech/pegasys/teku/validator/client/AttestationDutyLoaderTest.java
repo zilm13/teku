@@ -16,6 +16,7 @@ package tech.pegasys.teku.validator.client;
 import static java.util.Collections.emptyList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,27 +39,20 @@ import tech.pegasys.teku.validator.api.AttesterDuty;
 import tech.pegasys.teku.validator.api.CommitteeSubscriptionRequest;
 import tech.pegasys.teku.validator.api.FileBackedGraffitiProvider;
 import tech.pegasys.teku.validator.api.ValidatorApiChannel;
-import tech.pegasys.teku.validator.client.duties.AggregationDuty;
-import tech.pegasys.teku.validator.client.duties.AttestationProductionDuty;
 import tech.pegasys.teku.validator.client.duties.BeaconCommitteeSubscriptions;
-import tech.pegasys.teku.validator.client.duties.SlotBasedScheduledDuties;
+import tech.pegasys.teku.validator.client.duties.ScheduledDuties;
 import tech.pegasys.teku.validator.client.loader.OwnedValidators;
 
 class AttestationDutyLoaderTest {
 
   private static final List<Integer> VALIDATOR_INDICES = List.of(1);
 
-  private final Spec spec = TestSpecFactory.createMinimalPhase0();
-  private final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
+  private final DataStructureUtil dataStructureUtil = new DataStructureUtil();
   private final ValidatorApiChannel validatorApiChannel = mock(ValidatorApiChannel.class);
   private final ForkProvider forkProvider = mock(ForkProvider.class);
   private final BeaconCommitteeSubscriptions beaconCommitteeSubscriptions =
       mock(BeaconCommitteeSubscriptions.class);
-
-  @SuppressWarnings("unchecked")
-  private final SlotBasedScheduledDuties<AttestationProductionDuty, AggregationDuty>
-      scheduledDuties = mock(SlotBasedScheduledDuties.class);
-
+  private final ScheduledDuties scheduledDuties = mock(ScheduledDuties.class);
   private final ValidatorIndexProvider validatorIndexProvider = mock(ValidatorIndexProvider.class);
   private final BLSPublicKey validatorKey = dataStructureUtil.randomPublicKey();
   private final Signer signer = mock(Signer.class);
@@ -66,6 +60,7 @@ class AttestationDutyLoaderTest {
       new Validator(validatorKey, signer, new FileBackedGraffitiProvider());
   private final Map<BLSPublicKey, Validator> validators = Map.of(validatorKey, validator);
   private final ForkInfo forkInfo = dataStructureUtil.randomForkInfo();
+  private final Spec spec = TestSpecFactory.createMinimalPhase0();
 
   private final AttestationDutyLoader dutyLoader =
       new AttestationDutyLoader(
@@ -81,7 +76,7 @@ class AttestationDutyLoaderTest {
   void setUp() {
     when(validatorIndexProvider.getValidatorIndices(any()))
         .thenReturn(SafeFuture.completedFuture(VALIDATOR_INDICES));
-    when(forkProvider.getForkInfo(any())).thenReturn(SafeFuture.completedFuture(forkInfo));
+    when(forkProvider.getForkInfo()).thenReturn(SafeFuture.completedFuture(forkInfo));
   }
 
   @Test
@@ -105,12 +100,13 @@ class AttestationDutyLoaderTest {
             SafeFuture.completedFuture(
                 Optional.of(new AttesterDuties(dataStructureUtil.randomBytes32(), List.of(duty)))));
 
-    when(scheduledDuties.scheduleProduction(any(), any(), any())).thenReturn(new SafeFuture<>());
+    when(scheduledDuties.scheduleAttestationProduction(
+            any(), any(), anyInt(), anyInt(), anyInt(), anyInt()))
+        .thenReturn(new SafeFuture<>());
     when(signer.signAggregationSlot(slot, forkInfo))
         .thenReturn(SafeFuture.completedFuture(dataStructureUtil.randomSignature()));
 
-    final SafeFuture<Optional<SlotBasedScheduledDuties<?, ?>>> result =
-        dutyLoader.loadDutiesForEpoch(UInt64.ONE);
+    final SafeFuture<Optional<ScheduledDuties>> result = dutyLoader.loadDutiesForEpoch(UInt64.ONE);
 
     assertThat(result).isCompleted();
     verify(beaconCommitteeSubscriptions)
@@ -141,12 +137,13 @@ class AttestationDutyLoaderTest {
             SafeFuture.completedFuture(
                 Optional.of(new AttesterDuties(dataStructureUtil.randomBytes32(), List.of(duty)))));
 
-    when(scheduledDuties.scheduleProduction(any(), any(), any())).thenReturn(new SafeFuture<>());
+    when(scheduledDuties.scheduleAttestationProduction(
+            any(), any(), anyInt(), anyInt(), anyInt(), anyInt()))
+        .thenReturn(new SafeFuture<>());
     when(signer.signAggregationSlot(slot, forkInfo))
         .thenReturn(SafeFuture.completedFuture(dataStructureUtil.randomSignature()));
 
-    final SafeFuture<Optional<SlotBasedScheduledDuties<?, ?>>> result =
-        dutyLoader.loadDutiesForEpoch(UInt64.ONE);
+    final SafeFuture<Optional<ScheduledDuties>> result = dutyLoader.loadDutiesForEpoch(UInt64.ONE);
 
     assertThat(result).isCompleted();
     verify(beaconCommitteeSubscriptions)
@@ -162,8 +159,7 @@ class AttestationDutyLoaderTest {
         .thenReturn(
             SafeFuture.completedFuture(
                 Optional.of(new AttesterDuties(dataStructureUtil.randomBytes32(), emptyList()))));
-    final SafeFuture<Optional<SlotBasedScheduledDuties<?, ?>>> result =
-        dutyLoader.loadDutiesForEpoch(UInt64.ONE);
+    final SafeFuture<Optional<ScheduledDuties>> result = dutyLoader.loadDutiesForEpoch(UInt64.ONE);
 
     assertThat(result).isCompleted();
     verify(beaconCommitteeSubscriptions).sendRequests();

@@ -19,7 +19,6 @@ import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.ssz.type.Bytes4;
 
 public class SpecConfigAltair extends DelegatingSpecConfig {
-
   // Updated penalties
   private final UInt64 inactivityPenaltyQuotientAltair;
   private final int minSlashingPenaltyQuotientAltair;
@@ -27,18 +26,25 @@ public class SpecConfigAltair extends DelegatingSpecConfig {
 
   // Misc
   private final int syncCommitteeSize;
+  private final int syncPubkeysPerAggregate;
   private final UInt64 inactivityScoreBias;
-  private final UInt64 inactivityScoreRecoveryRate;
 
   // Time
   private final int epochsPerSyncCommitteePeriod;
 
+  // Signature domains
+  private final Bytes4 domainSyncCommittee;
+  private final Bytes4 domainSyncCommitteeSelectionProof;
+  private final Bytes4 domainContributionAndProof;
+
   // Fork
   private final Bytes4 altairForkVersion;
-  private final UInt64 altairForkEpoch;
+  private final UInt64 altairForkSlot;
 
   // Sync protocol
   private final int minSyncCommitteeParticipants;
+  private final int maxValidLightClientUpdates;
+  private final int lightClientUpdateTimeout;
 
   public SpecConfigAltair(
       final SpecConfig specConfig,
@@ -46,23 +52,33 @@ public class SpecConfigAltair extends DelegatingSpecConfig {
       final int altairMinSlashingPenaltyQuotient,
       final int proportionalSlashingMultiplierAltair,
       final int syncCommitteeSize,
+      final int syncPubkeysPerAggregate,
       final UInt64 inactivityScoreBias,
-      final UInt64 inactivityScoreRecoveryRate,
       final int epochsPerSyncCommitteePeriod,
+      final Bytes4 domainSyncCommittee,
+      final Bytes4 domainSyncCommitteeSelectionProof,
+      final Bytes4 domainContributionAndProof,
       final Bytes4 altairForkVersion,
-      final UInt64 altairForkEpoch,
-      final int minSyncCommitteeParticipants) {
+      final UInt64 altairForkSlot,
+      final int minSyncCommitteeParticipants,
+      final int maxValidLightClientUpdates,
+      final int lightClientUpdateTimeout) {
     super(specConfig);
     this.inactivityPenaltyQuotientAltair = inactivityPenaltyQuotientAltair;
     this.minSlashingPenaltyQuotientAltair = altairMinSlashingPenaltyQuotient;
     this.proportionalSlashingMultiplierAltair = proportionalSlashingMultiplierAltair;
     this.syncCommitteeSize = syncCommitteeSize;
+    this.syncPubkeysPerAggregate = syncPubkeysPerAggregate;
     this.inactivityScoreBias = inactivityScoreBias;
-    this.inactivityScoreRecoveryRate = inactivityScoreRecoveryRate;
     this.epochsPerSyncCommitteePeriod = epochsPerSyncCommitteePeriod;
+    this.domainSyncCommittee = domainSyncCommittee;
+    this.domainSyncCommitteeSelectionProof = domainSyncCommitteeSelectionProof;
+    this.domainContributionAndProof = domainContributionAndProof;
     this.altairForkVersion = altairForkVersion;
-    this.altairForkEpoch = altairForkEpoch;
+    this.altairForkSlot = altairForkSlot;
     this.minSyncCommitteeParticipants = minSyncCommitteeParticipants;
+    this.maxValidLightClientUpdates = maxValidLightClientUpdates;
+    this.lightClientUpdateTimeout = lightClientUpdateTimeout;
   }
 
   public static SpecConfigAltair required(final SpecConfig specConfig) {
@@ -79,8 +95,8 @@ public class SpecConfigAltair extends DelegatingSpecConfig {
     return altairForkVersion;
   }
 
-  public UInt64 getAltairForkEpoch() {
-    return altairForkEpoch;
+  public UInt64 getAltairForkSlot() {
+    return altairForkSlot;
   }
 
   public UInt64 getInactivityPenaltyQuotientAltair() {
@@ -99,20 +115,28 @@ public class SpecConfigAltair extends DelegatingSpecConfig {
     return syncCommitteeSize;
   }
 
-  public UInt64 getInactivityScoreBias() {
-    return inactivityScoreBias;
+  public int getSyncPubkeysPerAggregate() {
+    return syncPubkeysPerAggregate;
   }
 
-  public UInt64 getInactivityScoreRecoveryRate() {
-    return inactivityScoreRecoveryRate;
+  public UInt64 getInactivityScoreBias() {
+    return inactivityScoreBias;
   }
 
   public int getEpochsPerSyncCommitteePeriod() {
     return epochsPerSyncCommitteePeriod;
   }
 
-  public int getMinSyncCommitteeParticipants() {
-    return minSyncCommitteeParticipants;
+  public Bytes4 getDomainSyncCommittee() {
+    return domainSyncCommittee;
+  }
+
+  public Bytes4 getDomainSyncCommitteeSelectionProof() {
+    return domainSyncCommitteeSelectionProof;
+  }
+
+  public Bytes4 getDomainContributionAndProof() {
+    return domainContributionAndProof;
   }
 
   @Override
@@ -129,13 +153,18 @@ public class SpecConfigAltair extends DelegatingSpecConfig {
         && minSlashingPenaltyQuotientAltair == that.minSlashingPenaltyQuotientAltair
         && proportionalSlashingMultiplierAltair == that.proportionalSlashingMultiplierAltair
         && syncCommitteeSize == that.syncCommitteeSize
+        && syncPubkeysPerAggregate == that.syncPubkeysPerAggregate
         && Objects.equals(inactivityScoreBias, that.inactivityScoreBias)
-        && Objects.equals(inactivityScoreRecoveryRate, that.inactivityScoreRecoveryRate)
         && epochsPerSyncCommitteePeriod == that.epochsPerSyncCommitteePeriod
         && minSyncCommitteeParticipants == that.minSyncCommitteeParticipants
+        && maxValidLightClientUpdates == that.maxValidLightClientUpdates
+        && lightClientUpdateTimeout == that.lightClientUpdateTimeout
         && Objects.equals(inactivityPenaltyQuotientAltair, that.inactivityPenaltyQuotientAltair)
+        && Objects.equals(domainSyncCommittee, that.domainSyncCommittee)
+        && Objects.equals(domainSyncCommitteeSelectionProof, that.domainSyncCommitteeSelectionProof)
+        && Objects.equals(domainContributionAndProof, that.domainContributionAndProof)
         && Objects.equals(altairForkVersion, that.altairForkVersion)
-        && Objects.equals(altairForkEpoch, that.altairForkEpoch);
+        && Objects.equals(altairForkSlot, that.altairForkSlot);
   }
 
   @Override
@@ -146,11 +175,16 @@ public class SpecConfigAltair extends DelegatingSpecConfig {
         minSlashingPenaltyQuotientAltair,
         proportionalSlashingMultiplierAltair,
         syncCommitteeSize,
+        syncPubkeysPerAggregate,
         inactivityScoreBias,
-        inactivityScoreRecoveryRate,
         epochsPerSyncCommitteePeriod,
+        domainSyncCommittee,
+        domainSyncCommitteeSelectionProof,
+        domainContributionAndProof,
         altairForkVersion,
-        altairForkEpoch,
-        minSyncCommitteeParticipants);
+        altairForkSlot,
+        minSyncCommitteeParticipants,
+        maxValidLightClientUpdates,
+        lightClientUpdateTimeout);
   }
 }

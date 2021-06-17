@@ -39,7 +39,6 @@ public class StatusMessageHandler
 
   @Override
   public void onIncomingMessage(
-      final String protocolId,
       final Eth2Peer peer,
       final StatusMessage message,
       final ResponseCallback<StatusMessage> callback) {

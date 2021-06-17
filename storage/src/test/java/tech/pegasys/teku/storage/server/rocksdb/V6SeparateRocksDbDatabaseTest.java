@@ -19,12 +19,11 @@ import java.io.File;
 import java.nio.file.Path;
 import tech.pegasys.teku.storage.server.DatabaseVersion;
 import tech.pegasys.teku.storage.server.StateStorageMode;
-import tech.pegasys.teku.storage.server.kvstore.AbstractKvStoreDatabaseWithHotStatesTest;
 import tech.pegasys.teku.storage.storageSystem.FileBackedStorageSystemBuilder;
 import tech.pegasys.teku.storage.storageSystem.StorageSystem;
 import tech.pegasys.teku.storage.store.StoreConfig;
 
-public class V6SeparateRocksDbDatabaseTest extends AbstractKvStoreDatabaseWithHotStatesTest {
+public class V6SeparateRocksDbDatabaseTest extends AbstractRocksDbDatabaseWithHotStatesTest {
   @Override
   protected StorageSystem createStorageSystem(
       final File tempDir,

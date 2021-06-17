@@ -2,7 +2,6 @@ dependencies {
   implementation project(':bls')
   implementation project(':ethereum:core')
   implementation project(':ethereum:dataproviders')
-  implementation project(':ethereum:pow:api')
   implementation project(':ethereum:spec')
   implementation project(':infrastructure:async')
   implementation project(':infrastructure:collections')

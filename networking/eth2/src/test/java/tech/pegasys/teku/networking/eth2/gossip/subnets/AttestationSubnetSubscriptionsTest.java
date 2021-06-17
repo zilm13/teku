@@ -36,6 +36,7 @@ import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.spec.TestSpecFactory;
 import tech.pegasys.teku.spec.datastructures.attestation.ValidateableAttestation;
 import tech.pegasys.teku.spec.datastructures.operations.Attestation;
+import tech.pegasys.teku.spec.datastructures.util.CommitteeUtil;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
 import tech.pegasys.teku.storage.client.MemoryOnlyRecentChainData;
@@ -61,12 +62,7 @@ public class AttestationSubnetSubscriptionsTest {
     BeaconChainUtil.create(spec, 0, recentChainData).initializeStorage();
     subnetSubscriptions =
         new AttestationSubnetSubscriptions(
-            asyncRunner,
-            gossipNetwork,
-            gossipEncoding,
-            recentChainData,
-            processor,
-            recentChainData.getCurrentForkInfo().orElseThrow());
+            asyncRunner, gossipNetwork, gossipEncoding, recentChainData, processor);
 
     when(gossipNetwork.subscribe(any(), any())).thenReturn(mock(TopicChannel.class));
   }
@@ -145,7 +141,7 @@ public class AttestationSubnetSubscriptionsTest {
   }
 
   private int computeSubnetId(final Attestation attestation) {
-    return spec.computeSubnetForAttestation(
+    return CommitteeUtil.computeSubnetForAttestation(
         recentChainData.getBestState().orElseThrow(), attestation);
   }
 }

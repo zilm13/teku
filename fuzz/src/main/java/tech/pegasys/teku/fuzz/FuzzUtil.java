@@ -13,15 +13,12 @@
 
 package tech.pegasys.teku.fuzz;
 
-import static tech.pegasys.teku.spec.logic.common.helpers.MathHelpers.bytesToUInt64;
-
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Optional;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.bls.BLSConstants;
-import tech.pegasys.teku.bls.BLSSignatureVerifier;
 import tech.pegasys.teku.fuzz.input.AttestationFuzzInput;
 import tech.pegasys.teku.fuzz.input.AttesterSlashingFuzzInput;
 import tech.pegasys.teku.fuzz.input.BlockFuzzInput;
@@ -39,6 +36,7 @@ import tech.pegasys.teku.spec.datastructures.operations.Deposit;
 import tech.pegasys.teku.spec.datastructures.operations.ProposerSlashing;
 import tech.pegasys.teku.spec.datastructures.operations.SignedVoluntaryExit;
 import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
+import tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil;
 import tech.pegasys.teku.spec.logic.common.statetransition.exceptions.BlockProcessingException;
 import tech.pegasys.teku.spec.logic.common.statetransition.exceptions.StateTransitionException;
 import tech.pegasys.teku.ssz.SszData;
@@ -57,7 +55,7 @@ public class FuzzUtil {
   // Size of ValidatorIndex returned by shuffle
   private static final int OUTPUT_INDEX_BYTES = Long.BYTES;
 
-  private final BLSSignatureVerifier signatureVerifier;
+  private final boolean disable_bls;
 
   // NOTE: this uses primitive values as parameters to more easily call via JNI
   public FuzzUtil(final boolean useMainnetConfig, final boolean disable_bls) {
@@ -67,7 +65,7 @@ public class FuzzUtil {
             : TestSpecFactory.createMinimalPhase0();
     beaconBlockBodySchema = spec.getGenesisSpec().getSchemaDefinitions().getBeaconBlockBodySchema();
     initialize(useMainnetConfig, disable_bls);
-    this.signatureVerifier = disable_bls ? BLSSignatureVerifier.NO_OP : BLSSignatureVerifier.SIMPLE;
+    this.disable_bls = disable_bls;
   }
 
   public static void initialize(final boolean useMainnetConfig, final boolean disable_bls) {
@@ -95,10 +93,7 @@ public class FuzzUtil {
       BeaconState postState =
           structuredInput
               .getState()
-              .updated(
-                  state ->
-                      spec.getBlockProcessor(state.getSlot())
-                          .processAttestations(state, attestations, signatureVerifier));
+              .updated(state -> spec.processAttestations(state, attestations));
       Bytes output = postState.sszSerialize();
       return Optional.of(output.toArrayUnsafe());
     } catch (BlockProcessingException e) {
@@ -121,9 +116,9 @@ public class FuzzUtil {
           structuredInput
               .getState()
               .updated(
-                  state ->
-                      spec.getBlockProcessor(state.getSlot())
-                          .processAttesterSlashings(state, slashings));
+                  state -> {
+                    spec.processAttesterSlashings(state, slashings);
+                  });
       Bytes output = postState.sszSerialize();
       return Optional.of(output.toArrayUnsafe());
     } catch (BlockProcessingException e) {
@@ -136,10 +131,13 @@ public class FuzzUtil {
     BlockFuzzInput structuredInput =
         deserialize(input, BlockFuzzInput.createSchema(spec.getGenesisSpec()));
 
+    boolean validate_root_and_sigs = !disable_bls;
     try {
       BeaconState postState =
-          spec.processBlock(
-              structuredInput.getState(), structuredInput.getSigned_block(), signatureVerifier);
+          spec.initiateStateTransition(
+              structuredInput.getState(),
+              structuredInput.getSigned_block(),
+              validate_root_and_sigs);
       Bytes output = postState.sszSerialize();
       return Optional.of(output.toArrayUnsafe());
     } catch (StateTransitionException e) {
@@ -157,9 +155,9 @@ public class FuzzUtil {
           structuredInput
               .getState()
               .updated(
-                  state ->
-                      spec.getBlockProcessor(state.getSlot())
-                          .processBlockHeader(state, structuredInput.getBlock()));
+                  state -> {
+                    spec.processBlockHeader(state, structuredInput.getBlock());
+                  });
       Bytes output = postState.sszSerialize();
       return Optional.of(output.toArrayUnsafe());
     } catch (BlockProcessingException e) {
@@ -179,8 +177,9 @@ public class FuzzUtil {
           structuredInput
               .getState()
               .updated(
-                  state ->
-                      spec.getBlockProcessor(state.getSlot()).processDeposits(state, deposits));
+                  state -> {
+                    spec.processDeposits(state, deposits);
+                  });
       Bytes output = postState.sszSerialize();
       return Optional.of(output.toArrayUnsafe());
     } catch (BlockProcessingException e) {
@@ -203,9 +202,9 @@ public class FuzzUtil {
           structuredInput
               .getState()
               .updated(
-                  state ->
-                      spec.getBlockProcessor(state.getSlot())
-                          .processProposerSlashings(state, proposerSlashings, signatureVerifier));
+                  state -> {
+                    spec.processProposerSlashings(state, proposerSlashings);
+                  });
       Bytes output = postState.sszSerialize();
       return Optional.of(output.toArrayUnsafe());
     } catch (BlockProcessingException e) {
@@ -219,7 +218,7 @@ public class FuzzUtil {
       return Optional.empty();
     }
     // Mask it to make ensure positive before using remainder.
-    int count = bytesToUInt64(Bytes.wrap(input, 0, 2)).mod(100).intValue();
+    int count = BeaconStateUtil.bytes_to_int64(Bytes.wrap(input, 0, 2)).mod(100).intValue();
 
     Bytes32 seed = Bytes32.wrap(input, 2);
 
@@ -253,9 +252,9 @@ public class FuzzUtil {
           structuredInput
               .getState()
               .updated(
-                  state ->
-                      spec.getBlockProcessor(state.getSlot())
-                          .processVoluntaryExits(state, voluntaryExits, signatureVerifier));
+                  state -> {
+                    spec.processVoluntaryExits(state, voluntaryExits);
+                  });
       Bytes output = postState.sszSerialize();
       return Optional.of(output.toArrayUnsafe());
     } catch (BlockProcessingException e) {

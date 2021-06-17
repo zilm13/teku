@@ -36,7 +36,7 @@ public class StreamingStateRegenerator {
 
   private void processBlock(final SignedBeaconBlock block) {
     try {
-      state = spec.replayValidatedBlock(state, block);
+      state = spec.initiateStateTransition(state, block, false);
     } catch (StateTransitionException e) {
       throw new IllegalStateException("Regenerating state failed", e);
     }

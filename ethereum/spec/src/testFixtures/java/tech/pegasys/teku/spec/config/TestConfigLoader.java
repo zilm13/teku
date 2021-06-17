@@ -13,37 +13,15 @@
 
 package tech.pegasys.teku.spec.config;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import static tech.pegasys.teku.spec.config.SpecConfigLoader.processConfig;
 
-import java.net.URL;
 import java.util.function.Consumer;
 
 public class TestConfigLoader {
   public static SpecConfig loadConfig(
-      final String configName, final Consumer<SpecConfigBuilder> modifier) {
+      final String constants, final Consumer<SpecConfigBuilder> modifier) {
     final SpecConfigReader reader = new SpecConfigReader();
-    processConfig(configName, reader::read);
+    processConfig(constants, reader::read);
     return reader.build(modifier);
-  }
-
-  public static SpecConfig loadPhase0Config(final String configName) {
-    return loadPhase0Config(configName, __ -> {});
-  }
-
-  public static SpecConfig loadPhase0Config(
-      final String configName, final Consumer<SpecConfigBuilder> modifier) {
-    final SpecConfigReader reader = new SpecConfigReader();
-    final URL legacyPhase0Config = getLegacyMainnetConfigResourceAsUrl(configName);
-    processConfig(legacyPhase0Config.toString(), reader::read);
-    return reader.build(modifier);
-  }
-
-  private static URL getLegacyMainnetConfigResourceAsUrl(final String configName) {
-    final String resourcePath = "tech/pegasys/teku/spec/config/legacy/" + configName + ".yaml";
-    final URL resource = TestConfigLoader.class.getClassLoader().getResource(resourcePath);
-
-    checkNotNull(resource, "Unable to load config resource at: " + resourcePath);
-    return resource;
   }
 }

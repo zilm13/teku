@@ -46,7 +46,6 @@ import tech.pegasys.teku.validator.client.ForkProvider;
 import tech.pegasys.teku.validator.client.Validator;
 
 class BlockProductionDutyTest {
-  private static final String TYPE = "block";
   private static final UInt64 SLOT = UInt64.valueOf(498294);
   private final Spec spec = TestSpecFactory.createMinimalPhase0();
   private final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
@@ -67,7 +66,12 @@ class BlockProductionDutyTest {
 
   @BeforeEach
   public void setUp() {
-    when(forkProvider.getForkInfo(any())).thenReturn(completedFuture(fork));
+    when(forkProvider.getForkInfo()).thenReturn(completedFuture(fork));
+  }
+
+  @Test
+  public void shouldReportCorrectProducedType() {
+    assertThat(duty.getProducedType()).isEqualTo("block");
   }
 
   @Test
@@ -88,7 +92,8 @@ class BlockProductionDutyTest {
     performAndReportDuty();
 
     verify(validatorApiChannel).sendSignedBlock(signedBlock);
-    verify(validatorLogger).dutyCompleted(TYPE, SLOT, 1, Set.of(unsignedBlock.hashTreeRoot()));
+    verify(validatorLogger)
+        .dutyCompleted(duty.getProducedType(), SLOT, 1, Set.of(unsignedBlock.hashTreeRoot()));
     verifyNoMoreInteractions(validatorLogger);
   }
 
@@ -125,9 +130,9 @@ class BlockProductionDutyTest {
 
     verify(validatorLogger)
         .dutyFailed(
-            eq(TYPE),
+            eq(duty.getProducedType()),
             eq(SLOT),
-            eq(Set.of(validator.getPublicKey().toAbbreviatedString())),
+            eq(duty.getValidatorIdString()),
             any(IllegalStateException.class));
     verifyNoMoreInteractions(validatorLogger);
   }
@@ -149,13 +154,15 @@ class BlockProductionDutyTest {
   public void assertDutyFails(final RuntimeException error) {
     performAndReportDuty();
     verify(validatorLogger)
-        .dutyFailed(TYPE, SLOT, Set.of(validator.getPublicKey().toAbbreviatedString()), error);
+        .dutyFailed(duty.getProducedType(), SLOT, duty.getValidatorIdString(), error);
     verifyNoMoreInteractions(validatorLogger);
   }
 
   private void performAndReportDuty() {
     final SafeFuture<DutyResult> result = duty.performDuty();
     assertThat(result).isCompleted();
-    result.join().report(TYPE, SLOT, validatorLogger);
+    result
+        .join()
+        .report(duty.getProducedType(), SLOT, duty.getValidatorIdString(), validatorLogger);
   }
 }
