@@ -14,7 +14,7 @@
 package tech.pegasys.teku.storage.server;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_start_slot_at_epoch;
+import static tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil.compute_start_slot_at_epoch;
 import static tech.pegasys.teku.storage.store.StoreAssertions.assertStoresMatch;
 
 import com.google.common.io.Files;
@@ -28,10 +28,10 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tech.pegasys.teku.datastructures.blocks.SignedBlockAndState;
-import tech.pegasys.teku.datastructures.state.AnchorPoint;
-import tech.pegasys.teku.datastructures.state.Checkpoint;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBlockAndState;
+import tech.pegasys.teku.spec.datastructures.state.AnchorPoint;
+import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
 import tech.pegasys.teku.storage.storageSystem.StorageSystem;
 import tech.pegasys.teku.storage.store.StoreConfig;
 import tech.pegasys.teku.storage.store.UpdatableStore;
@@ -41,14 +41,19 @@ public abstract class AbstractStorageBackedDatabaseTest extends AbstractDatabase
   private final List<File> tmpDirectories = new ArrayList<>();
 
   protected abstract StorageSystem createStorageSystem(
-      final File tempDir, final StateStorageMode storageMode, final StoreConfig storeConfig);
+      final File tempDir,
+      final StateStorageMode storageMode,
+      final StoreConfig storeConfig,
+      final boolean storeNonCanonicalBlocks);
 
   @Override
   protected StorageSystem createStorageSystemInternal(
-      final StateStorageMode storageMode, final StoreConfig storeConfig) {
+      final StateStorageMode storageMode,
+      final StoreConfig storeConfig,
+      final boolean storeNonCanonicalBlocks) {
     final File tmpDir = Files.createTempDir();
     tmpDirectories.add(tmpDir);
-    return createStorageSystem(tmpDir, storageMode, storeConfig);
+    return createStorageSystem(tmpDir, storageMode, storeConfig, storeNonCanonicalBlocks);
   }
 
   @Override
@@ -63,9 +68,17 @@ public abstract class AbstractStorageBackedDatabaseTest extends AbstractDatabase
   }
 
   protected StorageSystem createStorage(final File tempDir, final StateStorageMode storageMode) {
+    return createStorage(tempDir, storageMode, false);
+  }
+
+  protected StorageSystem createStorage(
+      final File tempDir,
+      final StateStorageMode storageMode,
+      final boolean storeNonCanonicalBlocks) {
     this.storageMode = storageMode;
     final StorageSystem storage =
-        createStorageSystem(tempDir, storageMode, StoreConfig.createDefault());
+        createStorageSystem(
+            tempDir, storageMode, StoreConfig.createDefault(), storeNonCanonicalBlocks);
     setDefaultStorage(storage);
     return storage;
   }

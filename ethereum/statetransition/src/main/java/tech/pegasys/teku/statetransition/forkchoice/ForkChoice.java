@@ -22,26 +22,27 @@ import java.util.Optional;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.tuweni.bytes.Bytes32;
-import tech.pegasys.teku.core.ForkChoiceAttestationValidator;
-import tech.pegasys.teku.core.ForkChoiceBlockTasks;
-import tech.pegasys.teku.core.StateTransition;
-import tech.pegasys.teku.core.lookup.CapturingIndexedAttestationProvider;
-import tech.pegasys.teku.core.results.BlockImportResult;
-import tech.pegasys.teku.datastructures.attestation.ValidateableAttestation;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
-import tech.pegasys.teku.datastructures.forkchoice.InvalidCheckpointException;
-import tech.pegasys.teku.datastructures.forkchoice.ReadOnlyForkChoiceStrategy;
-import tech.pegasys.teku.datastructures.forkchoice.VoteUpdater;
-import tech.pegasys.teku.datastructures.operations.IndexedAttestation;
-import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.datastructures.state.Checkpoint;
-import tech.pegasys.teku.datastructures.util.AttestationProcessingResult;
 import tech.pegasys.teku.infrastructure.async.ExceptionThrowingRunnable;
 import tech.pegasys.teku.infrastructure.async.ExceptionThrowingSupplier;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.eventthread.EventThread;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.protoarray.ForkChoiceStrategy;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.cache.CapturingIndexedAttestationCache;
+import tech.pegasys.teku.spec.cache.IndexedAttestationCache;
+import tech.pegasys.teku.spec.datastructures.attestation.ValidateableAttestation;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.SlotAndBlockRoot;
+import tech.pegasys.teku.spec.datastructures.forkchoice.InvalidCheckpointException;
+import tech.pegasys.teku.spec.datastructures.forkchoice.ProposerWeighting;
+import tech.pegasys.teku.spec.datastructures.forkchoice.ReadOnlyForkChoiceStrategy;
+import tech.pegasys.teku.spec.datastructures.forkchoice.VoteUpdater;
+import tech.pegasys.teku.spec.datastructures.operations.IndexedAttestation;
+import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
+import tech.pegasys.teku.spec.datastructures.util.AttestationProcessingResult;
+import tech.pegasys.teku.spec.logic.common.statetransition.results.BlockImportResult;
 import tech.pegasys.teku.storage.client.RecentChainData;
 import tech.pegasys.teku.storage.store.UpdatableStore;
 import tech.pegasys.teku.storage.store.UpdatableStore.StoreTransaction;
@@ -49,42 +50,63 @@ import tech.pegasys.teku.storage.store.UpdatableStore.StoreTransaction;
 public class ForkChoice {
   private static final Logger LOG = LogManager.getLogger();
 
-  private final ForkChoiceAttestationValidator attestationValidator;
+  private final Spec spec;
   private final EventThread forkChoiceExecutor;
   private final RecentChainData recentChainData;
-  private final StateTransition stateTransition;
-  private final ForkChoiceBlockTasks forkChoiceBlockTasks;
+  private final ProposerWeightings proposerWeightings;
 
-  public ForkChoice(
-      final ForkChoiceAttestationValidator attestationValidator,
-      final ForkChoiceBlockTasks forkChoiceBlockTasks,
+  private ForkChoice(
+      final Spec spec,
       final EventThread forkChoiceExecutor,
       final RecentChainData recentChainData,
-      final StateTransition stateTransition) {
-    this.attestationValidator = attestationValidator;
-    this.forkChoiceBlockTasks = forkChoiceBlockTasks;
+      final ProposerWeightings proposerWeightings) {
+    this.spec = spec;
     this.forkChoiceExecutor = forkChoiceExecutor;
     this.recentChainData = recentChainData;
-    this.stateTransition = stateTransition;
+    this.proposerWeightings = proposerWeightings;
     recentChainData.subscribeStoreInitialized(this::initializeProtoArrayForkChoice);
   }
 
+  public static ForkChoice create(
+      final Spec spec,
+      final EventThread forkChoiceExecutor,
+      final RecentChainData recentChainData,
+      final boolean balanceAttackMitigationEnabled) {
+    final ProposerWeightings proposerWeightings =
+        balanceAttackMitigationEnabled
+            ? new ActiveProposerWeightings(forkChoiceExecutor, spec)
+            : new InactiveProposerWeightings();
+    return new ForkChoice(spec, forkChoiceExecutor, recentChainData, proposerWeightings);
+  }
+
+  /**
+   * @deprecated Provided only to avoid having to hard code balanceAttackMitigationEnabled in lots
+   *     of tests. Will be removed when the feature toggle is removed.
+   */
+  @Deprecated
+  public static ForkChoice create(
+      final Spec spec,
+      final EventThread forkChoiceExecutor,
+      final RecentChainData recentChainData) {
+    return create(spec, forkChoiceExecutor, recentChainData, false);
+  }
+
   private void initializeProtoArrayForkChoice() {
-    processHead();
+    processHead().join();
   }
 
-  public void processHead() {
-    processHead(Optional.empty());
+  public SafeFuture<Boolean> processHead() {
+    return processHead(Optional.empty());
   }
 
-  public void processHead(UInt64 nodeSlot) {
-    processHead(Optional.of(nodeSlot));
+  public SafeFuture<Boolean> processHead(UInt64 nodeSlot) {
+    return processHead(Optional.of(nodeSlot));
   }
 
-  private void processHead(Optional<UInt64> nodeSlot) {
+  private SafeFuture<Boolean> processHead(Optional<UInt64> nodeSlot) {
     final Checkpoint retrievedJustifiedCheckpoint =
         recentChainData.getStore().getJustifiedCheckpoint();
-    recentChainData
+    return recentChainData
         .retrieveCheckpointState(retrievedJustifiedCheckpoint)
         .thenCompose(
             justifiedCheckpointState ->
@@ -101,15 +123,23 @@ public class ForkChoice {
                             retrievedJustifiedCheckpoint.getRoot(),
                             justifiedCheckpoint.getEpoch(),
                             justifiedCheckpoint.getRoot());
-                        return;
+                        return false;
                       }
                       final VoteUpdater transaction = recentChainData.startVoteUpdate();
                       final ReadOnlyForkChoiceStrategy forkChoiceStrategy = getForkChoiceStrategy();
+                      final BeaconState justifiedState = justifiedCheckpointState.orElseThrow();
+                      final List<UInt64> justifiedEffectiveBalances =
+                          spec.getBeaconStateUtil(justifiedState.getSlot())
+                              .getEffectiveBalances(justifiedState);
+
+                      final List<ProposerWeighting> removedProposerWeightings =
+                          proposerWeightings.clearProposerWeightings();
                       Bytes32 headBlockRoot =
                           transaction.applyForkChoiceScoreChanges(
                               finalizedCheckpoint,
                               justifiedCheckpoint,
-                              justifiedCheckpointState.orElseThrow());
+                              justifiedEffectiveBalances,
+                              removedProposerWeightings);
 
                       recentChainData.updateHead(
                           headBlockRoot,
@@ -122,15 +152,22 @@ public class ForkChoice {
                                               "Unable to retrieve the slot of fork choice head: "
                                                   + headBlockRoot))));
                       transaction.commit();
-                    }))
-        .join();
+                      return true;
+                    }));
+  }
+
+  /** Import a block to the store. */
+  public SafeFuture<BlockImportResult> onBlock(final SignedBeaconBlock block) {
+    return recentChainData
+        .retrieveStateAtSlot(new SlotAndBlockRoot(block.getSlot(), block.getParentRoot()))
+        .thenCompose(blockSlotState -> onBlock(block, blockSlotState));
   }
 
   /**
    * Import a block to the store. The supplied blockSlotState must already have empty slots
    * processed to the same slot as the block.
    */
-  public SafeFuture<BlockImportResult> onBlock(
+  private SafeFuture<BlockImportResult> onBlock(
       final SignedBeaconBlock block, Optional<BeaconState> blockSlotState) {
     if (blockSlotState.isEmpty()) {
       return SafeFuture.completedFuture(BlockImportResult.FAILED_UNKNOWN_PARENT);
@@ -144,33 +181,28 @@ public class ForkChoice {
         () -> {
           final ForkChoiceStrategy forkChoiceStrategy = getForkChoiceStrategy();
           final StoreTransaction transaction = recentChainData.startStoreTransaction();
-          final CapturingIndexedAttestationProvider indexedAttestationProvider =
-              new CapturingIndexedAttestationProvider();
+          final CapturingIndexedAttestationCache indexedAttestationCache =
+              IndexedAttestationCache.capturing();
 
           addParentStateRoots(blockSlotState.get(), transaction);
 
           final BlockImportResult result =
-              forkChoiceBlockTasks.on_block(
-                  transaction,
-                  block,
-                  blockSlotState.get(),
-                  stateTransition,
-                  indexedAttestationProvider);
+              spec.onBlock(transaction, block, blockSlotState.get(), indexedAttestationCache);
 
           if (!result.isSuccessful()) {
             return result;
           }
           // Note: not using thenRun here because we want to ensure each step is on the event thread
           transaction.commit().join();
-          updateForkChoiceForImportedBlock(block, result);
-          applyVotesFromBlock(forkChoiceStrategy, indexedAttestationProvider);
+          updateForkChoiceForImportedBlock(block, blockSlotState.get(), result, forkChoiceStrategy);
+          applyVotesFromBlock(forkChoiceStrategy, indexedAttestationCache);
           return result;
         });
   }
 
   private void applyVotesFromBlock(
       final ForkChoiceStrategy forkChoiceStrategy,
-      final CapturingIndexedAttestationProvider indexedAttestationProvider) {
+      final CapturingIndexedAttestationCache indexedAttestationProvider) {
     final VoteUpdater voteUpdater = recentChainData.startVoteUpdate();
     indexedAttestationProvider.getIndexedAttestations().stream()
         .filter(
@@ -183,22 +215,45 @@ public class ForkChoice {
   }
 
   private void updateForkChoiceForImportedBlock(
-      final SignedBeaconBlock block, final BlockImportResult result) {
+      final SignedBeaconBlock block,
+      final BeaconState blockSlotState,
+      final BlockImportResult result,
+      final ForkChoiceStrategy forkChoiceStrategy) {
     if (result.isSuccessful()) {
-      // If the new block builds on our current chain head immediately make it the new head
-      // Since fork choice works by walking down the tree selecting the child block with
-      // the greatest weight, when a block has only one child it will automatically become
-      // a better choice than the block itself.  So the first block we receive that is a
-      // child of our current chain head, must be the new chain head. If we'd had any other
-      // child of the current chain head we'd have already selected it as head.
-      if (recentChainData
-          .getChainHead()
-          .map(currentHead -> currentHead.getRoot().equals(block.getParentRoot()))
-          .orElse(false)) {
-        recentChainData.updateHead(block.getRoot(), block.getSlot());
-        result.markAsCanonical();
+      proposerWeightings.onBlockReceived(block, blockSlotState, forkChoiceStrategy);
+
+      final SlotAndBlockRoot bestHeadBlock = findNewChainHead(block, forkChoiceStrategy);
+      if (!bestHeadBlock.getBlockRoot().equals(recentChainData.getBestBlockRoot().orElseThrow())) {
+        recentChainData.updateHead(bestHeadBlock.getBlockRoot(), bestHeadBlock.getSlot());
+        if (bestHeadBlock.getBlockRoot().equals(block.getRoot())) {
+          result.markAsCanonical();
+        }
       }
     }
+  }
+
+  private SlotAndBlockRoot findNewChainHead(
+      final SignedBeaconBlock block, final ForkChoiceStrategy forkChoiceStrategy) {
+    // If the new block builds on our current chain head it must be the new chain head.
+    // Since fork choice works by walking down the tree selecting the child block with
+    // the greatest weight, when a block has only one child it will automatically become
+    // a better choice than the block itself.  So the first block we receive that is a
+    // child of our current chain head, must be the new chain head. If we'd had any other
+    // child of the current chain head we'd have already selected it as head.
+    if (recentChainData
+        .getChainHead()
+        .map(currentHead -> currentHead.getRoot().equals(block.getParentRoot()))
+        .orElse(false)) {
+      return new SlotAndBlockRoot(block.getSlot(), block.getRoot());
+    }
+
+    // Otherwise, use fork choice to find the new chain head as if this block is on time the
+    // proposer weighting may cause us to reorg.
+    // During sync, this may be noticeably slower than just comparing the chain head due to the way
+    // ProtoArray skips updating all ancestors when adding a new block but it's cheap when in sync.
+    final Checkpoint justifiedCheckpoint = recentChainData.getJustifiedCheckpoint().orElseThrow();
+    final Checkpoint finalizedCheckpoint = recentChainData.getFinalizedCheckpoint().orElseThrow();
+    return forkChoiceStrategy.findHead(justifiedCheckpoint, finalizedCheckpoint);
   }
 
   public SafeFuture<AttestationProcessingResult> onAttestation(
@@ -209,7 +264,7 @@ public class ForkChoice {
             maybeTargetState -> {
               final UpdatableStore store = recentChainData.getStore();
               final AttestationProcessingResult validationResult =
-                  attestationValidator.validate(store, attestation, maybeTargetState);
+                  spec.validateAttestation(store, attestation, maybeTargetState);
 
               if (!validationResult.isSuccessful()) {
                 return SafeFuture.completedFuture(validationResult);
@@ -248,7 +303,18 @@ public class ForkChoice {
         .reportExceptions();
   }
 
+  public void onBlocksDueForSlot(final UInt64 slot) {
+    onForkChoiceThread(() -> proposerWeightings.onBlockDueForSlot(slot)).reportExceptions();
+  }
+
+  public void onTick(final UInt64 currentTime) {
+    final StoreTransaction transaction = recentChainData.startStoreTransaction();
+    spec.onTick(transaction, currentTime);
+    transaction.commit().join();
+  }
+
   private ForkChoiceStrategy getForkChoiceStrategy() {
+    forkChoiceExecutor.checkOnEventThread();
     return recentChainData
         .getForkChoiceStrategy()
         .orElseThrow(

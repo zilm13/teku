@@ -15,13 +15,13 @@ package tech.pegasys.teku.networking.eth2.rpc.core;
 
 import java.util.Objects;
 import org.apache.tuweni.bytes.Bytes;
-import tech.pegasys.teku.datastructures.networking.libp2p.rpc.RpcRequest;
 import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.networking.eth2.peers.PeerLookup;
 import tech.pegasys.teku.networking.eth2.rpc.core.encodings.RpcEncoding;
 import tech.pegasys.teku.networking.p2p.rpc.RpcMethod;
-import tech.pegasys.teku.ssz.backing.SszData;
-import tech.pegasys.teku.ssz.backing.schema.SszSchema;
+import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.RpcRequest;
+import tech.pegasys.teku.ssz.SszData;
+import tech.pegasys.teku.ssz.schema.SszSchema;
 
 public class Eth2RpcMethod<TRequest extends RpcRequest & SszData, TResponse extends SszData>
     implements RpcMethod {
@@ -64,14 +64,6 @@ public class Eth2RpcMethod<TRequest extends RpcRequest & SszData, TResponse exte
     return methodMultistreamId;
   }
 
-  public SszSchema<TRequest> getRequestType() {
-    return requestType;
-  }
-
-  public SszSchema<TResponse> getResponseType() {
-    return responseType;
-  }
-
   public RpcEncoding getEncoding() {
     return encoding;
   }
@@ -88,8 +80,8 @@ public class Eth2RpcMethod<TRequest extends RpcRequest & SszData, TResponse exte
     return new RpcRequestDecoder<>(requestType, encoding);
   }
 
-  public RpcResponseDecoder<TResponse> createResponseDecoder() {
-    return new RpcResponseDecoder<>(responseType, encoding);
+  public RpcResponseDecoder<TResponse, ?> createResponseDecoder() {
+    return RpcResponseDecoder.createContextFreeDecoder(encoding, responseType);
   }
 
   @Override

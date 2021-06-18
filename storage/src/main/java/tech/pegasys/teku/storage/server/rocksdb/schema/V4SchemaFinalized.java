@@ -14,36 +14,40 @@
 package tech.pegasys.teku.storage.server.rocksdb.schema;
 
 import static tech.pegasys.teku.storage.server.rocksdb.serialization.RocksDbSerializer.BYTES32_SERIALIZER;
-import static tech.pegasys.teku.storage.server.rocksdb.serialization.RocksDbSerializer.SIGNED_BLOCK_SERIALIZER;
-import static tech.pegasys.teku.storage.server.rocksdb.serialization.RocksDbSerializer.STATE_SERIALIZER;
 import static tech.pegasys.teku.storage.server.rocksdb.serialization.RocksDbSerializer.UINT64_SERIALIZER;
 
 import java.util.Collections;
 import java.util.List;
 import org.apache.tuweni.bytes.Bytes32;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
-import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
+import tech.pegasys.teku.storage.server.rocksdb.serialization.RocksDbSerializer;
 
 public class V4SchemaFinalized implements SchemaFinalized {
-  public static final SchemaFinalized INSTANCE = new V4SchemaFinalized();
-
   private static final RocksDbColumn<Bytes32, UInt64> SLOTS_BY_FINALIZED_ROOT =
       RocksDbColumn.create(1, BYTES32_SERIALIZER, UINT64_SERIALIZER);
-  private static final RocksDbColumn<UInt64, SignedBeaconBlock> FINALIZED_BLOCKS_BY_SLOT =
-      RocksDbColumn.create(2, UINT64_SERIALIZER, SIGNED_BLOCK_SERIALIZER);
-  private static final RocksDbColumn<UInt64, BeaconState> FINALIZED_STATES_BY_SLOT =
-      RocksDbColumn.create(3, UINT64_SERIALIZER, STATE_SERIALIZER);
+  private final RocksDbColumn<UInt64, SignedBeaconBlock> finalizedBlocksBySlot;
+  private final RocksDbColumn<UInt64, BeaconState> finalizedStatesBySlot;
+  private final RocksDbColumn<Bytes32, SignedBeaconBlock> nonCanonicalBlocksByRoot;
   private static final RocksDbColumn<Bytes32, UInt64> SLOTS_BY_FINALIZED_STATE_ROOT =
       RocksDbColumn.create(4, BYTES32_SERIALIZER, UINT64_SERIALIZER);
-  private static final List<RocksDbColumn<?, ?>> ALL_COLUMNS =
-      List.of(
-          SLOTS_BY_FINALIZED_ROOT,
-          FINALIZED_BLOCKS_BY_SLOT,
-          FINALIZED_STATES_BY_SLOT,
-          SLOTS_BY_FINALIZED_STATE_ROOT);
 
-  private V4SchemaFinalized() {}
+  private V4SchemaFinalized(final Spec spec) {
+    finalizedBlocksBySlot =
+        RocksDbColumn.create(
+            2, UINT64_SERIALIZER, RocksDbSerializer.createSignedBlockSerializer(spec));
+    this.finalizedStatesBySlot =
+        RocksDbColumn.create(3, UINT64_SERIALIZER, RocksDbSerializer.createStateSerializer(spec));
+    nonCanonicalBlocksByRoot =
+        RocksDbColumn.create(
+            5, BYTES32_SERIALIZER, RocksDbSerializer.createSignedBlockSerializer(spec));
+  }
+
+  public static SchemaFinalized create(final Spec spec) {
+    return new V4SchemaFinalized(spec);
+  }
 
   @Override
   public RocksDbColumn<Bytes32, UInt64> getColumnSlotsByFinalizedRoot() {
@@ -52,12 +56,12 @@ public class V4SchemaFinalized implements SchemaFinalized {
 
   @Override
   public RocksDbColumn<UInt64, SignedBeaconBlock> getColumnFinalizedBlocksBySlot() {
-    return FINALIZED_BLOCKS_BY_SLOT;
+    return finalizedBlocksBySlot;
   }
 
   @Override
   public RocksDbColumn<UInt64, BeaconState> getColumnFinalizedStatesBySlot() {
-    return FINALIZED_STATES_BY_SLOT;
+    return finalizedStatesBySlot;
   }
 
   @Override
@@ -66,8 +70,18 @@ public class V4SchemaFinalized implements SchemaFinalized {
   }
 
   @Override
+  public RocksDbColumn<Bytes32, SignedBeaconBlock> getColumnNonCanonicalBlocksByRoot() {
+    return nonCanonicalBlocksByRoot;
+  }
+
+  @Override
   public List<RocksDbColumn<?, ?>> getAllColumns() {
-    return ALL_COLUMNS;
+    return List.of(
+        SLOTS_BY_FINALIZED_ROOT,
+        finalizedBlocksBySlot,
+        finalizedStatesBySlot,
+        SLOTS_BY_FINALIZED_STATE_ROOT,
+        nonCanonicalBlocksByRoot);
   }
 
   @Override

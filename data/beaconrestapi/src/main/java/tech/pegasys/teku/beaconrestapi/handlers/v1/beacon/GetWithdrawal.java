@@ -22,7 +22,7 @@ import static tech.pegasys.teku.beaconrestapi.RestApiConstants.RES_NOT_FOUND;
 import static tech.pegasys.teku.beaconrestapi.RestApiConstants.RES_OK;
 import static tech.pegasys.teku.beaconrestapi.RestApiConstants.RES_SERVICE_UNAVAILABLE;
 import static tech.pegasys.teku.beaconrestapi.RestApiConstants.SERVICE_UNAVAILABLE;
-import static tech.pegasys.teku.beaconrestapi.RestApiConstants.TAG_V1_BEACON;
+import static tech.pegasys.teku.beaconrestapi.RestApiConstants.TAG_BEACON;
 
 import com.google.common.base.Throwables;
 import io.javalin.http.Context;
@@ -64,7 +64,7 @@ public class GetWithdrawal extends AbstractHandler {
       path = ROUTE,
       method = HttpMethod.GET,
       summary = "Get withdrawal with proof from state",
-      tags = {TAG_V1_BEACON},
+      tags = {TAG_BEACON},
       description =
           "Returns withdrawal and generalized state proof tree for validator withdrawal by hash of its public key",
       pathParams = {

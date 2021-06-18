@@ -15,13 +15,13 @@ package tech.pegasys.teku.storage.server.rocksdb;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_epoch_at_slot;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_signing_root;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_domain;
 import static tech.pegasys.teku.infrastructure.logging.StatusLogger.STATUS_LOG;
 import static tech.pegasys.teku.infrastructure.metrics.TekuMetricCategory.STORAGE;
 import static tech.pegasys.teku.infrastructure.metrics.TekuMetricCategory.STORAGE_FINALIZED_DB;
 import static tech.pegasys.teku.infrastructure.metrics.TekuMetricCategory.STORAGE_HOT_DB;
+import static tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil.compute_epoch_at_slot;
+import static tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil.compute_signing_root;
+import static tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil.get_domain;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Iterables;
@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,30 +48,29 @@ import org.hyperledger.besu.plugin.services.MetricsSystem;
 import tech.pegasys.teku.bls.BLS;
 import tech.pegasys.teku.bls.BLSPublicKey;
 import tech.pegasys.teku.bls.BLSSignature;
-import tech.pegasys.teku.core.ForkChoiceUtil;
 import tech.pegasys.teku.dataproviders.lookup.BlockProvider;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlockHeader;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlockSummary;
-import tech.pegasys.teku.datastructures.blocks.BlockAndCheckpointEpochs;
-import tech.pegasys.teku.datastructures.blocks.CheckpointEpochs;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.SlotAndBlockRoot;
-import tech.pegasys.teku.datastructures.blocks.StateAndBlockSummary;
-import tech.pegasys.teku.datastructures.forkchoice.VoteTracker;
-import tech.pegasys.teku.datastructures.hashtree.HashTree;
-import tech.pegasys.teku.datastructures.state.AnchorPoint;
-import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.datastructures.state.Checkpoint;
-import tech.pegasys.teku.datastructures.state.Fork;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.pow.event.DepositsFromBlockEvent;
 import tech.pegasys.teku.pow.event.MinGenesisTimeBlockEvent;
 import tech.pegasys.teku.protoarray.ProtoArraySnapshot;
 import tech.pegasys.teku.protoarray.StoredBlockMetadata;
-import tech.pegasys.teku.spec.SpecProvider;
-import tech.pegasys.teku.spec.constants.SpecConstants;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.config.SpecConfig;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlockHeader;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlockSummary;
+import tech.pegasys.teku.spec.datastructures.blocks.BlockAndCheckpointEpochs;
+import tech.pegasys.teku.spec.datastructures.blocks.CheckpointEpochs;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.SlotAndBlockRoot;
+import tech.pegasys.teku.spec.datastructures.blocks.StateAndBlockSummary;
+import tech.pegasys.teku.spec.datastructures.forkchoice.VoteTracker;
+import tech.pegasys.teku.spec.datastructures.hashtree.HashTree;
+import tech.pegasys.teku.spec.datastructures.state.AnchorPoint;
+import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
+import tech.pegasys.teku.spec.datastructures.state.Fork;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
 import tech.pegasys.teku.storage.events.StorageUpdate;
 import tech.pegasys.teku.storage.events.WeakSubjectivityState;
 import tech.pegasys.teku.storage.events.WeakSubjectivityUpdate;
@@ -109,7 +109,8 @@ public class RocksDbDatabase implements Database {
   final RocksDbEth1Dao eth1Dao;
   private final RocksDbProtoArrayDao protoArrayDao;
 
-  private final SpecProvider specProvider;
+  private final Spec spec;
+  private final boolean storeNonCanonicalBlocks;
 
   public static Database createV4(
       final MetricsSystem metricsSystem,
@@ -117,18 +118,28 @@ public class RocksDbDatabase implements Database {
       final RocksDbConfiguration finalizedConfiguration,
       final StateStorageMode stateStorageMode,
       final long stateStorageFrequency,
-      final SpecProvider specProvider) {
+      final boolean storeNonCanonicalBlocks,
+      final Spec spec) {
     final RocksDbAccessor hotDb =
         RocksDbInstanceFactory.create(
-            metricsSystem, STORAGE_HOT_DB, hotConfiguration, V4SchemaHot.INSTANCE.getAllColumns());
+            metricsSystem,
+            STORAGE_HOT_DB,
+            hotConfiguration,
+            V4SchemaHot.create(spec).getAllColumns());
     final RocksDbAccessor finalizedDb =
         RocksDbInstanceFactory.create(
             metricsSystem,
             STORAGE_FINALIZED_DB,
             finalizedConfiguration,
-            V4SchemaFinalized.INSTANCE.getAllColumns());
+            V4SchemaFinalized.create(spec).getAllColumns());
     return createV4(
-        metricsSystem, hotDb, finalizedDb, stateStorageMode, stateStorageFrequency, specProvider);
+        metricsSystem,
+        hotDb,
+        finalizedDb,
+        stateStorageMode,
+        stateStorageFrequency,
+        storeNonCanonicalBlocks,
+        spec);
   }
 
   public static Database createV6(
@@ -139,7 +150,8 @@ public class RocksDbDatabase implements Database {
       final SchemaFinalized schemaFinalized,
       final StateStorageMode stateStorageMode,
       final long stateStorageFrequency,
-      final SpecProvider specProvider) {
+      final boolean storeNonCanonicalBlocks,
+      final Spec spec) {
     final RocksDbAccessor hotDb;
     final RocksDbAccessor finalizedDb;
 
@@ -169,7 +181,8 @@ public class RocksDbDatabase implements Database {
         schemaFinalized,
         stateStorageMode,
         stateStorageFrequency,
-        specProvider);
+        storeNonCanonicalBlocks,
+        spec);
   }
 
   public static Database createLevelDb(
@@ -178,21 +191,24 @@ public class RocksDbDatabase implements Database {
       final RocksDbConfiguration finalizedConfiguration,
       final StateStorageMode stateStorageMode,
       final long stateStorageFrequency,
-      final SpecProvider specProvider) {
+      final boolean storeNonCanonicalBlocks,
+      final Spec spec) {
+    final List<RocksDbColumn<?, ?>> v4FinalizedColumns =
+        V4SchemaFinalized.create(spec).getAllColumns();
     final RocksDbAccessor hotDb =
         LevelDbInstanceFactory.create(
-            metricsSystem,
-            STORAGE_HOT_DB,
-            hotConfiguration,
-            V4SchemaFinalized.INSTANCE.getAllColumns());
+            metricsSystem, STORAGE_HOT_DB, hotConfiguration, v4FinalizedColumns);
     final RocksDbAccessor finalizedDb =
         LevelDbInstanceFactory.create(
-            metricsSystem,
-            STORAGE_FINALIZED_DB,
-            finalizedConfiguration,
-            V4SchemaFinalized.INSTANCE.getAllColumns());
+            metricsSystem, STORAGE_FINALIZED_DB, finalizedConfiguration, v4FinalizedColumns);
     return createV4(
-        metricsSystem, hotDb, finalizedDb, stateStorageMode, stateStorageFrequency, specProvider);
+        metricsSystem,
+        hotDb,
+        finalizedDb,
+        stateStorageMode,
+        stateStorageFrequency,
+        storeNonCanonicalBlocks,
+        spec);
   }
 
   public static Database createLevelDbV2(
@@ -203,7 +219,8 @@ public class RocksDbDatabase implements Database {
       final SchemaFinalized schemaFinalized,
       final StateStorageMode stateStorageMode,
       final long stateStorageFrequency,
-      final SpecProvider specProvider) {
+      final boolean storeNonCanonicalBlocks,
+      final Spec spec) {
     final RocksDbAccessor hotDb;
     final RocksDbAccessor finalizedDb;
 
@@ -233,7 +250,8 @@ public class RocksDbDatabase implements Database {
         schemaFinalized,
         stateStorageMode,
         stateStorageFrequency,
-        specProvider);
+        storeNonCanonicalBlocks,
+        spec);
   }
 
   static Database createV4(
@@ -242,12 +260,21 @@ public class RocksDbDatabase implements Database {
       final RocksDbAccessor finalizedDb,
       final StateStorageMode stateStorageMode,
       final long stateStorageFrequency,
-      final SpecProvider specProvider) {
-    final V4HotRocksDbDao dao = new V4HotRocksDbDao(hotDb, V4SchemaHot.INSTANCE);
+      final boolean storeNonCanonicalBlocks,
+      final Spec spec) {
+    final V4HotRocksDbDao dao = new V4HotRocksDbDao(hotDb, V4SchemaHot.create(spec));
     final V4FinalizedRocksDbDao finalizedDbDao =
-        new V4FinalizedRocksDbDao(finalizedDb, V4SchemaFinalized.INSTANCE, stateStorageFrequency);
+        new V4FinalizedRocksDbDao(
+            finalizedDb, V4SchemaFinalized.create(spec), stateStorageFrequency);
     return new RocksDbDatabase(
-        metricsSystem, dao, finalizedDbDao, dao, dao, stateStorageMode, specProvider);
+        metricsSystem,
+        dao,
+        finalizedDbDao,
+        dao,
+        dao,
+        stateStorageMode,
+        storeNonCanonicalBlocks,
+        spec);
   }
 
   static Database createV6(
@@ -258,12 +285,20 @@ public class RocksDbDatabase implements Database {
       final SchemaFinalized schemaFinalized,
       final StateStorageMode stateStorageMode,
       final long stateStorageFrequency,
-      final SpecProvider specProvider) {
+      final boolean storeNonCanonicalBlocks,
+      final Spec spec) {
     final V4HotRocksDbDao dao = new V4HotRocksDbDao(hotDb, schemaHot);
     final V4FinalizedRocksDbDao finalizedDbDao =
         new V4FinalizedRocksDbDao(finalizedDb, schemaFinalized, stateStorageFrequency);
     return new RocksDbDatabase(
-        metricsSystem, dao, finalizedDbDao, dao, dao, stateStorageMode, specProvider);
+        metricsSystem,
+        dao,
+        finalizedDbDao,
+        dao,
+        dao,
+        stateStorageMode,
+        storeNonCanonicalBlocks,
+        spec);
   }
 
   private RocksDbDatabase(
@@ -273,15 +308,17 @@ public class RocksDbDatabase implements Database {
       final RocksDbEth1Dao eth1Dao,
       final RocksDbProtoArrayDao protoArrayDao,
       final StateStorageMode stateStorageMode,
-      final SpecProvider specProvider) {
-    checkNotNull(specProvider);
+      final boolean storeNonCanonicalBlocks,
+      final Spec spec) {
+    checkNotNull(spec);
     this.metricsSystem = metricsSystem;
     this.finalizedDao = finalizedDao;
     this.eth1Dao = eth1Dao;
     this.protoArrayDao = protoArrayDao;
     this.stateStorageMode = stateStorageMode;
     this.hotDao = hotDao;
-    this.specProvider = specProvider;
+    this.storeNonCanonicalBlocks = storeNonCanonicalBlocks;
+    this.spec = spec;
   }
 
   @Override
@@ -359,7 +396,7 @@ public class RocksDbDatabase implements Database {
 
     // Check block signatures are valid for blocks except the genesis block
     boolean isGenesisBlockIncluded =
-        Iterables.getLast(sorted).getSlot().equals(SpecConstants.GENESIS_SLOT);
+        Iterables.getLast(sorted).getSlot().equals(SpecConfig.GENESIS_SLOT);
     checkArgument(
         batchVerifyHistoricalBlockSignatures(
             isGenesisBlockIncluded ? sorted.subList(0, sorted.size() - 1) : sorted),
@@ -389,15 +426,13 @@ public class RocksDbDatabase implements Database {
         signedBlock -> {
           final BeaconBlock block = signedBlock.getMessage();
           final UInt64 epoch = compute_epoch_at_slot(block.getSlot());
-          final Fork fork = specProvider.fork(epoch);
+          final Fork fork = spec.fork(epoch);
           final Bytes32 domain =
-              get_domain(
-                  specProvider.domainBeaconProposer(epoch), epoch, fork, genesisValidatorsRoot);
+              get_domain(spec.domainBeaconProposer(epoch), epoch, fork, genesisValidatorsRoot);
           signatures.add(signedBlock.getSignature());
           signingRoots.add(compute_signing_root(block, domain));
           BLSPublicKey proposerPublicKey =
-              specProvider
-                  .getValidatorPubKey(finalizedState, block.getProposerIndex())
+              spec.getValidatorPubKey(finalizedState, block.getProposerIndex())
                   .orElseThrow(
                       () ->
                           new IllegalStateException(
@@ -480,12 +515,13 @@ public class RocksDbDatabase implements Database {
     // Make sure time is set to a reasonable value in the case where we start up before genesis when
     // the clock time would be prior to genesis
     final long clockTime = timeSupplier.get();
-    final UInt64 slotTime = ForkChoiceUtil.getSlotStartTime(finalizedState.getSlot(), genesisTime);
+    final UInt64 slotTime = spec.getSlotStartTime(finalizedState.getSlot(), genesisTime);
     final UInt64 time = slotTime.max(clockTime);
 
     return Optional.of(
         StoreBuilder.create()
             .metricsSystem(metricsSystem)
+            .specProvider(spec)
             .time(time)
             .anchor(maybeAnchor)
             .genesisTime(genesisTime)
@@ -543,7 +579,10 @@ public class RocksDbDatabase implements Database {
 
   @Override
   public Optional<SignedBeaconBlock> getSignedBlock(final Bytes32 root) {
-    return hotDao.getHotBlock(root).or(() -> finalizedDao.getFinalizedBlock(root));
+    return hotDao
+        .getHotBlock(root)
+        .or(() -> finalizedDao.getFinalizedBlock(root))
+        .or(() -> finalizedDao.getNonCanonicalBlock(root));
   }
 
   @Override
@@ -673,8 +712,8 @@ public class RocksDbDatabase implements Database {
     updateFinalizedData(
         update.getFinalizedChildToParentMap(),
         update.getFinalizedBlocks(),
-        update.getFinalizedStates());
-
+        update.getFinalizedStates(),
+        update.getDeletedHotBlocks());
     LOG.trace("Applying hot updates");
     try (final HotUpdater updater = hotDao.hotUpdater()) {
       // Store new hot data
@@ -684,7 +723,7 @@ public class RocksDbDatabase implements Database {
           .ifPresent(
               checkpoint -> {
                 updater.setFinalizedCheckpoint(checkpoint);
-                final int slotsPerEpoch = specProvider.slotsPerEpoch(checkpoint.getEpoch());
+                final int slotsPerEpoch = spec.slotsPerEpoch(checkpoint.getEpoch());
                 final UInt64 finalizedSlot = checkpoint.getEpochStartSlot().plus(slotsPerEpoch);
                 updater.pruneHotStateRoots(hotDao.getStateRootsBeforeSlot(finalizedSlot));
                 updater.deleteHotState(checkpoint.getRoot());
@@ -713,7 +752,8 @@ public class RocksDbDatabase implements Database {
   private void updateFinalizedData(
       Map<Bytes32, Bytes32> finalizedChildToParentMap,
       final Map<Bytes32, SignedBeaconBlock> finalizedBlocks,
-      final Map<Bytes32, BeaconState> finalizedStates) {
+      final Map<Bytes32, BeaconState> finalizedStates,
+      final Set<Bytes32> deletedHotBlocks) {
     if (finalizedChildToParentMap.isEmpty()) {
       // Nothing to do
       return;
@@ -729,6 +769,31 @@ public class RocksDbDatabase implements Database {
         break;
       default:
         throw new UnsupportedOperationException("Unhandled storage mode: " + stateStorageMode);
+    }
+
+    if (storeNonCanonicalBlocks) {
+      storeNonCanonicalBlocks(
+          deletedHotBlocks.stream()
+              .filter(root -> !finalizedChildToParentMap.containsKey(root))
+              .flatMap(root -> getHotBlock(root).stream())
+              .collect(Collectors.toSet()));
+    }
+  }
+
+  private void storeNonCanonicalBlocks(final Set<SignedBeaconBlock> nonCanonicalBlocks) {
+    int i = 0;
+    final Iterator<SignedBeaconBlock> it = nonCanonicalBlocks.iterator();
+    while (it.hasNext()) {
+      final int start = i;
+      try (final FinalizedUpdater updater = finalizedDao.finalizedUpdater()) {
+        while (it.hasNext() && (i - start) < TX_BATCH_SIZE) {
+          final SignedBeaconBlock block = it.next();
+          LOG.debug("Non canonical block {}", block.getRoot().toHexString());
+          updater.addNonCanonicalBlock(block);
+          i++;
+        }
+        updater.commit();
+      }
     }
   }
 
@@ -759,7 +824,7 @@ public class RocksDbDatabase implements Database {
       final int start = i;
       try (final FinalizedUpdater updater = finalizedDao.finalizedUpdater()) {
         final StateRootRecorder recorder =
-            new StateRootRecorder(lastSlot, updater::addFinalizedStateRoot, specProvider);
+            new StateRootRecorder(lastSlot, updater::addFinalizedStateRoot, spec);
 
         while (i < finalizedRoots.size() && (i - start) < TX_BATCH_SIZE) {
           final Bytes32 blockRoot = finalizedRoots.get(i);

@@ -22,7 +22,7 @@ import java.util.Objects;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.tuweni.bytes.Bytes;
-import tech.pegasys.teku.datastructures.networking.libp2p.rpc.RpcErrorMessage;
+import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.RpcErrorMessage;
 
 public class RpcException extends Exception {
   private static final Logger LOG = LogManager.getLogger();
@@ -49,10 +49,20 @@ public class RpcException extends Exception {
     }
   }
 
+  public static class UnrecognizedContextBytesException extends RpcException {
+    public UnrecognizedContextBytesException(final String context) {
+      super(INVALID_REQUEST_CODE, "Failed to recognize context bytes: " + context);
+    }
+  }
+
   // Unexpected message length
   public static class ExtraDataAppendedException extends RpcException {
     public ExtraDataAppendedException() {
       super(INVALID_REQUEST_CODE, "Extra data appended to end of message");
+    }
+
+    public ExtraDataAppendedException(String details) {
+      super(INVALID_REQUEST_CODE, "Extra data appended to end of message: " + details);
     }
   }
 

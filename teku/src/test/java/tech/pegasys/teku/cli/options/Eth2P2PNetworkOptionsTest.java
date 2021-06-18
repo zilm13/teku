@@ -23,9 +23,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import tech.pegasys.teku.cli.AbstractBeaconNodeCommandTest;
 import tech.pegasys.teku.config.TekuConfiguration;
-import tech.pegasys.teku.datastructures.eth1.Eth1Address;
 import tech.pegasys.teku.networking.eth2.P2PConfig;
 import tech.pegasys.teku.networks.Eth2NetworkConfiguration;
+import tech.pegasys.teku.spec.datastructures.eth1.Eth1Address;
 
 public class Eth2P2PNetworkOptionsTest extends AbstractBeaconNodeCommandTest {
 
@@ -39,7 +39,7 @@ public class Eth2P2PNetworkOptionsTest extends AbstractBeaconNodeCommandTest {
   }
 
   @ParameterizedTest(name = "{0}")
-  @ValueSource(strings = {"mainnet", "minimal", "swift", "medalla", "pyrmont"})
+  @ValueSource(strings = {"mainnet", "minimal", "swift", "pyrmont", "prater"})
   public void useDefaultsFromNetworkDefinition(final String networkName) {
     final Eth2NetworkConfiguration eth2NetworkConfig =
         Eth2NetworkConfiguration.builder(networkName).build();
@@ -70,7 +70,7 @@ public class Eth2P2PNetworkOptionsTest extends AbstractBeaconNodeCommandTest {
 
     // Powchain
     assertThat(tekuConfig.powchain().getDepositContract())
-        .isEqualTo(eth2NetworkConfig.getEth1DepositContractAddress().orElse(null));
+        .isEqualTo(eth2NetworkConfig.getEth1DepositContractAddress());
     assertThat(tekuConfig.powchain().getDepositContractDeployBlock())
         .isEqualTo(eth2NetworkConfig.getEth1DepositContractDeployBlock());
   }
@@ -85,10 +85,10 @@ public class Eth2P2PNetworkOptionsTest extends AbstractBeaconNodeCommandTest {
           "0xfe3b557e8fb62b89f4916b721be55ceb828dbd73"
         });
 
-    final Optional<Eth1Address> configuredDepositContract =
+    final Eth1Address configuredDepositContract =
         getResultingTekuConfiguration().eth2NetworkConfiguration().getEth1DepositContractAddress();
     assertThat(configuredDepositContract)
-        .contains(Eth1Address.fromHexString("0xfe3b557e8fb62b89f4916b721be55ceb828dbd73"));
+        .isEqualTo(Eth1Address.fromHexString("0xfe3b557e8fb62b89f4916b721be55ceb828dbd73"));
   }
 
   @Test
@@ -144,7 +144,7 @@ public class Eth2P2PNetworkOptionsTest extends AbstractBeaconNodeCommandTest {
 
   @Test
   public void initialState_shouldDefaultToNetworkValue() {
-    final String network = "medalla";
+    final String network = "pyrmont";
     final Eth2NetworkConfiguration networkConfig =
         Eth2NetworkConfiguration.builder(network).build();
     assertThat(networkConfig.getInitialState()).isPresent();
@@ -158,7 +158,7 @@ public class Eth2P2PNetworkOptionsTest extends AbstractBeaconNodeCommandTest {
   @Test
   public void initialState_shouldOverrideNetworkValue() {
     final String state = "state.ssz";
-    final String network = "medalla";
+    final String network = "pyrmont";
     final Eth2NetworkConfiguration networkConfig =
         Eth2NetworkConfiguration.builder(network).build();
     assertThat(networkConfig.getInitialState()).isPresent();

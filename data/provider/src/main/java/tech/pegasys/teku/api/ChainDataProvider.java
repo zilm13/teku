@@ -15,12 +15,13 @@ package tech.pegasys.teku.api;
 
 import static java.util.stream.Collectors.toList;
 import static tech.pegasys.teku.api.response.v1.beacon.ValidatorResponse.getValidatorStatus;
-import static tech.pegasys.teku.datastructures.util.ValidatorsUtil.getValidatorIndex;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ONE;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ZERO;
-import static tech.pegasys.teku.spec.constants.SpecConstants.FAR_FUTURE_EPOCH;
-import static tech.pegasys.teku.ssz.backing.tree.GIndexUtil.gIdxCompose;
-import static tech.pegasys.teku.ssz.backing.tree.GIndexUtil.get_helper_indices;
+import static tech.pegasys.teku.spec.config.SpecConfig.FAR_FUTURE_EPOCH;
+import static tech.pegasys.teku.spec.datastructures.state.beaconstate.versions.rayonism.BeaconStateSchemaRayonism.WITHDRAWALS_INDEX;
+import static tech.pegasys.teku.spec.datastructures.util.ValidatorsUtil.getValidatorIndex;
+import static tech.pegasys.teku.ssz.tree.GIndexUtil.gIdxCompose;
+import static tech.pegasys.teku.ssz.tree.GIndexUtil.get_helper_indices;
 
 import com.google.common.annotations.VisibleForTesting;
 import java.io.ByteArrayInputStream;
@@ -56,17 +57,16 @@ import tech.pegasys.teku.api.schema.PublicKeyException;
 import tech.pegasys.teku.api.schema.Root;
 import tech.pegasys.teku.api.schema.SignedBeaconBlock;
 import tech.pegasys.teku.api.stateselector.StateSelectorFactory;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
-import tech.pegasys.teku.datastructures.state.CommitteeAssignment;
-import tech.pegasys.teku.datastructures.state.ForkInfo;
-import tech.pegasys.teku.datastructures.state.Withdrawal;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.Spec;
-import tech.pegasys.teku.spec.SpecProvider;
-import tech.pegasys.teku.ssz.SSZTypes.SSZBackingList;
-import tech.pegasys.teku.ssz.backing.Merkleizable;
-import tech.pegasys.teku.ssz.backing.tree.TreeNode;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
+import tech.pegasys.teku.spec.datastructures.state.CommitteeAssignment;
+import tech.pegasys.teku.spec.datastructures.state.ForkInfo;
+import tech.pegasys.teku.spec.datastructures.state.Withdrawal;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.versions.rayonism.BeaconStateRayonism;
+import tech.pegasys.teku.ssz.Merkleizable;
+import tech.pegasys.teku.ssz.tree.TreeNode;
 import tech.pegasys.teku.storage.client.ChainDataUnavailableException;
 import tech.pegasys.teku.storage.client.CombinedChainDataClient;
 import tech.pegasys.teku.storage.client.RecentChainData;
@@ -74,16 +74,16 @@ import tech.pegasys.teku.storage.client.RecentChainData;
 public class ChainDataProvider {
   private final BlockSelectorFactory defaultBlockSelectorFactory;
   private final StateSelectorFactory defaultStateSelectorFactory;
-  private final SpecProvider specProvider;
+  private final Spec spec;
   private final CombinedChainDataClient combinedChainDataClient;
 
   private final RecentChainData recentChainData;
 
   public ChainDataProvider(
-      final SpecProvider specProvider,
+      final Spec spec,
       final RecentChainData recentChainData,
       final CombinedChainDataClient combinedChainDataClient) {
-    this.specProvider = specProvider;
+    this.spec = spec;
     this.combinedChainDataClient = combinedChainDataClient;
     this.recentChainData = recentChainData;
     this.defaultBlockSelectorFactory = new BlockSelectorFactory(combinedChainDataClient);
@@ -101,12 +101,12 @@ public class ChainDataProvider {
     if (!isStoreAvailable()) {
       throw new ChainDataUnavailableException();
     }
-    final tech.pegasys.teku.datastructures.genesis.GenesisData genesisData =
+    final tech.pegasys.teku.spec.datastructures.genesis.GenesisData genesisData =
         recentChainData.getGenesisData().orElseThrow(ChainDataUnavailableException::new);
     return new GenesisData(
         genesisData.getGenesisTime(),
         genesisData.getGenesisValidatorsRoot(),
-        specProvider.atEpoch(ZERO).getConstants().getGenesisForkVersion());
+        spec.atEpoch(ZERO).getConfig().getGenesisForkVersion());
   }
 
   public SafeFuture<Optional<BlockHeader>> getBlockHeader(final String slotParameter) {
@@ -223,7 +223,7 @@ public class ChainDataProvider {
   }
 
   private Optional<Integer> validatorParameterToIndex(
-      final tech.pegasys.teku.datastructures.state.BeaconState state,
+      final tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState state,
       final String validatorParameter) {
     if (!isStoreAvailable()) {
       throw new ChainDataUnavailableException();
@@ -273,7 +273,7 @@ public class ChainDataProvider {
 
   @VisibleForTesting
   List<ValidatorBalanceResponse> getValidatorBalancesFromState(
-      final tech.pegasys.teku.datastructures.state.BeaconState state,
+      final tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState state,
       final List<String> validators) {
     return getValidatorSelector(state, validators)
         .mapToObj(index -> ValidatorBalanceResponse.fromState(state, index))
@@ -314,7 +314,8 @@ public class ChainDataProvider {
             .thenApply(
                 maybeBlock ->
                     maybeBlock.flatMap(
-                        tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock::getBeaconBlock));
+                        tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock
+                            ::getBeaconBlock));
     return blockFuture.thenCompose(
         maybeBlock -> {
           if (maybeBlock.isPresent()) {
@@ -333,9 +334,10 @@ public class ChainDataProvider {
   }
 
   private Optional<WithdrawalResponse> searchWithdrawalWithProof(
-      final tech.pegasys.teku.datastructures.state.BeaconState state,
-      final tech.pegasys.teku.datastructures.blocks.BeaconBlock block,
+      final tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState genericState,
+      final tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock block,
       UInt64 validatorIndex) {
+    final BeaconStateRayonism state = BeaconStateRayonism.required(genericState);
     Optional<Pair<Integer, Withdrawal>> found =
         IntStream.range(0, state.getWithdrawals().size())
             .mapToObj(i -> Pair.of(i, state.getWithdrawals().get(i)))
@@ -347,14 +349,9 @@ public class ChainDataProvider {
 
     // Get proof in BeaconState tree
     TreeNode stateTree = state.getBackingNode();
-    long withdrawalIndex =
-        tech.pegasys.teku.datastructures.state.BeaconState.SSZ_SCHEMA
-            .get()
-            .getChildGeneralizedIndex(14);
+    long withdrawalIndex = state.getSchema().getChildGeneralizedIndex(WITHDRAWALS_INDEX);
     long withdrawalElementIndex =
-        ((SSZBackingList) state.getWithdrawals())
-            .getSchema()
-            .getChildGeneralizedIndex(found.get().getLeft());
+        state.getWithdrawals().getSchema().getChildGeneralizedIndex(found.get().getLeft());
     long composedIndex = gIdxCompose(withdrawalIndex, withdrawalElementIndex);
     Pair<Long, TreeNode> withdrawalNode = Pair.of(composedIndex, stateTree.get(composedIndex));
     TreeNode leaf = withdrawalNode.getRight();
@@ -366,7 +363,7 @@ public class ChainDataProvider {
 
     // Expand proof to BeaconBlock
     TreeNode blockTree = block.getBackingNode();
-    long stateIndex = BeaconBlock.SSZ_SCHEMA.get().getChildGeneralizedIndex(3);
+    long stateIndex = block.getSchema().getChildGeneralizedIndex(3);
     List<Bytes32> stateProof =
         get_helper_indices(Collections.singletonList(stateIndex)).stream()
             .map(it -> blockTree.get(it).hashTreeRoot())
@@ -398,11 +395,10 @@ public class ChainDataProvider {
 
   @VisibleForTesting
   List<ValidatorResponse> getFilteredValidatorList(
-      final tech.pegasys.teku.datastructures.state.BeaconState state,
+      final tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState state,
       final List<String> validators,
       final Set<ValidatorStatus> statusFilter) {
-    final Spec spec = specProvider.atSlot(state.getSlot());
-    final UInt64 epoch = spec.getBeaconStateUtil().getCurrentEpoch(state);
+    final UInt64 epoch = spec.getCurrentEpoch(state);
     return getValidatorSelector(state, validators)
         .filter(getStatusPredicate(state, statusFilter))
         .mapToObj(index -> ValidatorResponse.fromState(state, index, epoch, FAR_FUTURE_EPOCH))
@@ -420,10 +416,9 @@ public class ChainDataProvider {
   }
 
   private ValidatorResponse getValidatorFromState(
-      final tech.pegasys.teku.datastructures.state.BeaconState state,
+      final tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState state,
       final String validatorIdParam) {
-    final Spec spec = specProvider.atSlot(state.getSlot());
-    final UInt64 epoch = spec.getBeaconStateUtil().getCurrentEpoch(state);
+    final UInt64 epoch = spec.getCurrentEpoch(state);
     return getValidatorSelector(state, List.of(validatorIdParam))
         .mapToObj(index -> ValidatorResponse.fromState(state, index, epoch, FAR_FUTURE_EPOCH))
         .flatMap(Optional::stream)
@@ -446,7 +441,7 @@ public class ChainDataProvider {
   }
 
   List<EpochCommitteeResponse> getCommitteesFromState(
-      final tech.pegasys.teku.datastructures.state.BeaconState state,
+      final tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState state,
       final Optional<UInt64> epoch,
       final Optional<UInt64> committeeIndex,
       final Optional<UInt64> slot) {
@@ -458,18 +453,13 @@ public class ChainDataProvider {
             ? __ -> true
             : (assignment) -> assignment.getCommitteeIndex().compareTo(committeeIndex.get()) == 0;
 
-    final UInt64 stateEpoch =
-        specProvider
-            .atSlot(state.getSlot())
-            .getBeaconStateUtil()
-            .computeEpochAtSlot(state.getSlot());
+    final UInt64 stateEpoch = spec.computeEpochAtSlot(state.getSlot());
     if (epoch.isPresent() && epoch.get().isGreaterThan(stateEpoch.plus(ONE))) {
       throw new BadRequestException(
           "Epoch " + epoch.get() + " is too far ahead of state epoch " + stateEpoch);
     }
     if (slot.isPresent()) {
-      final UInt64 computeEpochAtSlot =
-          specProvider.atSlot(slot.get()).getBeaconStateUtil().computeEpochAtSlot(slot.get());
+      final UInt64 computeEpochAtSlot = spec.computeEpochAtSlot(slot.get());
       if (!computeEpochAtSlot.equals(epoch.orElse(stateEpoch))) {
         throw new BadRequestException(
             "Slot " + slot.get() + " is not in epoch " + epoch.orElse(stateEpoch));
@@ -483,17 +473,16 @@ public class ChainDataProvider {
   }
 
   private IntPredicate getStatusPredicate(
-      final tech.pegasys.teku.datastructures.state.BeaconState state,
+      final tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState state,
       final Set<ValidatorStatus> statusFilter) {
-    final Spec spec = specProvider.atSlot(state.getSlot());
-    final UInt64 epoch = spec.getBeaconStateUtil().getCurrentEpoch(state);
+    final UInt64 epoch = spec.getCurrentEpoch(state);
     return statusFilter.isEmpty()
         ? i -> true
         : i -> statusFilter.contains(getValidatorStatus(state, i, epoch, FAR_FUTURE_EPOCH));
   }
 
   private IntStream getValidatorSelector(
-      final tech.pegasys.teku.datastructures.state.BeaconState state,
+      final tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState state,
       final List<String> validators) {
     return validators.isEmpty()
         ? IntStream.range(0, state.getValidators().size())

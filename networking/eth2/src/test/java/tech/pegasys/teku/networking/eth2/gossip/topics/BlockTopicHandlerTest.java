@@ -22,27 +22,30 @@ import io.libp2p.core.pubsub.ValidationResult;
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.StubAsyncRunner;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.networking.eth2.gossip.BlockGossipManager;
 import tech.pegasys.teku.networking.eth2.gossip.encoding.GossipEncoding;
 import tech.pegasys.teku.networking.eth2.gossip.topics.topichandlers.Eth2TopicHandler;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
-import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
+import tech.pegasys.teku.ssz.type.Bytes4;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
 import tech.pegasys.teku.statetransition.validation.InternalValidationResult;
 import tech.pegasys.teku.storage.client.MemoryOnlyRecentChainData;
 import tech.pegasys.teku.storage.client.RecentChainData;
 
 public class BlockTopicHandlerTest {
-  private final DataStructureUtil dataStructureUtil = new DataStructureUtil();
+  private final Spec spec = TestSpecFactory.createMinimalPhase0();
+  private final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
   private final EventBus eventBus = mock(EventBus.class);
   private final GossipEncoding gossipEncoding = GossipEncoding.SSZ_SNAPPY;
-  private final RecentChainData recentChainData = MemoryOnlyRecentChainData.create(eventBus);
+  private final RecentChainData recentChainData = MemoryOnlyRecentChainData.create(spec, eventBus);
   private final StubAsyncRunner asyncRunner = new StubAsyncRunner();
-  private final BeaconChainUtil beaconChainUtil = BeaconChainUtil.create(2, recentChainData);
+  private final BeaconChainUtil beaconChainUtil = BeaconChainUtil.create(spec, 2, recentChainData);
 
   @SuppressWarnings("unchecked")
   private final OperationProcessor<SignedBeaconBlock> processor = mock(OperationProcessor.class);
@@ -54,7 +57,7 @@ public class BlockTopicHandlerTest {
           gossipEncoding,
           dataStructureUtil.randomForkInfo().getForkDigest(),
           BlockGossipManager.TOPIC_NAME,
-          SignedBeaconBlock.SSZ_SCHEMA.get());
+          spec.getGenesisSchemaDefinitions().getSignedBeaconBlockSchema());
 
   @BeforeEach
   public void setup() {
@@ -138,7 +141,7 @@ public class BlockTopicHandlerTest {
             gossipEncoding,
             forkDigest,
             BlockGossipManager.TOPIC_NAME,
-            SignedBeaconBlock.SSZ_SCHEMA.get());
+            spec.getGenesisSchemaDefinitions().getSignedBeaconBlockSchema());
     assertThat(topicHandler.getTopic()).isEqualTo("/eth2/11223344/beacon_block/ssz_snappy");
   }
 }

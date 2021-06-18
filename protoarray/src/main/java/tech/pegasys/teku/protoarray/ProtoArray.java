@@ -17,13 +17,18 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.datastructures.forkchoice.ProposerWeighting;
 
 public class ProtoArray {
+  private static final Logger LOG = LogManager.getLogger();
 
   private int pruneThreshold;
 
@@ -41,35 +46,46 @@ public class ProtoArray {
    * because they extended from a now-invalid chain and were removed. This avoids having to update
    * the indices to entries in the list too often.
    */
-  private final List<ProtoNode> nodes;
+  private final List<ProtoNode> nodes = new ArrayList<>();
 
   /**
-   * Maps block roots to the index of their node in the {@link #nodes} list. Nodes which are present
-   * in this map are guaranteed to be present in the nodes list, but the nodes list may contain
-   * additional nodes, not present in this map.
+   * protoArrayIndices allows root lookup to retrieve indices of protoNodes without looking through
+   * the nodes list
    *
-   * <p>The {@link #removeBlockRoot(Bytes32)} method removes blocks from this map but does not
-   * change the nodes list to avoid having to adjust all indices.
+   * <p>Needs to be Maintained when nodes are added or removed from the nodes list.
    */
-  private final Map<Bytes32, Integer> indices;
+  private final ProtoArrayIndices indices = new ProtoArrayIndices();
 
-  public ProtoArray(
-      int pruneThreshold,
-      UInt64 justifiedEpoch,
-      UInt64 finalizedEpoch,
-      UInt64 initialEpoch,
-      List<ProtoNode> nodes,
-      Map<Bytes32, Integer> indices) {
+  ProtoArray(
+      int pruneThreshold, UInt64 justifiedEpoch, UInt64 finalizedEpoch, UInt64 initialEpoch) {
     this.pruneThreshold = pruneThreshold;
     this.justifiedEpoch = justifiedEpoch;
     this.finalizedEpoch = finalizedEpoch;
     this.initialEpoch = initialEpoch;
-    this.nodes = nodes;
-    this.indices = indices;
   }
 
-  public Map<Bytes32, Integer> getIndices() {
-    return indices;
+  public static ProtoArrayBuilder builder() {
+    return new ProtoArrayBuilder();
+  }
+
+  public boolean contains(final Bytes32 root) {
+    return indices.contains(root);
+  }
+
+  public Optional<Integer> getIndexByRoot(final Bytes32 root) {
+    return indices.get(root);
+  }
+
+  public Optional<ProtoNode> getProtoNode(final Bytes32 root) {
+    return indices
+        .get(root)
+        .flatMap(
+            blockIndex -> {
+              if (blockIndex < getTotalTrackedNodeCount()) {
+                return Optional.of(nodes.get(blockIndex));
+              }
+              return Optional.empty();
+            });
   }
 
   public List<ProtoNode> getNodes() {
@@ -97,7 +113,7 @@ public class ProtoArray {
       Bytes32 stateRoot,
       UInt64 justifiedEpoch,
       UInt64 finalizedEpoch) {
-    if (indices.containsKey(blockRoot)) {
+    if (indices.contains(blockRoot)) {
       return;
     }
 
@@ -109,14 +125,14 @@ public class ProtoArray {
             stateRoot,
             blockRoot,
             parentRoot,
-            Optional.ofNullable(indices.get(parentRoot)),
+            indices.get(parentRoot),
             justifiedEpoch,
             finalizedEpoch,
             UInt64.ZERO,
             Optional.empty(),
             Optional.empty());
 
-    indices.put(node.getBlockRoot(), nodeIndex);
+    indices.add(blockRoot, nodeIndex);
     nodes.add(node);
 
     updateBestDescendantOfParent(node, nodeIndex);
@@ -125,16 +141,25 @@ public class ProtoArray {
   /**
    * Follows the best-descendant links to find the best-block (i.e., head-block).
    *
-   * <p>The result of this function is not guaranteed to be accurate if `onBlock` has been called
-   * without a subsequent `applyScoreChanges` call. This is because `onBlock` does not attempt to
-   * walk backwards through the tree and update the best child / best descendant links.
-   *
-   * @param justifiedRoot
-   * @return
+   * @param justifiedRoot the root of the justified checkpoint
+   * @return the best node according to fork choice
    */
-  public Bytes32 findHead(Bytes32 justifiedRoot) {
+  public ProtoNode findHead(Bytes32 justifiedRoot, UInt64 justifiedEpoch, UInt64 finalizedEpoch) {
+    if (!this.justifiedEpoch.equals(justifiedEpoch)
+        || !this.finalizedEpoch.equals(finalizedEpoch)) {
+      this.justifiedEpoch = justifiedEpoch;
+      this.finalizedEpoch = finalizedEpoch;
+      // Justified or finalized epoch changed we we have to re-evaluate all best descendants.
+      applyToNodes(this::updateBestDescendantOfParent);
+    }
     int justifiedIndex =
-        checkNotNull(indices.get(justifiedRoot), "ProtoArray: Unknown justified root");
+        indices
+            .get(justifiedRoot)
+            .orElseThrow(
+                () ->
+                    new IllegalArgumentException(
+                        "ProtoArray: Unknown justified root " + justifiedRoot.toHexString()));
+
     ProtoNode justifiedNode =
         checkNotNull(nodes.get(justifiedIndex), "ProtoArray: Unknown justified index");
 
@@ -142,12 +167,22 @@ public class ProtoArray {
     ProtoNode bestNode =
         checkNotNull(nodes.get(bestDescendantIndex), "ProtoArray: Unknown best descendant index");
 
+    // Normally the best descendant index would point straight to chain head, but onBlock only
+    // updates the parent, not all the ancestors. When applyScoreChanges runs it propagates the
+    // change back up and everything works, but we run findHead to determine if the new block should
+    // become the best head so need to follow down the chain.
+    while (bestNode.getBestDescendantIndex().isPresent()) {
+      bestDescendantIndex = bestNode.getBestDescendantIndex().get();
+      bestNode =
+          checkNotNull(nodes.get(bestDescendantIndex), "ProtoArray: Unknown best descendant index");
+    }
+
     // Perform a sanity check that the node is indeed valid to be the head.
     if (!nodeIsViableForHead(bestNode)) {
       throw new RuntimeException("ProtoArray: Best node is not viable for head");
     }
 
-    return bestNode.getBlockRoot();
+    return bestNode;
   }
 
   /**
@@ -201,7 +236,12 @@ public class ProtoArray {
    */
   public void maybePrune(Bytes32 finalizedRoot) {
     int finalizedIndex =
-        checkNotNull(indices.get(finalizedRoot), "ProtoArray: Finalized root is unknown");
+        indices
+            .get(finalizedRoot)
+            .orElseThrow(
+                () ->
+                    new IllegalArgumentException(
+                        "ProtoArray: Finalized root is unknown " + finalizedRoot.toHexString()));
 
     if (finalizedIndex < pruneThreshold) {
       // Pruning at small numbers incurs more cost than benefit.
@@ -218,13 +258,7 @@ public class ProtoArray {
     // Drop all the nodes prior to finalization.
     nodes.subList(0, finalizedIndex).clear();
 
-    // Adjust the indices map.
-    indices.replaceAll(
-        (key, value) -> {
-          int newIndex = value - finalizedIndex;
-          checkState(newIndex >= 0, "ProtoArray: New array index less than 0.");
-          return newIndex;
-        });
+    indices.offsetIndexes(finalizedIndex);
 
     // Iterate through all the existing nodes and adjust their indices to match the
     // new layout of nodes.
@@ -274,8 +308,8 @@ public class ProtoArray {
    *       be removed.
    *   <li>The child is already the best child and the parent is updated with the new best
    *       descendant.
-   *   <li>The child is not the best child but becomes the best child. - The child is not the best
-   *       child and does not become the best child.
+   *   <li>The child is not the best child but becomes the best child.
+   *   <li>The child is not the best child and does not become the best child.
    * </ul>
    *
    * @param parentIndex
@@ -419,6 +453,26 @@ public class ProtoArray {
     indices.remove(blockRoot);
   }
 
+  public void applyProposerWeighting(final ProposerWeighting weighting) {
+    Optional<Integer> nodeIndex = indices.get(weighting.getTargetRoot());
+    if (nodeIndex.isEmpty()) {
+      LOG.warn("Applying proposer weighting for unknown block root {}", weighting.getTargetRoot());
+      return;
+    }
+    while (nodeIndex.isPresent()) {
+      final ProtoNode protoNode = nodes.get(nodeIndex.get());
+
+      // Genesis block is fixed so we don't apply scores to it
+      if (protoNode.getBlockRoot().equals(Bytes32.ZERO)) {
+        break;
+      }
+
+      protoNode.adjustWeight(weighting.getWeight().longValue());
+      updateBestDescendantOfParent(protoNode, nodeIndex.get());
+      nodeIndex = protoNode.getParentIndex();
+    }
+  }
+
   private void applyDeltas(final List<Long> deltas) {
     applyToNodes((node, nodeIndex) -> applyDelta(deltas, node, nodeIndex));
     applyToNodes(this::updateBestDescendantOfParent);
@@ -449,6 +503,10 @@ public class ProtoArray {
       }
       action.onNode(node, nodeIndex);
     }
+  }
+
+  public Map<Bytes32, Integer> getRootIndices() {
+    return indices.getRootIndices();
   }
 
   private interface NodeVisitor {

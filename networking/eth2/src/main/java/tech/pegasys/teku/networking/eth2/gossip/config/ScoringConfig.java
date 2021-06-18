@@ -13,14 +13,12 @@
 
 package tech.pegasys.teku.networking.eth2.gossip.config;
 
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_committee_count_per_slot;
-
 import com.google.common.base.Suppliers;
 import java.time.Duration;
 import java.util.function.Supplier;
-import tech.pegasys.teku.datastructures.util.CommitteeUtil;
-import tech.pegasys.teku.spec.SpecProvider;
-import tech.pegasys.teku.spec.constants.SpecConstants;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.config.SpecConfig;
+import tech.pegasys.teku.spec.datastructures.util.CommitteeUtil;
 import tech.pegasys.teku.util.config.Constants;
 
 class ScoringConfig {
@@ -44,7 +42,8 @@ class ScoringConfig {
   private final Supplier<Double> maxScoreCalculator =
       Suppliers.memoize(this::calculateMaxPositiveScore);
 
-  private final SpecConstants constants;
+  private final Spec spec;
+  private final SpecConfig genesisConfig;
   private final Duration slotDuration;
   private final Duration epochDuration;
 
@@ -53,19 +52,20 @@ class ScoringConfig {
   private final Duration decayInterval;
   private final Duration targetScoringDuration;
 
-  private ScoringConfig(final SpecProvider specProvider, final int d) {
+  private ScoringConfig(final Spec spec, final int d) {
+    this.spec = spec;
     // TODO(#3356) Use spec provider through-out rather than relying only on genesis constants
-    this.constants = specProvider.getGenesisSpecConstants();
+    this.genesisConfig = spec.getGenesisSpecConfig();
     this.d = d;
 
-    this.slotDuration = Duration.ofSeconds(this.constants.getSecondsPerSlot());
-    this.epochDuration = slotDuration.multipliedBy(this.constants.getSlotsPerEpoch());
+    this.slotDuration = Duration.ofSeconds(this.genesisConfig.getSecondsPerSlot());
+    this.epochDuration = slotDuration.multipliedBy(this.genesisConfig.getSlotsPerEpoch());
     this.decayInterval = slotDuration;
     this.targetScoringDuration = epochDuration.multipliedBy(100);
   }
 
-  public static ScoringConfig create(final SpecProvider specProvider, final int gossipDParam) {
-    return new ScoringConfig(specProvider, gossipDParam);
+  public static ScoringConfig create(final Spec spec, final int gossipDParam) {
+    return new ScoringConfig(spec, gossipDParam);
   }
 
   public double getMaxInMeshScore() {
@@ -121,7 +121,7 @@ class ScoringConfig {
   }
 
   public int getSlotsPerEpoch() {
-    return constants.getSlotsPerEpoch();
+    return genesisConfig.getSlotsPerEpoch();
   }
 
   public int convertEpochsToSlots(final int epochs) {
@@ -142,8 +142,9 @@ class ScoringConfig {
 
   public double getAggregatorsPerSlot(final int activeValidatorCount) {
     final int committeesPerEpoch =
-        get_committee_count_per_slot(activeValidatorCount)
-            .times(constants.getSlotsPerEpoch())
+        spec.getGenesisBeaconStateUtil()
+            .getCommitteeCountPerSlot(activeValidatorCount)
+            .times(genesisConfig.getSlotsPerEpoch())
             .intValue();
 
     // Committees can vary in size by one - calculate aggregators per slot accounting for this
@@ -163,11 +164,13 @@ class ScoringConfig {
         largeCommitteeSize / largeAggregatorModulo * largeCommitteesPerEpoch;
 
     return ((double) smallCommitteeAggregatorPerEpoch + largeCommitteeAggregatorPerEpoch)
-        / constants.getSlotsPerEpoch();
+        / genesisConfig.getSlotsPerEpoch();
   }
 
   public int getCommitteesPerSlot(final int activeValidatorCount) {
-    return get_committee_count_per_slot(activeValidatorCount).intValue();
+    return spec.getGenesisBeaconStateUtil()
+        .getCommitteeCountPerSlot(activeValidatorCount)
+        .intValue();
   }
 
   /** @return The desired time to decay a single scoring event to zero */

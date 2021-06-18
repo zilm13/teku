@@ -80,6 +80,15 @@ public class Eth2NetworkOptions {
       hidden = true)
   private Integer peerRequestLimit = DEFAULT_PEER_REQUEST_LIMIT;
 
+  @Option(
+      names = {"--Xfork-choice-balance-attack-mitigation-enabled"},
+      paramLabel = "<BOOLEAN>",
+      description = "Whether to enable the HF1 fork choice balance attack mitigation.",
+      arity = "0..1",
+      fallbackValue = "false",
+      hidden = true)
+  private Boolean forkChoiceBalanceAttackMitigationEnabled = null;
+
   public Eth2NetworkConfiguration getNetworkConfiguration() {
     return createEth2NetworkConfig();
   }
@@ -92,7 +101,7 @@ public class Eth2NetworkOptions {
         .eth2NetworkConfig(this::configureEth2Network)
         .powchain(
             b -> {
-              eth2Config.getEth1DepositContractAddress().ifPresent(b::depositContract);
+              b.depositContract(eth2Config.getEth1DepositContractAddress());
               b.depositContractDeployBlock(eth2Config.getEth1DepositContractDeployBlock());
             })
         .storageConfiguration(
@@ -120,7 +129,10 @@ public class Eth2NetworkOptions {
       builder.eth1DepositContractAddress(eth1DepositContractAddress);
     }
     if (StringUtils.isNotBlank(initialState)) {
-      builder.initialState(initialState);
+      builder.customInitialState(initialState);
+    }
+    if (forkChoiceBalanceAttackMitigationEnabled != null) {
+      builder.balanceAttackMitigationEnabled(forkChoiceBalanceAttackMitigationEnabled);
     }
   }
 }

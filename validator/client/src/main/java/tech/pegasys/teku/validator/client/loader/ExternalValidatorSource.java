@@ -17,7 +17,6 @@ import static java.util.stream.Collectors.toList;
 import static tech.pegasys.teku.infrastructure.logging.StatusLogger.STATUS_LOG;
 
 import java.net.http.HttpClient;
-import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
@@ -26,6 +25,7 @@ import tech.pegasys.teku.core.signatures.Signer;
 import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.infrastructure.async.ThrottlingTaskQueue;
 import tech.pegasys.teku.infrastructure.metrics.TekuMetricCategory;
+import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.validator.api.ValidatorConfig;
 import tech.pegasys.teku.validator.client.signer.ExternalSigner;
 import tech.pegasys.teku.validator.client.signer.ExternalSignerStatusLogger;
@@ -33,48 +33,64 @@ import tech.pegasys.teku.validator.client.signer.ExternalSignerUpcheck;
 
 public class ExternalValidatorSource implements ValidatorSource {
 
-  private final MetricsSystem metricsSystem;
+  private final Spec spec;
   private final ValidatorConfig config;
   private final Supplier<HttpClient> externalSignerHttpClientFactory;
   private final PublicKeyLoader publicKeyLoader;
-  private final AsyncRunner asyncRunner;
-  private ThrottlingTaskQueue externalSignerTaskQueue;
+  private final ThrottlingTaskQueue externalSignerTaskQueue;
+  private final MetricsSystem metricsSystem;
 
-  public ExternalValidatorSource(
+  private ExternalValidatorSource(
+      final Spec spec,
+      final ValidatorConfig config,
+      final Supplier<HttpClient> externalSignerHttpClientFactory,
+      final PublicKeyLoader publicKeyLoader,
+      final ThrottlingTaskQueue externalSignerTaskQueue,
+      final MetricsSystem metricsSystem) {
+    this.spec = spec;
+    this.config = config;
+    this.externalSignerHttpClientFactory = externalSignerHttpClientFactory;
+    this.publicKeyLoader = publicKeyLoader;
+    this.externalSignerTaskQueue = externalSignerTaskQueue;
+    this.metricsSystem = metricsSystem;
+  }
+
+  public static ExternalValidatorSource create(
+      final Spec spec,
       final MetricsSystem metricsSystem,
       final ValidatorConfig config,
       final Supplier<HttpClient> externalSignerHttpClientFactory,
       final PublicKeyLoader publicKeyLoader,
       final AsyncRunner asyncRunner) {
-    this.metricsSystem = metricsSystem;
-    this.config = config;
-    this.externalSignerHttpClientFactory = externalSignerHttpClientFactory;
-    this.publicKeyLoader = publicKeyLoader;
-    this.asyncRunner = asyncRunner;
-  }
-
-  @Override
-  public List<ValidatorProvider> getAvailableValidators() {
-    if (config.getValidatorExternalSignerPublicKeySources().isEmpty()) {
-      return Collections.emptyList();
-    }
-
-    externalSignerTaskQueue =
+    final ThrottlingTaskQueue externalSignerTaskQueue =
         new ThrottlingTaskQueue(
             config.getValidatorExternalSignerConcurrentRequestLimit(),
             metricsSystem,
             TekuMetricCategory.VALIDATOR,
             "external_signer_request_queue_size");
-
-    setupExternalSignerStatusLogging(config, externalSignerHttpClientFactory);
-
-    final List<BLSPublicKey> publicKeys =
-        publicKeyLoader.getPublicKeys(config.getValidatorExternalSignerPublicKeySources());
-    return publicKeys.stream().map(ExternalValidatorProvider::new).collect(toList());
+    setupExternalSignerStatusLogging(config, externalSignerHttpClientFactory, asyncRunner);
+    return new ExternalValidatorSource(
+        spec,
+        config,
+        externalSignerHttpClientFactory,
+        publicKeyLoader,
+        externalSignerTaskQueue,
+        metricsSystem);
   }
 
-  private void setupExternalSignerStatusLogging(
-      final ValidatorConfig config, final Supplier<HttpClient> externalSignerHttpClientFactory) {
+  @Override
+  public List<ValidatorProvider> getAvailableValidators() {
+    final List<BLSPublicKey> publicKeys =
+        publicKeyLoader.getPublicKeys(config.getValidatorExternalSignerPublicKeySources());
+    return publicKeys.stream()
+        .map(key -> new ExternalValidatorProvider(spec, key))
+        .collect(toList());
+  }
+
+  private static void setupExternalSignerStatusLogging(
+      final ValidatorConfig config,
+      final Supplier<HttpClient> externalSignerHttpClientFactory,
+      final AsyncRunner asyncRunner) {
     final ExternalSignerUpcheck externalSignerUpcheck =
         new ExternalSignerUpcheck(
             externalSignerHttpClientFactory.get(),
@@ -93,9 +109,12 @@ public class ExternalValidatorSource implements ValidatorSource {
   }
 
   private class ExternalValidatorProvider implements ValidatorProvider {
+
+    private final Spec spec;
     private final BLSPublicKey publicKey;
 
-    private ExternalValidatorProvider(final BLSPublicKey publicKey) {
+    private ExternalValidatorProvider(final Spec spec, final BLSPublicKey publicKey) {
+      this.spec = spec;
       this.publicKey = publicKey;
     }
 
@@ -107,11 +126,13 @@ public class ExternalValidatorSource implements ValidatorSource {
     @Override
     public Signer createSigner() {
       return new ExternalSigner(
+          spec,
           externalSignerHttpClientFactory.get(),
           config.getValidatorExternalSignerUrl(),
           publicKey,
           config.getValidatorExternalSignerTimeout(),
-          externalSignerTaskQueue);
+          externalSignerTaskQueue,
+          metricsSystem);
     }
   }
 }

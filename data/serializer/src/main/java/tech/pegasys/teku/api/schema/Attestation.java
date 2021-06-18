@@ -20,7 +20,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
-import tech.pegasys.teku.ssz.backing.collections.SszBitlist;
+import tech.pegasys.teku.ssz.collections.SszBitlist;
 
 public class Attestation {
   @Schema(type = "string", format = "byte", description = DESCRIPTION_BYTES_SSZ)
@@ -31,7 +31,7 @@ public class Attestation {
   @Schema(type = "string", format = "byte", description = DESCRIPTION_BYTES96)
   public final BLSSignature signature;
 
-  public Attestation(tech.pegasys.teku.datastructures.operations.Attestation attestation) {
+  public Attestation(tech.pegasys.teku.spec.datastructures.operations.Attestation attestation) {
     this.aggregation_bits = attestation.getAggregation_bits();
     this.data = new AttestationData(attestation.getData());
     this.signature = new BLSSignature(attestation.getAggregate_signature());
@@ -47,8 +47,8 @@ public class Attestation {
     this.signature = signature;
   }
 
-  public tech.pegasys.teku.datastructures.operations.Attestation asInternalAttestation() {
-    return new tech.pegasys.teku.datastructures.operations.Attestation(
+  public tech.pegasys.teku.spec.datastructures.operations.Attestation asInternalAttestation() {
+    return new tech.pegasys.teku.spec.datastructures.operations.Attestation(
         aggregation_bits, data.asInternalAttestationData(), signature.asInternalBLSSignature());
   }
 

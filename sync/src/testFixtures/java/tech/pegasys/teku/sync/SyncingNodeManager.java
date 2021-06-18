@@ -20,10 +20,6 @@ import java.util.List;
 import java.util.function.Consumer;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import tech.pegasys.teku.bls.BLSKeyPair;
-import tech.pegasys.teku.core.ForkChoiceAttestationValidator;
-import tech.pegasys.teku.core.ForkChoiceBlockTasks;
-import tech.pegasys.teku.core.StateTransition;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.eventthread.InlineEventThread;
@@ -32,8 +28,12 @@ import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.networking.eth2.Eth2P2PNetwork;
 import tech.pegasys.teku.networking.eth2.Eth2P2PNetworkFactory;
 import tech.pegasys.teku.networking.eth2.Eth2P2PNetworkFactory.Eth2P2PNetworkBuilder;
+import tech.pegasys.teku.networking.eth2.gossip.BlockGossipChannel;
 import tech.pegasys.teku.networking.p2p.network.PeerAddress;
 import tech.pegasys.teku.networking.p2p.peer.Peer;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
 import tech.pegasys.teku.statetransition.block.BlockImportChannel;
 import tech.pegasys.teku.statetransition.block.BlockImporter;
@@ -60,6 +60,7 @@ public class SyncingNodeManager {
   private final BeaconChainUtil chainUtil;
   private final Eth2P2PNetwork eth2P2PNetwork;
   private final ForwardSync syncService;
+  private final BlockGossipChannel blockGossipChannel;
 
   private SyncingNodeManager(
       final EventBus eventBus,
@@ -74,6 +75,7 @@ public class SyncingNodeManager {
     this.chainUtil = chainUtil;
     this.eth2P2PNetwork = eth2P2PNetwork;
     this.syncService = syncService;
+    this.blockGossipChannel = eventChannels.getPublisher(BlockGossipChannel.class);
   }
 
   @SuppressWarnings("FutureReturnValueIgnored")
@@ -83,26 +85,21 @@ public class SyncingNodeManager {
       final List<BLSKeyPair> validatorKeys,
       Consumer<Eth2P2PNetworkBuilder> configureNetwork)
       throws Exception {
+    final Spec spec = TestSpecFactory.createMinimalPhase0();
     final EventBus eventBus = new EventBus();
     final EventChannels eventChannels =
         EventChannels.createSyncChannels(TEST_EXCEPTION_HANDLER, new NoOpMetricsSystem());
-    final RecentChainData recentChainData = MemoryOnlyRecentChainData.create(eventBus);
+    final RecentChainData recentChainData = MemoryOnlyRecentChainData.create(spec, eventBus);
 
-    final BeaconChainUtil chainUtil = BeaconChainUtil.create(recentChainData, validatorKeys);
+    final BeaconChainUtil chainUtil = BeaconChainUtil.create(spec, recentChainData, validatorKeys);
     chainUtil.initializeStorage();
 
-    ForkChoice forkChoice =
-        new ForkChoice(
-            new ForkChoiceAttestationValidator(),
-            new ForkChoiceBlockTasks(),
-            new InlineEventThread(),
-            recentChainData,
-            new StateTransition());
+    ForkChoice forkChoice = ForkChoice.create(spec, new InlineEventThread(), recentChainData);
     BlockImporter blockImporter =
         new BlockImporter(
             recentChainData, forkChoice, WeakSubjectivityFactory.lenientValidator(), eventBus);
 
-    BlockValidator blockValidator = new BlockValidator(recentChainData);
+    BlockValidator blockValidator = new BlockValidator(spec, recentChainData);
     final PendingPool<SignedBeaconBlock> pendingBlocks = PendingPool.createForBlocks();
     final FutureItems<SignedBeaconBlock> futureBlocks =
         FutureItems.create(SignedBeaconBlock::getSlot);
@@ -118,7 +115,9 @@ public class SyncingNodeManager {
     final Eth2P2PNetworkBuilder networkBuilder =
         networkFactory
             .builder()
+            .spec(spec)
             .eventBus(eventBus)
+            .eventChannels(eventChannels)
             .recentChainData(recentChainData)
             .gossipedBlockProcessor(blockManager::validateAndImportBlock);
 
@@ -178,5 +177,9 @@ public class SyncingNodeManager {
   public void setSlot(UInt64 slot) {
     eventChannels().getPublisher(SlotEventsChannel.class).onSlot(slot);
     chainUtil().setSlot(slot);
+  }
+
+  public void gossipBlock(final SignedBeaconBlock block) {
+    blockGossipChannel.publishBlock(block);
   }
 }

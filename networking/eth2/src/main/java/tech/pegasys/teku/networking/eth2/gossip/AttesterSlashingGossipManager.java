@@ -13,13 +13,13 @@
 
 package tech.pegasys.teku.networking.eth2.gossip;
 
-import tech.pegasys.teku.datastructures.operations.AttesterSlashing;
-import tech.pegasys.teku.datastructures.state.ForkInfo;
 import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.networking.eth2.gossip.encoding.GossipEncoding;
 import tech.pegasys.teku.networking.eth2.gossip.topics.OperationProcessor;
 import tech.pegasys.teku.networking.p2p.gossip.GossipNetwork;
-import tech.pegasys.teku.ssz.backing.schema.SszSchema;
+import tech.pegasys.teku.spec.datastructures.operations.AttesterSlashing;
+import tech.pegasys.teku.spec.datastructures.state.ForkInfo;
+import tech.pegasys.teku.ssz.schema.SszSchema;
 
 public class AttesterSlashingGossipManager extends AbstractGossipManager<AttesterSlashing> {
   public static String TOPIC_NAME = "attester_slashing";

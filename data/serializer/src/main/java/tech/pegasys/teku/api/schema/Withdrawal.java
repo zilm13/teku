@@ -53,15 +53,15 @@ public class Withdrawal {
     this.amount = amount;
   }
 
-  public Withdrawal(final tech.pegasys.teku.datastructures.state.Withdrawal withdrawal) {
+  public Withdrawal(final tech.pegasys.teku.spec.datastructures.state.Withdrawal withdrawal) {
     this.validator_index = withdrawal.getValidator_index();
     this.withdrawal_credentials = withdrawal.getWithdrawal_credentials();
     this.withdrawn_epoch = withdrawal.getWithdrawn_epoch();
     this.amount = withdrawal.getAmount();
   }
 
-  public tech.pegasys.teku.datastructures.state.Withdrawal asInternalWithdrawal() {
-    return new tech.pegasys.teku.datastructures.state.Withdrawal(
+  public tech.pegasys.teku.spec.datastructures.state.Withdrawal asInternalWithdrawal() {
+    return new tech.pegasys.teku.spec.datastructures.state.Withdrawal(
         validator_index, withdrawal_credentials, withdrawn_epoch, amount);
   }
 

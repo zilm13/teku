@@ -13,10 +13,12 @@
 
 package tech.pegasys.teku.validator.client;
 
-import static tech.pegasys.teku.util.config.Constants.SLOTS_PER_EPOCH;
-
 import org.apache.tuweni.bytes.Bytes32;
+import org.hyperledger.besu.plugin.services.MetricsSystem;
+import tech.pegasys.teku.infrastructure.metrics.SettableGauge;
+import tech.pegasys.teku.infrastructure.metrics.TekuMetricCategory;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.validator.api.ValidatorTimingChannel;
 
 public class ValidatorTimingActions implements ValidatorTimingChannel {
@@ -24,16 +26,29 @@ public class ValidatorTimingActions implements ValidatorTimingChannel {
   private final ValidatorTimingChannel blockDuties;
   private final ValidatorTimingChannel attestationDuties;
   private final ValidatorStatusLogger statusLogger;
+  private final Spec spec;
+
+  private final SettableGauge validatorCurrentEpoch;
 
   public ValidatorTimingActions(
       final ValidatorStatusLogger statusLogger,
       final ValidatorIndexProvider validatorIndexProvider,
       final ValidatorTimingChannel blockDuties,
-      final ValidatorTimingChannel attestationDuties) {
+      final ValidatorTimingChannel attestationDuties,
+      final Spec spec,
+      final MetricsSystem metricsSystem) {
     this.statusLogger = statusLogger;
     this.validatorIndexProvider = validatorIndexProvider;
     this.blockDuties = blockDuties;
     this.attestationDuties = attestationDuties;
+    this.spec = spec;
+
+    this.validatorCurrentEpoch =
+        SettableGauge.create(
+            metricsSystem,
+            TekuMetricCategory.VALIDATOR,
+            "current_epoch",
+            "Current epoch of the validator client");
   }
 
   @Override
@@ -41,7 +56,10 @@ public class ValidatorTimingActions implements ValidatorTimingChannel {
     validatorIndexProvider.lookupValidators();
     blockDuties.onSlot(slot);
     attestationDuties.onSlot(slot);
-    if (slot.mod(SLOTS_PER_EPOCH).equals(UInt64.ONE)) {
+    final UInt64 epoch = spec.computeEpochAtSlot(slot);
+    validatorCurrentEpoch.set(epoch.doubleValue());
+    final UInt64 firstSlotOfEpoch = spec.computeStartSlotAtEpoch(epoch);
+    if (slot.equals(firstSlotOfEpoch.plus(1))) {
       statusLogger.checkValidatorStatusChanges();
     }
   }

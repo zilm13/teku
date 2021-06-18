@@ -21,11 +21,12 @@ import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.events.EventChannels;
 import tech.pegasys.teku.infrastructure.io.SyncDataAccessor;
+import tech.pegasys.teku.infrastructure.io.SystemSignalListener;
 import tech.pegasys.teku.infrastructure.metrics.TekuMetricCategory;
 import tech.pegasys.teku.service.serviceutils.Service;
 import tech.pegasys.teku.service.serviceutils.ServiceConfig;
 import tech.pegasys.teku.service.serviceutils.layout.DataDirLayout;
-import tech.pegasys.teku.spec.SpecProvider;
+import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.validator.api.ValidatorApiChannel;
 import tech.pegasys.teku.validator.api.ValidatorTimingChannel;
 import tech.pegasys.teku.validator.beaconnode.BeaconNodeApi;
@@ -41,9 +42,10 @@ import tech.pegasys.teku.validator.remote.RemoteBeaconNodeApi;
 
 public class ValidatorClientService extends Service {
   private final EventChannels eventChannels;
+  private final ValidatorLoader validatorLoader;
   private final BeaconNodeApi beaconNodeApi;
   private final ForkProvider forkProvider;
-  private final SpecProvider specProvider;
+  private final Spec spec;
 
   private ValidatorTimingChannel attestationTimingChannel;
   private ValidatorTimingChannel blockProductionTimingChannel;
@@ -52,15 +54,21 @@ public class ValidatorClientService extends Service {
 
   private final SafeFuture<Void> initializationComplete = new SafeFuture<>();
 
+  private MetricsSystem metricsSystem;
+
   private ValidatorClientService(
       final EventChannels eventChannels,
+      final ValidatorLoader validatorLoader,
       final BeaconNodeApi beaconNodeApi,
       final ForkProvider forkProvider,
-      final SpecProvider specProvider) {
+      final Spec spec,
+      final MetricsSystem metricsSystem) {
     this.eventChannels = eventChannels;
+    this.validatorLoader = validatorLoader;
     this.beaconNodeApi = beaconNodeApi;
     this.forkProvider = forkProvider;
-    this.specProvider = specProvider;
+    this.spec = spec;
+    this.metricsSystem = metricsSystem;
   }
 
   public static ValidatorClientService create(
@@ -75,50 +83,63 @@ public class ValidatorClientService extends Service {
             .map(
                 endpoint ->
                     RemoteBeaconNodeApi.create(
-                        services,
-                        asyncRunner,
-                        endpoint,
-                        config.getSpecProvider(),
-                        useDependentRoots))
+                        services, asyncRunner, endpoint, config.getSpec(), useDependentRoots))
             .orElseGet(
-                () -> InProcessBeaconNodeApi.create(services, asyncRunner, useDependentRoots));
+                () ->
+                    InProcessBeaconNodeApi.create(
+                        services, asyncRunner, useDependentRoots, config.getSpec()));
     final ValidatorApiChannel validatorApiChannel = beaconNodeApi.getValidatorApi();
     final GenesisDataProvider genesisDataProvider =
         new GenesisDataProvider(asyncRunner, validatorApiChannel);
     final ForkProvider forkProvider =
         new ForkProvider(asyncRunner, validatorApiChannel, genesisDataProvider);
 
+    final ValidatorLoader validatorLoader = createValidatorLoader(config, asyncRunner, services);
+
     ValidatorClientService validatorClientService =
         new ValidatorClientService(
-            eventChannels, beaconNodeApi, forkProvider, config.getSpecProvider());
+            eventChannels,
+            validatorLoader,
+            beaconNodeApi,
+            forkProvider,
+            config.getSpec(),
+            services.getMetricsSystem());
 
     asyncRunner
         .runAsync(
             () ->
                 validatorClientService.initializeValidators(
-                    config, validatorApiChannel, asyncRunner, services))
+                    config, validatorApiChannel, asyncRunner))
         .propagateTo(validatorClientService.initializationComplete);
     return validatorClientService;
   }
 
-  void initializeValidators(
-      ValidatorClientConfiguration config,
-      ValidatorApiChannel validatorApiChannel,
-      AsyncRunner asyncRunner,
-      ServiceConfig services) {
-    final MetricsSystem metricsSystem = services.getMetricsSystem();
+  private static ValidatorLoader createValidatorLoader(
+      final ValidatorClientConfiguration config,
+      final AsyncRunner asyncRunner,
+      final ServiceConfig services) {
     final Path slashingProtectionPath = getSlashingProtectionPath(services.getDataDirLayout());
     final SlashingProtector slashingProtector =
         new LocalSlashingProtector(new SyncDataAccessor(), slashingProtectionPath);
-    final ValidatorLoader validatorLoader =
-        ValidatorLoader.create(
-            slashingProtector, new PublicKeyLoader(), asyncRunner, metricsSystem);
-    final OwnedValidators validators =
-        validatorLoader.initializeValidators(
-            config.getValidatorConfig(), config.getInteropConfig());
+    return ValidatorLoader.create(
+        config.getSpec(),
+        config.getValidatorConfig(),
+        config.getInteropConfig(),
+        slashingProtector,
+        new PublicKeyLoader(),
+        asyncRunner,
+        services.getMetricsSystem());
+  }
+
+  private void initializeValidators(
+      ValidatorClientConfiguration config,
+      ValidatorApiChannel validatorApiChannel,
+      AsyncRunner asyncRunner) {
+    validatorLoader.loadValidators();
+    final OwnedValidators validators = validatorLoader.getOwnedValidators();
     this.validatorIndexProvider = new ValidatorIndexProvider(validators, validatorApiChannel);
     final ValidatorDutyFactory validatorDutyFactory =
-        new ValidatorDutyFactory(forkProvider, validatorApiChannel);
+        new ValidatorDutyFactory(forkProvider, validatorApiChannel, spec);
     final BeaconCommitteeSubscriptions beaconCommitteeSubscriptions =
         new BeaconCommitteeSubscriptions(validatorApiChannel);
     final DutyLoader attestationDutyLoader =
@@ -127,24 +148,26 @@ public class ValidatorClientService extends Service {
             new AttestationDutyLoader(
                 validatorApiChannel,
                 forkProvider,
-                dependentRoot -> new ScheduledDuties(validatorDutyFactory, dependentRoot),
+                dependentRoot ->
+                    new ScheduledDuties(validatorDutyFactory, dependentRoot, metricsSystem),
                 validators,
                 validatorIndexProvider,
                 beaconCommitteeSubscriptions,
-                specProvider));
+                spec));
     final DutyLoader blockDutyLoader =
         new RetryingDutyLoader(
             asyncRunner,
             new BlockProductionDutyLoader(
                 validatorApiChannel,
-                dependentRoot -> new ScheduledDuties(validatorDutyFactory, dependentRoot),
+                dependentRoot ->
+                    new ScheduledDuties(validatorDutyFactory, dependentRoot, metricsSystem),
                 validators,
                 validatorIndexProvider));
     final boolean useDependentRoots = config.getValidatorConfig().useDependentRoots();
     this.attestationTimingChannel =
-        new AttestationDutyScheduler(metricsSystem, attestationDutyLoader, useDependentRoots);
+        new AttestationDutyScheduler(metricsSystem, attestationDutyLoader, useDependentRoots, spec);
     this.blockProductionTimingChannel =
-        new BlockDutyScheduler(metricsSystem, blockDutyLoader, useDependentRoots);
+        new BlockDutyScheduler(metricsSystem, blockDutyLoader, useDependentRoots, spec);
     addValidatorCountMetric(metricsSystem, validators);
     this.validatorStatusLogger =
         new DefaultValidatorStatusLogger(validators, validatorApiChannel, asyncRunner);
@@ -167,6 +190,7 @@ public class ValidatorClientService extends Service {
   protected SafeFuture<?> doStart() {
     return initializationComplete.thenCompose(
         (__) -> {
+          SystemSignalListener.registerReloadConfigListener(validatorLoader::loadValidators);
           forkProvider.start().reportExceptions();
           validatorIndexProvider.lookupValidators();
           eventChannels.subscribe(
@@ -175,7 +199,9 @@ public class ValidatorClientService extends Service {
                   validatorStatusLogger,
                   validatorIndexProvider,
                   blockProductionTimingChannel,
-                  attestationTimingChannel));
+                  attestationTimingChannel,
+                  spec,
+                  metricsSystem));
           validatorStatusLogger.printInitialValidatorStatuses().reportExceptions();
           return beaconNodeApi.subscribeToEvents();
         });

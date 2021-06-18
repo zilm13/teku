@@ -13,8 +13,6 @@
 
 package tech.pegasys.teku.storage.client;
 
-import static tech.pegasys.teku.core.ForkChoiceUtil.get_ancestor;
-
 import com.google.common.eventbus.EventBus;
 import java.util.Collections;
 import java.util.Map;
@@ -27,29 +25,28 @@ import org.apache.logging.log4j.Logger;
 import org.apache.tuweni.bytes.Bytes32;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import org.hyperledger.besu.plugin.services.metrics.Counter;
-import tech.pegasys.teku.core.ForkChoiceUtil;
 import tech.pegasys.teku.dataproviders.lookup.BlockProvider;
 import tech.pegasys.teku.dataproviders.lookup.StateAndBlockSummaryProvider;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.SlotAndBlockRoot;
-import tech.pegasys.teku.datastructures.blocks.StateAndBlockSummary;
-import tech.pegasys.teku.datastructures.forkchoice.ReadOnlyForkChoiceStrategy;
-import tech.pegasys.teku.datastructures.forkchoice.VoteUpdater;
-import tech.pegasys.teku.datastructures.genesis.GenesisData;
-import tech.pegasys.teku.datastructures.state.AnchorPoint;
-import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.datastructures.state.Checkpoint;
-import tech.pegasys.teku.datastructures.state.Fork;
-import tech.pegasys.teku.datastructures.state.ForkInfo;
 import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.metrics.TekuMetricCategory;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.protoarray.ForkChoiceStrategy;
 import tech.pegasys.teku.protoarray.ProtoArrayStorageChannel;
-import tech.pegasys.teku.spec.SpecProvider;
-import tech.pegasys.teku.spec.util.BeaconStateUtil;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.SlotAndBlockRoot;
+import tech.pegasys.teku.spec.datastructures.blocks.StateAndBlockSummary;
+import tech.pegasys.teku.spec.datastructures.forkchoice.ReadOnlyForkChoiceStrategy;
+import tech.pegasys.teku.spec.datastructures.forkchoice.VoteUpdater;
+import tech.pegasys.teku.spec.datastructures.genesis.GenesisData;
+import tech.pegasys.teku.spec.datastructures.state.AnchorPoint;
+import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
+import tech.pegasys.teku.spec.datastructures.state.Fork;
+import tech.pegasys.teku.spec.datastructures.state.ForkInfo;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
+import tech.pegasys.teku.spec.logic.common.util.BeaconStateUtil;
 import tech.pegasys.teku.storage.api.ChainHeadChannel;
 import tech.pegasys.teku.storage.api.FinalizedCheckpointChannel;
 import tech.pegasys.teku.storage.api.ReorgContext;
@@ -78,7 +75,7 @@ public abstract class RecentChainData implements StoreUpdateHandler {
   protected final MetricsSystem metricsSystem;
   private final ChainHeadChannel chainHeadChannel;
   private final StoreConfig storeConfig;
-  private final SpecProvider specProvider;
+  private final Spec spec;
 
   private final AtomicBoolean storeInitialized = new AtomicBoolean(false);
   private final SafeFuture<Void> storeInitializedFuture = new SafeFuture<>();
@@ -102,7 +99,7 @@ public abstract class RecentChainData implements StoreUpdateHandler {
       final FinalizedCheckpointChannel finalizedCheckpointChannel,
       final ChainHeadChannel chainHeadChannel,
       final EventBus eventBus,
-      final SpecProvider specProvider) {
+      final Spec spec) {
     this.asyncRunner = asyncRunner;
     this.metricsSystem = metricsSystem;
     this.storeConfig = storeConfig;
@@ -120,7 +117,7 @@ public abstract class RecentChainData implements StoreUpdateHandler {
             TekuMetricCategory.BEACON,
             "reorgs_total",
             "Total occurrences of reorganizations of the chain");
-    this.specProvider = specProvider;
+    this.spec = spec;
   }
 
   public void subscribeStoreInitialized(Runnable runnable) {
@@ -132,7 +129,7 @@ public abstract class RecentChainData implements StoreUpdateHandler {
   }
 
   public void initializeFromGenesis(final BeaconState genesisState, final UInt64 currentTime) {
-    final AnchorPoint genesis = AnchorPoint.fromGenesisState(genesisState);
+    final AnchorPoint genesis = AnchorPoint.fromGenesisState(spec, genesisState);
     initializeFromAnchorPoint(genesis, currentTime);
   }
 
@@ -141,11 +138,11 @@ public abstract class RecentChainData implements StoreUpdateHandler {
         StoreBuilder.forkChoiceStoreBuilder(
                 asyncRunner,
                 metricsSystem,
+                spec,
                 blockProvider,
                 stateProvider,
                 anchorPoint,
-                currentTime,
-                specProvider)
+                currentTime)
             .storeConfig(storeConfig)
             .build();
 
@@ -204,13 +201,13 @@ public abstract class RecentChainData implements StoreUpdateHandler {
     return chainHead
         .map(
             head ->
-                ForkChoiceUtil.getAncestors(
+                spec.getAncestors(
                     store.getForkChoiceStrategy(), head.getRoot(), startSlot, step, count))
         .orElseGet(TreeMap::new);
   }
 
   public NavigableMap<UInt64, Bytes32> getAncestorsOnFork(final UInt64 startSlot, Bytes32 root) {
-    return ForkChoiceUtil.getAncestorsOnFork(store.getForkChoiceStrategy(), root, startSlot);
+    return spec.getAncestorsOnFork(store.getForkChoiceStrategy(), root, startSlot);
   }
 
   public Optional<ForkChoiceStrategy> getForkChoiceStrategy() {
@@ -244,7 +241,7 @@ public abstract class RecentChainData implements StoreUpdateHandler {
         .thenApply(
             headBlockAndState ->
                 headBlockAndState
-                    .map(head -> ChainHead.create(head, newForkChoiceSlot, specProvider))
+                    .map(head -> ChainHead.create(head, newForkChoiceSlot, spec))
                     .orElseThrow(
                         () ->
                             new IllegalStateException(
@@ -294,7 +291,7 @@ public abstract class RecentChainData implements StoreUpdateHandler {
                           .isLessThan(newChainHead.getForkChoiceEpoch()))
               .orElse(false);
       final BeaconStateUtil beaconStateUtil =
-          specProvider.atSlot(newChainHead.getForkChoiceSlot()).getBeaconStateUtil();
+          spec.atSlot(newChainHead.getForkChoiceSlot()).getBeaconStateUtil();
       chainHeadChannel.chainHeadUpdated(
           newChainHead.getForkChoiceSlot(),
           newChainHead.getStateRoot(),
@@ -341,11 +338,11 @@ public abstract class RecentChainData implements StoreUpdateHandler {
     if (isPreGenesis()) {
       return Optional.empty();
     }
-    return Optional.of(ForkChoiceUtil.get_current_slot(store));
+    return Optional.of(spec.getCurrentSlot(store));
   }
 
   public Optional<UInt64> getCurrentEpoch() {
-    return getCurrentSlot().map(slot -> specProvider.computeEpochAtSlot(slot));
+    return getCurrentSlot().map(spec::computeEpochAtSlot);
   }
 
   /** @return The number of slots between our chainhead and the current slot by time */
@@ -360,8 +357,7 @@ public abstract class RecentChainData implements StoreUpdateHandler {
   }
 
   public Optional<Fork> getNextFork() {
-    // There is no future fork defined at this point.
-    return Optional.empty();
+    return getCurrentEpoch().flatMap(spec.getForkManifest()::getNext);
   }
 
   /**
@@ -386,9 +382,7 @@ public abstract class RecentChainData implements StoreUpdateHandler {
 
   private boolean isForkActive(final Fork fork) {
     return getCurrentSlot()
-        .map(
-            currentSlot ->
-                specProvider.computeEpochAtSlot(currentSlot).compareTo(fork.getEpoch()) >= 0)
+        .map(currentSlot -> spec.computeEpochAtSlot(currentSlot).compareTo(fork.getEpoch()) >= 0)
         .orElse(false);
   }
 
@@ -479,7 +473,8 @@ public abstract class RecentChainData implements StoreUpdateHandler {
   }
 
   public Optional<Bytes32> getBlockRootBySlot(final UInt64 slot, final Bytes32 headBlockRoot) {
-    return getForkChoiceStrategy().flatMap(strategy -> get_ancestor(strategy, headBlockRoot, slot));
+    return getForkChoiceStrategy()
+        .flatMap(strategy -> spec.getAncestor(strategy, headBlockRoot, slot));
   }
 
   public UInt64 getFinalizedEpoch() {

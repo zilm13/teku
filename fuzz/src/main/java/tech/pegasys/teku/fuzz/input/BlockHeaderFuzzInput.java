@@ -13,11 +13,15 @@
 
 package tech.pegasys.teku.fuzz.input;
 
-import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
-import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.ssz.backing.containers.Container2;
-import tech.pegasys.teku.ssz.backing.containers.ContainerSchema2;
-import tech.pegasys.teku.ssz.backing.tree.TreeNode;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.SpecVersion;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
+import tech.pegasys.teku.spec.schemas.SchemaDefinitions;
+import tech.pegasys.teku.ssz.containers.Container2;
+import tech.pegasys.teku.ssz.containers.ContainerSchema2;
+import tech.pegasys.teku.ssz.schema.SszSchema;
+import tech.pegasys.teku.ssz.tree.TreeNode;
 
 /**
  * Note: BlockHeader fuzzing target accepts a block as input (not a SignedBeaconBlock or
@@ -26,9 +30,13 @@ import tech.pegasys.teku.ssz.backing.tree.TreeNode;
 public class BlockHeaderFuzzInput
     extends Container2<BlockHeaderFuzzInput, BeaconState, BeaconBlock> {
 
-  public static ContainerSchema2<BlockHeaderFuzzInput, BeaconState, BeaconBlock> createType() {
+  public static ContainerSchema2<BlockHeaderFuzzInput, BeaconState, BeaconBlock> createType(
+      final SpecVersion spec) {
+    final SchemaDefinitions schemaDefinitions = spec.getSchemaDefinitions();
     return ContainerSchema2.create(
-        BeaconState.getSszSchema(), BeaconBlock.SSZ_SCHEMA.get(), BlockHeaderFuzzInput::new);
+        SszSchema.as(BeaconState.class, schemaDefinitions.getBeaconStateSchema()),
+        schemaDefinitions.getBeaconBlockSchema(),
+        BlockHeaderFuzzInput::new);
   }
 
   private BlockHeaderFuzzInput(
@@ -36,13 +44,8 @@ public class BlockHeaderFuzzInput
     super(type, backingNode);
   }
 
-  public BlockHeaderFuzzInput(final BeaconState state, final BeaconBlock block) {
-    super(createType(), state, block);
-  }
-
-  // NOTE: empty constructor is needed for reflection/introspection
-  public BlockHeaderFuzzInput() {
-    super(createType());
+  public BlockHeaderFuzzInput(final Spec spec, final BeaconState state, final BeaconBlock block) {
+    super(createType(spec.atSlot(state.getSlot())), state, block);
   }
 
   public BeaconBlock getBlock() {

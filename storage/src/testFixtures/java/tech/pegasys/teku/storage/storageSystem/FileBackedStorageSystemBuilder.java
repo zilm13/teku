@@ -18,9 +18,10 @@ import static com.google.common.base.Preconditions.checkState;
 
 import java.nio.file.Path;
 import java.util.Optional;
+import tech.pegasys.teku.core.ChainBuilder;
 import tech.pegasys.teku.infrastructure.metrics.StubMetricsSystem;
-import tech.pegasys.teku.networks.SpecProviderFactory;
-import tech.pegasys.teku.spec.SpecProvider;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
 import tech.pegasys.teku.storage.server.Database;
 import tech.pegasys.teku.storage.server.DatabaseVersion;
 import tech.pegasys.teku.storage.server.StateStorageMode;
@@ -35,7 +36,7 @@ public class FileBackedStorageSystemBuilder {
   private DatabaseVersion version = DatabaseVersion.DEFAULT_VERSION;
   private StateStorageMode storageMode = StateStorageMode.ARCHIVE;
   private StoreConfig storeConfig = StoreConfig.createDefault();
-  private SpecProvider specProvider = SpecProviderFactory.createMinimal();
+  private Spec spec = TestSpecFactory.createMinimalPhase0();
 
   // Version-dependent fields
   private Path dataDir;
@@ -43,6 +44,7 @@ public class FileBackedStorageSystemBuilder {
   private Path archiveDir;
   private Optional<Path> v6ArchiveDir = Optional.empty();
   private long stateStorageFrequency = 1L;
+  private boolean storeNonCanonicalBlocks = false;
 
   private FileBackedStorageSystemBuilder() {}
 
@@ -74,7 +76,12 @@ public class FileBackedStorageSystemBuilder {
 
     validate();
     return StorageSystem.create(
-        database, createRestartSupplier(), storageMode, storeConfig, specProvider);
+        database,
+        createRestartSupplier(),
+        storageMode,
+        storeConfig,
+        spec,
+        ChainBuilder.createDefault());
   }
 
   private FileBackedStorageSystemBuilder copy() {
@@ -97,8 +104,14 @@ public class FileBackedStorageSystemBuilder {
     return this;
   }
 
-  public FileBackedStorageSystemBuilder specProvider(final SpecProvider specProvider) {
-    this.specProvider = specProvider;
+  public FileBackedStorageSystemBuilder storeNonCanonicalBlocks(
+      final boolean storeNonCanonicalBlocks) {
+    this.storeNonCanonicalBlocks = storeNonCanonicalBlocks;
+    return this;
+  }
+
+  public FileBackedStorageSystemBuilder specProvider(final Spec spec) {
+    this.spec = spec;
     return this;
   }
 
@@ -149,7 +162,8 @@ public class FileBackedStorageSystemBuilder {
         RocksDbConfiguration.v5ArchiveDefaults().withDatabaseDir(archiveDir),
         storageMode,
         stateStorageFrequency,
-        specProvider);
+        storeNonCanonicalBlocks,
+        spec);
   }
 
   private Database createV6Database() {
@@ -164,11 +178,12 @@ public class FileBackedStorageSystemBuilder {
         new StubMetricsSystem(),
         hotConfigDefault.withDatabaseDir(hotDir),
         coldConfig,
-        V4SchemaHot.INSTANCE,
-        V6SchemaFinalized.INSTANCE,
+        V4SchemaHot.create(spec),
+        V6SchemaFinalized.create(spec),
         storageMode,
         stateStorageFrequency,
-        specProvider);
+        storeNonCanonicalBlocks,
+        spec);
   }
 
   private Database createLevelDb2Database() {
@@ -183,11 +198,12 @@ public class FileBackedStorageSystemBuilder {
         new StubMetricsSystem(),
         hotConfigDefault.withDatabaseDir(hotDir),
         coldConfig,
-        V4SchemaHot.INSTANCE,
-        V6SchemaFinalized.INSTANCE,
+        V4SchemaHot.create(spec),
+        V6SchemaFinalized.create(spec),
         storageMode,
         stateStorageFrequency,
-        specProvider);
+        storeNonCanonicalBlocks,
+        spec);
   }
 
   private Database createV5Database() {
@@ -197,7 +213,8 @@ public class FileBackedStorageSystemBuilder {
         RocksDbConfiguration.v5ArchiveDefaults().withDatabaseDir(archiveDir),
         storageMode,
         stateStorageFrequency,
-        specProvider);
+        storeNonCanonicalBlocks,
+        spec);
   }
 
   private Database createV4Database() {
@@ -207,6 +224,7 @@ public class FileBackedStorageSystemBuilder {
         RocksDbConfiguration.v4Settings(archiveDir),
         storageMode,
         stateStorageFrequency,
-        specProvider);
+        storeNonCanonicalBlocks,
+        spec);
   }
 }

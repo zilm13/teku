@@ -13,20 +13,24 @@
 
 package tech.pegasys.teku.api.schema;
 
-import static tech.pegasys.teku.ssz.backing.SszDataAssert.assertThatSszData;
+import static tech.pegasys.teku.ssz.SszDataAssert.assertThatSszData;
 
 import org.junit.jupiter.api.Test;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
 
 class SignedBeaconBlockTest {
 
+  final Spec spec = TestSpecFactory.createMinimalPhase0();
   private final DataStructureUtil dataStructureUtil = new DataStructureUtil();
 
   @Test
   public void shouldConvertSchemaToInternalCorrectly() {
-    final tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock internalBlock =
+    final tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock internalBlock =
         dataStructureUtil.randomSignedBeaconBlock(1);
     final SignedBeaconBlock apiBlock = new SignedBeaconBlock(internalBlock);
-    assertThatSszData(apiBlock.asInternalSignedBeaconBlock()).isEqualByAllMeansTo(internalBlock);
+    assertThatSszData(apiBlock.asInternalSignedBeaconBlock(spec))
+        .isEqualByAllMeansTo(internalBlock);
   }
 }

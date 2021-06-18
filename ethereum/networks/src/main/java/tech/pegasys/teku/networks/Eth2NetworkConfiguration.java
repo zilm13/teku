@@ -15,55 +15,63 @@ package tech.pegasys.teku.networks;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.util.Arrays.asList;
-import static tech.pegasys.teku.networks.Eth2Network.LESS_SWIFT;
-import static tech.pegasys.teku.networks.Eth2Network.MAINNET;
-import static tech.pegasys.teku.networks.Eth2Network.MEDALLA;
-import static tech.pegasys.teku.networks.Eth2Network.MINIMAL;
-import static tech.pegasys.teku.networks.Eth2Network.PYRMONT;
-import static tech.pegasys.teku.networks.Eth2Network.SWIFT;
-import static tech.pegasys.teku.networks.Eth2Network.TOLEDO;
+import static tech.pegasys.teku.spec.networks.Eth2Network.LESS_SWIFT;
+import static tech.pegasys.teku.spec.networks.Eth2Network.MAINNET;
+import static tech.pegasys.teku.spec.networks.Eth2Network.MERGENET_MINIMAL;
+import static tech.pegasys.teku.spec.networks.Eth2Network.MINIMAL;
+import static tech.pegasys.teku.spec.networks.Eth2Network.PRATER;
+import static tech.pegasys.teku.spec.networks.Eth2Network.PYRMONT;
+import static tech.pegasys.teku.spec.networks.Eth2Network.SWIFT;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import tech.pegasys.teku.datastructures.eth1.Eth1Address;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.Spec;
-import tech.pegasys.teku.spec.SpecProvider;
+import tech.pegasys.teku.spec.SpecFactory;
+import tech.pegasys.teku.spec.SpecVersion;
+import tech.pegasys.teku.spec.datastructures.eth1.Eth1Address;
+import tech.pegasys.teku.spec.networks.Eth2Network;
 
 public class Eth2NetworkConfiguration {
   private static final int DEFAULT_STARTUP_TARGET_PEER_COUNT = 5;
   private static final int DEFAULT_STARTUP_TIMEOUT_SECONDS = 30;
 
-  private final SpecProvider specProvider;
+  private final Spec spec;
   private final String constants;
   private final Optional<String> initialState;
   private final boolean usingCustomInitialState;
   private final int startupTargetPeerCount;
   private final int startupTimeoutSeconds;
   private final List<String> discoveryBootnodes;
-  private final Optional<Eth1Address> eth1DepositContractAddress;
+  private final Eth1Address eth1DepositContractAddress;
   private final Optional<UInt64> eth1DepositContractDeployBlock;
+  private final boolean balanceAttackMitigationEnabled;
 
   private Eth2NetworkConfiguration(
-      final SpecProvider specProvider,
+      final Spec spec,
       final String constants,
       final Optional<String> initialState,
       final boolean usingCustomInitialState,
       final int startupTargetPeerCount,
       final int startupTimeoutSeconds,
       final List<String> discoveryBootnodes,
-      final Optional<Eth1Address> eth1DepositContractAddress,
-      final Optional<UInt64> eth1DepositContractDeployBlock) {
-    this.specProvider = specProvider;
+      final Eth1Address eth1DepositContractAddress,
+      final Optional<UInt64> eth1DepositContractDeployBlock,
+      final boolean balanceAttackMitigationEnabled) {
+    this.spec = spec;
     this.constants = constants;
     this.initialState = initialState;
     this.usingCustomInitialState = usingCustomInitialState;
     this.startupTargetPeerCount = startupTargetPeerCount;
     this.startupTimeoutSeconds = startupTimeoutSeconds;
     this.discoveryBootnodes = discoveryBootnodes;
-    this.eth1DepositContractAddress = eth1DepositContractAddress;
+    this.eth1DepositContractAddress =
+        eth1DepositContractAddress == null
+            ? new Eth1Address(spec.getGenesisSpecConfig().getDepositContractAddress())
+            : eth1DepositContractAddress;
     this.eth1DepositContractDeployBlock = eth1DepositContractDeployBlock;
+    this.balanceAttackMitigationEnabled = balanceAttackMitigationEnabled;
   }
 
   public static Eth2NetworkConfiguration.Builder builder(final String network) {
@@ -78,12 +86,12 @@ public class Eth2NetworkConfiguration {
     return new Builder();
   }
 
-  public SpecProvider getSpecProvider() {
-    return specProvider;
+  public Spec getSpec() {
+    return spec;
   }
 
   /**
-   * @deprecated Constants should be accessed via {@link Spec}
+   * @deprecated Constants should be accessed via {@link SpecVersion}
    * @return The constants resource name or url
    */
   @Deprecated
@@ -111,12 +119,16 @@ public class Eth2NetworkConfiguration {
     return discoveryBootnodes;
   }
 
-  public Optional<Eth1Address> getEth1DepositContractAddress() {
+  public Eth1Address getEth1DepositContractAddress() {
     return eth1DepositContractAddress;
   }
 
   public Optional<UInt64> getEth1DepositContractDeployBlock() {
     return eth1DepositContractDeployBlock;
+  }
+
+  public boolean isBalanceAttackMitigationEnabled() {
+    return balanceAttackMitigationEnabled;
   }
 
   @Override
@@ -131,14 +143,21 @@ public class Eth2NetworkConfiguration {
     private int startupTargetPeerCount = DEFAULT_STARTUP_TARGET_PEER_COUNT;
     private int startupTimeoutSeconds = DEFAULT_STARTUP_TIMEOUT_SECONDS;
     private List<String> discoveryBootnodes = new ArrayList<>();
-    private Optional<Eth1Address> eth1DepositContractAddress = Optional.empty();
+    private Eth1Address eth1DepositContractAddress;
     private Optional<UInt64> eth1DepositContractDeployBlock = Optional.empty();
+    private boolean balanceAttackMitigationEnabled = false;
 
     public Eth2NetworkConfiguration build() {
       checkNotNull(constants, "Missing constants");
 
+      final Spec spec = SpecFactory.getDefault().create(constants);
+      // if the deposit contract was not set, default from constants
+      if (eth1DepositContractAddress == null) {
+        eth1DepositContractAddress(
+            spec.getGenesisSpec().getConfig().getDepositContractAddress().toHexString());
+      }
       return new Eth2NetworkConfiguration(
-          SpecProviderFactory.create(constants),
+          spec,
           constants,
           initialState,
           usingCustomInitialState,
@@ -146,7 +165,8 @@ public class Eth2NetworkConfiguration {
           startupTimeoutSeconds,
           discoveryBootnodes,
           eth1DepositContractAddress,
-          eth1DepositContractDeployBlock);
+          eth1DepositContractDeployBlock,
+          balanceAttackMitigationEnabled);
     }
 
     public Builder constants(final String constants) {
@@ -154,9 +174,15 @@ public class Eth2NetworkConfiguration {
       return this;
     }
 
-    public Builder initialState(final String initialState) {
+    public Builder customInitialState(final String initialState) {
       this.initialState = Optional.of(initialState);
       this.usingCustomInitialState = true;
+      return this;
+    }
+
+    public Builder defaultInitialState(final String initialState) {
+      this.initialState = Optional.of(initialState);
+      this.usingCustomInitialState = false;
       return this;
     }
 
@@ -182,11 +208,11 @@ public class Eth2NetworkConfiguration {
     }
 
     public Builder eth1DepositContractAddress(final String eth1Address) {
-      this.eth1DepositContractAddress = Optional.of(Eth1Address.fromHexString(eth1Address));
+      this.eth1DepositContractAddress = Eth1Address.fromHexString(eth1Address);
       return this;
     }
 
-    public Builder eth1DepositContractAddress(final Optional<Eth1Address> eth1Address) {
+    public Builder eth1DepositContractAddress(final Eth1Address eth1Address) {
       checkNotNull(eth1Address);
       this.eth1DepositContractAddress = eth1Address;
       return this;
@@ -195,6 +221,11 @@ public class Eth2NetworkConfiguration {
     public Builder eth1DepositContractDeployBlock(final long eth1DepositContractDeployBlock) {
       this.eth1DepositContractDeployBlock =
           Optional.of(UInt64.valueOf(eth1DepositContractDeployBlock));
+      return this;
+    }
+
+    public Builder balanceAttackMitigationEnabled(final boolean balanceAttackMitigationEnabled) {
+      this.balanceAttackMitigationEnabled = balanceAttackMitigationEnabled;
       return this;
     }
 
@@ -210,18 +241,18 @@ public class Eth2NetworkConfiguration {
           return applyMainnetNetworkDefaults();
         case MINIMAL:
           return applyMinimalNetworkDefaults();
-        case MEDALLA:
-          return applyMedallaNetworkDefaults();
-        case TOLEDO:
-          return applyToledoNetworkDefaults();
         case PYRMONT:
           return applyPyrmontNetworkDefaults();
+        case PRATER:
+          return applyPraterNetworkDefaults();
         case SWIFT:
           return applySwiftNetworkDefaults();
         case LESS_SWIFT:
           return applyLessSwiftNetworkDefaults();
+        case MERGENET_MINIMAL:
+          return applyMergenetMinimalNetworkDefaults();
         default:
-          return reset().constants(network.constantsName());
+          return reset().constants(network.configName());
       }
     }
 
@@ -231,35 +262,35 @@ public class Eth2NetworkConfiguration {
       startupTargetPeerCount = DEFAULT_STARTUP_TARGET_PEER_COUNT;
       startupTimeoutSeconds = DEFAULT_STARTUP_TIMEOUT_SECONDS;
       discoveryBootnodes = new ArrayList<>();
-      eth1DepositContractAddress = Optional.empty();
+      eth1DepositContractAddress = null;
       eth1DepositContractDeployBlock = Optional.empty();
 
       return this;
     }
 
     public Builder applyMinimalNetworkDefaults() {
-      return reset().constants(MINIMAL.constantsName()).startupTargetPeerCount(0);
+      return reset().constants(MINIMAL.configName()).startupTargetPeerCount(0);
     }
 
     public Builder applySwiftNetworkDefaults() {
-      return reset().constants(SWIFT.constantsName()).startupTargetPeerCount(0);
+      return reset().constants(SWIFT.configName()).startupTargetPeerCount(0);
     }
 
     public Builder applyLessSwiftNetworkDefaults() {
-      return reset().constants(LESS_SWIFT.constantsName()).startupTargetPeerCount(0);
+      return reset().constants(LESS_SWIFT.configName()).startupTargetPeerCount(0);
     }
 
     public Builder applyMainnetNetworkDefaults() {
       return reset()
-          .constants(MAINNET.constantsName())
+          .constants(MAINNET.configName())
           .initialStateFromClasspath("mainnet-genesis.ssz")
           .startupTimeoutSeconds(120)
-          .eth1DepositContractAddress("0x00000000219ab540356cBB839Cbe05303d7705Fa")
           .eth1DepositContractDeployBlock(11052984)
           .discoveryBootnodes(
               // PegaSys Teku
               "enr:-KG4QJRlj4pHagfNIm-Fsx9EVjW4rviuZYzle3tyddm2KAWMJBDGAhxfM2g-pDaaiwE8q19uvLSH4jyvWjypLMr3TIcEhGV0aDKQ9aX9QgAAAAD__________4JpZIJ2NIJpcIQDE8KdiXNlY3AyNTZrMaEDhpehBDbZjM_L9ek699Y7vhUJ-eAdMyQW_Fil522Y0fODdGNwgiMog3VkcIIjKA",
-              "enr:-KG4QDyytgmE4f7AnvW-ZaUOIi9i79qX4JwjRAiXBZCU65wOfBu-3Nb5I7b_Rmg3KCOcZM_C3y5pg7EBU5XGrcLTduQEhGV0aDKQ9aX9QgAAAAD__________4JpZIJ2NIJpcIQ2_DUbiXNlY3AyNTZrMaEDKnz_-ps3UUOfHWVYaskI5kWYO_vtYMGYCQRAR3gHDouDdGNwgiMog3VkcIIjKA",
+              "enr:-KG4QL-eqFoHy0cI31THvtZjpYUu_Jdw_MO7skQRJxY1g5HTN1A0epPCU6vi0gLGUgrzpU-ygeMSS8ewVxDpKfYmxMMGhGV0aDKQtTA_KgAAAAD__________4JpZIJ2NIJpcIQ2_DUbiXNlY3AyNTZrMaED8GJ2vzUqgL6-KD1xalo1CsmY4X1HaDnyl6Y_WayCo9GDdGNwgiMog3VkcIIjKA",
+
               // Prysmatic Labs
               "enr:-Ku4QImhMc1z8yCiNJ1TyUxdcfNucje3BGwEHzodEZUan8PherEo4sF7pPHPSIB1NNuSg5fZy7qFsjmUKs2ea1Whi0EBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpD1pf1CAAAAAP__________gmlkgnY0gmlwhBLf22SJc2VjcDI1NmsxoQOVphkDqal4QzPMksc5wnpuC3gvSC8AfbFOnZY_On34wIN1ZHCCIyg",
               "enr:-Ku4QP2xDnEtUXIjzJ_DhlCRN9SN99RYQPJL92TMlSv7U5C1YnYLjwOQHgZIUXw6c-BvRg2Yc2QsZxxoS_pPRVe0yK8Bh2F0dG5ldHOIAAAAAAAAAACEZXRoMpD1pf1CAAAAAP__________gmlkgnY0gmlwhBLf22SJc2VjcDI1NmsxoQMeFF5GrS7UZpAH2Ly84aLK-TyvH-dRo0JM1i8yygH50YN1ZHCCJxA",
@@ -278,66 +309,23 @@ public class Eth2NetworkConfiguration {
               "enr:-LK4QKWrXTpV9T78hNG6s8AM6IO4XH9kFT91uZtFg1GcsJ6dKovDOr1jtAAFPnS2lvNltkOGA9k29BUN7lFh_sjuc9QBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpC1MD8qAAAAAP__________gmlkgnY0gmlwhANAdd-Jc2VjcDI1NmsxoQLQa6ai7y9PMN5hpLe5HmiJSlYzMuzP7ZhwRiwHvqNXdoN0Y3CCI4yDdWRwgiOM");
     }
 
-    public Builder applyMedallaNetworkDefaults() {
+    public Builder applyPraterNetworkDefaults() {
       return reset()
-          .constants(MEDALLA.constantsName())
-          .initialStateFromClasspath("medalla-genesis.ssz")
+          .constants(PRATER.configName())
           .startupTimeoutSeconds(120)
-          .eth1DepositContractAddress("0x07b39F4fDE4A38bACe212b546dAc87C58DfE3fDC")
-          .eth1DepositContractDeployBlock(3085928)
+          .eth1DepositContractDeployBlock(4367322)
+          .defaultInitialState(
+              "https://github.com/eth2-clients/eth2-testnets/raw/192c1b48ea5ff4adb4e6ef7d2a9e5f82fb5ffd72/shared/prater/genesis.ssz")
           .discoveryBootnodes(
-              // PegaSys Teku
-              "enr:-KG4QFuKQ9eeXDTf8J4tBxFvs3QeMrr72mvS7qJgL9ieO6k9Rq5QuGqtGK4VlXMNHfe34Khhw427r7peSoIbGcN91fUDhGV0aDKQD8XYjwAAAAH__________4JpZIJ2NIJpcIQDhMExiXNlY3AyNTZrMaEDESplmV9c2k73v0DjxVXJ6__2bWyP-tK28_80lf7dUhqDdGNwgiMog3VkcIIjKA",
-
-              // Sigp Lighthouse
-              "enr:-LK4QKWk9yZo258PQouLshTOEEGWVHH7GhKwpYmB5tmKE4eHeSfman0PZvM2Rpp54RWgoOagAsOfKoXgZSbiCYzERWABh2F0dG5ldHOIAAAAAAAAAACEZXRoMpAAAAAAAAAAAAAAAAAAAAAAgmlkgnY0gmlwhDQlA5CJc2VjcDI1NmsxoQOYiWqrQtQksTEtS3qY6idxJE5wkm0t9wKqpzv2gCR21oN0Y3CCIyiDdWRwgiMo",
-              "enr:-LK4QEnIS-PIxxLCadJdnp83VXuJqgKvC9ZTIWaJpWqdKlUFCiup2sHxWihF9EYGlMrQLs0mq_2IyarhNq38eoaOHUoBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpAAAAAAAAAAAAAAAAAAAAAAgmlkgnY0gmlwhA37LMaJc2VjcDI1NmsxoQJ7k0mKtTd_kdEq251flOjD1HKpqgMmIETDoD-Msy_O-4N0Y3CCIyiDdWRwgiMo",
-
-              // Prysmatic
-              "enr:-Ku4QLglCMIYAgHd51uFUqejD9DWGovHOseHQy7Od1SeZnHnQ3fSpE4_nbfVs8lsy8uF07ae7IgrOOUFU0NFvZp5D4wBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpAYrkzLAAAAAf__________gmlkgnY0gmlwhBLf22SJc2VjcDI1NmsxoQJxCnE6v_x2ekgY_uoE1rtwzvGy40mq9eD66XfHPBWgIIN1ZHCCD6A",
-              "enr:-Ku4QOzU2MY51tYFcoByfULugCu2mepfqAbB0DajbRzg8xlILLfi5Iv_Wx-ARn8SiFoZZb3yp2x05cnUDYSoDYZupjIBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpAYrkzLAAAAAf__________gmlkgnY0gmlwhBLf22SJc2VjcDI1NmsxoQLEq16KLm1vPjUKYGkHq296D60i7y209NYPUpwZPXDVgYN1ZHCCD6A",
-              "enr:-Ku4QOYFmi2BW_YPDew_CKdfMvsrcRY1ARA-ImtcqFl-lgoxOFbxte4PU44-1M3uRNSRM-6rVa8USGohmWwtgwalEt8Bh2F0dG5ldHOIAAAAAAAAAACEZXRoMpAYrkzLAAAAAf__________gmlkgnY0gmlwhBLf22SJc2VjcDI1NmsxoQKH3lxnglLqrA7L6sl5r7XFnckr3XCnlZMaBTYSdE8SHIN1ZHCCD6A",
-
-              // Proto
-              "enr:-Ku4QFVactU18ogiqPPasKs3jhUm5ISszUrUMK2c6SUPbGtANXVJ2wFapsKwVEVnVKxZ7Gsr9yEc4PYF-a14ahPa1q0Bh2F0dG5ldHOIAAAAAAAAAACEZXRoMpAYrkzLAAAAAf__________gmlkgnY0gmlwhGQbAHyJc2VjcDI1NmsxoQILF-Ya2i5yowVkQtlnZLjG0kqC4qtwmSk8ha7tKLuME4N1ZHCCIyg",
-
-              // Lighthouse v5.1
-              "enr:-LK4QCGFeQXjpQkgOfLHsbTjD65IOtSqV7Qo-Qdqv6SrL8lqFY7INPMMGP5uGKkVDcJkeXimSeNeypaZV3MHkcJgr9QCh2F0dG5ldHOIAAAAAAAAAACEZXRoMpDnp11aAAAAAf__________gmlkgnY0gmlwhA37LMaJc2VjcDI1NmsxoQJ7k0mKtTd_kdEq251flOjD1HKpqgMmIETDoD-Msy_O-4N0Y3CCIyiDdWRwgiMo",
-              "enr:-LK4QCpyWmMLYwC2umMJ_g0c9VY7YOFwZyaR80_tuQNTWOzJbaR82DDhVQYqmE_0gvN6Du5jwnxzIaaNRZQlVXzfIK0Dh2F0dG5ldHOIAAAAAAAAAACEZXRoMpDnp11aAAAAAf__________gmlkgnY0gmlwhCLR2xuJc2VjcDI1NmsxoQOYiWqrQtQksTEtS3qY6idxJE5wkm0t9wKqpzv2gCR21oN0Y3CCIyiDdWRwgiMo",
-
-              // Prysm v5.1
-              "enr:-Ku4QHWezvidY_m0dWEwERrNrqjEQWrlIx7b8K4EIxGgTrLmUxHCZPW5-t8PsS8nFxAJ8k8YacKP5zPRk5gbsTSsRTQBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpAYrkzLAAAAAf__________gmlkgnY0gmlwhBLf22SJc2VjcDI1NmsxoQMypP_ODwTuBq2v0oIdjPGCEyu9Hb_jHDbuIX_iNvBRGoN1ZHCCGWQ",
-              "enr:-Ku4QOnVSyvzS3VbF87J8MubaRuTyfPi6B67XQg6-5eAV_uILAhn9geTTQmfqDIOcIeAxWHUUajQp6lYniAXPWncp6UBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpAYrkzLAAAAAf__________gmlkgnY0gmlwhBLf22SJc2VjcDI1NmsxoQKekYKqUtwbaJKKCct_srE5-g7tBUm68mj_jpeSb7CCqYN1ZHCCC7g");
-    }
-
-    public Builder applyToledoNetworkDefaults() {
-      return reset()
-          .constants(TOLEDO.constantsName())
-          .startupTimeoutSeconds(120)
-          .eth1DepositContractAddress("0x47709dC7a8c18688a1f051761fc34ac253970bC0")
-          .eth1DepositContractDeployBlock(3702432)
-          .discoveryBootnodes(
-              // discv5.1-only bootnode @protolambda
-              "enr:-Ku4QL5E378NT4-vqP6v1mZ7kHxiTHJvuBvQixQsuTTCffa0PJNWMBlG3Mduvsvd6T2YP1U3l5tBKO5H-9wyX2SCtPkBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpC4EvfsAHAe0P__________gmlkgnY0gmlwhDaetEeJc2VjcDI1NmsxoQKtGC2CAuba7goLLdle899M3esUmoWRvzi7GBVhq6ViCYN1ZHCCIyg",
-
-              // lighthouse (Canada) @protolambda
-              "enr:-LK4QHLujdDjOwm2siyFJ2XGz19_ip-qTtozG3ceZ3_56G-LMWb4um67gTSYRJg0WsSkyvRMBEpz8uuIYl-7HfWvktgBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpCXm69nAHAe0P__________gmlkgnY0gmlwhCO3C5OJc2VjcDI1NmsxoQKXw9BLDY6YwmqTtfkzUnlJQb82UrlX4lIAnSSYWHFRlYN0Y3CCIyiDdWRwgiMo",
-
-              // lighthouse (Sao Paulo) @protolambda
-              "enr:-LK4QMxmk7obupScBebKFaasSH3QmYUg-HaEmMAljfmGQCLbKwdOhszzx-VfVPvlH7bZZbOmg3-SNWbJsFfytdjD7a4Bh2F0dG5ldHOIAAAAAAAAAACEZXRoMpCXm69nAHAe0P__________gmlkgnY0gmlwhBLkdWuJc2VjcDI1NmsxoQOwYsJyLOjJcDIqiQSSZtDi_EwwSaUjPBSnLVY_PYu-HoN0Y3CCIyiDdWRwgiMo",
-
-              // Teku @protolambda
-              "enr:-KG4QKqo0mG4C35ntJg8icO54wd973aZ7aBiAnC2t1XkGvgqNDOEHwNe2ykxYVUj9AWjm_lKD7brlhXKCZEskGbie2cDhGV0aDKQl5uvZwBwHtD__________4JpZIJ2NIJpcIQNOThwiXNlY3AyNTZrMaECn1dwC8MRt8rk2VUT8RjzEBaceF09d4CEQI20O_SWYcqDdGNwgiMog3VkcIIjKA",
-
-              // Prysm @protolambda
-              "enr:-LK4QAhU5smiLgU0AgrdFv8eCKmDPCBkXCMCIy8Aktaci5qvCYOsW98xVqJS6OoPWt4Sz_YoTdLQBWxd-RZ756vmGPMBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpCXm69nAHAe0P__________gmlkgnY0gmlwhDTTDL2Jc2VjcDI1NmsxoQOmSJ0mKsQjab7Zralm1Hi0AEReZ2SEqYdKoOPmoA98DoN0Y3CCIyiDdWRwgiMo");
+              // q9f Bootnodes
+              "enr:-LK4QH1xnjotgXwg25IDPjrqRGFnH1ScgNHA3dv1Z8xHCp4uP3N3Jjl_aYv_WIxQRdwZvSukzbwspXZ7JjpldyeVDzMCh2F0dG5ldHOIAAAAAAAAAACEZXRoMpB53wQoAAAQIP__________gmlkgnY0gmlwhIe1te-Jc2VjcDI1NmsxoQOkcGXqbCJYbcClZ3z5f6NWhX_1YPFRYRRWQpJjwSHpVIN0Y3CCIyiDdWRwgiMo",
+              "enr:-KG4QCIzJZTY_fs_2vqWEatJL9RrtnPwDCv-jRBuO5FQ2qBrfJubWOWazri6s9HsyZdu-fRUfEzkebhf1nvO42_FVzwDhGV0aDKQed8EKAAAECD__________4JpZIJ2NIJpcISHtbYziXNlY3AyNTZrMaED4m9AqVs6F32rSCGsjtYcsyfQE2K8nDiGmocUY_iq-TSDdGNwgiMog3VkcIIjKA");
     }
 
     public Builder applyPyrmontNetworkDefaults() {
       return reset()
-          .constants(PYRMONT.constantsName())
+          .constants(PYRMONT.configName())
           .startupTimeoutSeconds(120)
-          .eth1DepositContractAddress("0x8c5fecdC472E27Bc447696F431E425D02dd46a8c")
           .eth1DepositContractDeployBlock(3743587)
           .initialStateFromClasspath("pyrmont-genesis.ssz")
           .discoveryBootnodes(
@@ -345,6 +333,10 @@ public class Eth2NetworkConfiguration {
               "enr:-Ku4QOA5OGWObY8ep_x35NlGBEj7IuQULTjkgxC_0G1AszqGEA0Wn2RNlyLFx9zGTNB1gdFBA6ZDYxCgIza1uJUUOj4Dh2F0dG5ldHOIAAAAAAAAAACEZXRoMpDVTPWXAAAgCf__________gmlkgnY0gmlwhDQPSjiJc2VjcDI1NmsxoQM6yTQB6XGWYJbI7NZFBjp4Yb9AYKQPBhVrfUclQUobb4N1ZHCCIyg",
               // @protolambda bootnode 2
               "enr:-Ku4QOksdA2tabOGrfOOr6NynThMoio6Ggka2oDPqUuFeWCqcRM2alNb8778O_5bK95p3EFt0cngTUXm2H7o1jkSJ_8Dh2F0dG5ldHOIAAAAAAAAAACEZXRoMpDVTPWXAAAgCf__________gmlkgnY0gmlwhDaa13aJc2VjcDI1NmsxoQKdNQJvnohpf0VO0ZYCAJxGjT0uwJoAHbAiBMujGjK0SoN1ZHCCIyg");
+    }
+
+    public Builder applyMergenetMinimalNetworkDefaults() {
+      return reset().constants(MERGENET_MINIMAL.configName()).startupTargetPeerCount(0);
     }
   }
 }

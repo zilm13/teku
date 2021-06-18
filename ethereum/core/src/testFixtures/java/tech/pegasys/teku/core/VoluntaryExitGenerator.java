@@ -13,25 +13,29 @@
 
 package tech.pegasys.teku.core;
 
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_epoch_at_slot;
 import static tech.pegasys.teku.infrastructure.async.SyncAsyncRunner.SYNC_RUNNER;
+import static tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil.compute_epoch_at_slot;
 
 import java.util.List;
 import tech.pegasys.teku.bls.BLSKeyPair;
 import tech.pegasys.teku.bls.BLSSignature;
 import tech.pegasys.teku.bls.BLSTestUtil;
 import tech.pegasys.teku.core.signatures.LocalSigner;
-import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
-import tech.pegasys.teku.datastructures.operations.VoluntaryExit;
-import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.datastructures.state.ForkInfo;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.datastructures.operations.SignedVoluntaryExit;
+import tech.pegasys.teku.spec.datastructures.operations.VoluntaryExit;
+import tech.pegasys.teku.spec.datastructures.state.ForkInfo;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
 import tech.pegasys.teku.util.config.Constants;
 
 public class VoluntaryExitGenerator {
+
+  private final Spec spec;
   private final List<BLSKeyPair> validatorKeys;
 
-  public VoluntaryExitGenerator(final List<BLSKeyPair> validatorKeys) {
+  public VoluntaryExitGenerator(final Spec spec, final List<BLSKeyPair> validatorKeys) {
+    this.spec = spec;
     this.validatorKeys = validatorKeys;
   }
 
@@ -40,7 +44,7 @@ public class VoluntaryExitGenerator {
     VoluntaryExit exit = new VoluntaryExit(epoch, UInt64.valueOf(validatorIndex));
 
     BLSSignature exitSignature =
-        new LocalSigner(getKeypair(validatorIndex, valid), SYNC_RUNNER)
+        new LocalSigner(spec, getKeypair(validatorIndex, valid), SYNC_RUNNER)
             .signVoluntaryExit(exit, forkInfo)
             .join();
 

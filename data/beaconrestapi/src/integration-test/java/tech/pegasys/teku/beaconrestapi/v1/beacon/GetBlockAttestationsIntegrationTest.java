@@ -25,7 +25,7 @@ import tech.pegasys.teku.api.response.v1.beacon.GetBlockAttestationsResponse;
 import tech.pegasys.teku.api.schema.Attestation;
 import tech.pegasys.teku.beaconrestapi.AbstractDataBackedRestAPIIntegrationTest;
 import tech.pegasys.teku.beaconrestapi.handlers.v1.beacon.GetBlockAttestations;
-import tech.pegasys.teku.datastructures.blocks.SignedBlockAndState;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBlockAndState;
 
 public class GetBlockAttestationsIntegrationTest extends AbstractDataBackedRestAPIIntegrationTest {
   @BeforeEach
@@ -42,7 +42,7 @@ public class GetBlockAttestationsIntegrationTest extends AbstractDataBackedRestA
         jsonProvider.jsonToObject(response.body().string(), GetBlockAttestationsResponse.class);
     final List<Attestation> data = body.data;
     final List<Attestation> attestations =
-        created.get(0).getBlock().getMessage().getBody().getAttestations().asList().stream()
+        created.get(0).getBlock().getMessage().getBody().getAttestations().stream()
             .map(Attestation::new)
             .collect(toList());
     assertThat(data).isEqualTo(attestations);

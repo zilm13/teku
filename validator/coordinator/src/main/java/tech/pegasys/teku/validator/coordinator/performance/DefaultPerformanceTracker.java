@@ -14,10 +14,6 @@
 package tech.pegasys.teku.validator.coordinator.performance;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_epoch_at_slot;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_start_slot_at_epoch;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_block_root;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_block_root_at_slot;
 
 import com.google.common.annotations.VisibleForTesting;
 import java.util.ArrayList;
@@ -35,15 +31,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.apache.tuweni.bytes.Bytes32;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
-import tech.pegasys.teku.datastructures.operations.Attestation;
-import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.infrastructure.logging.StatusLogger;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.backing.collections.SszBitlist;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.spec.datastructures.operations.Attestation;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
+import tech.pegasys.teku.ssz.collections.SszBitlist;
 import tech.pegasys.teku.storage.client.CombinedChainDataClient;
-import tech.pegasys.teku.util.config.Constants;
 import tech.pegasys.teku.validator.api.ValidatorPerformanceTrackingMode;
 import tech.pegasys.teku.validator.coordinator.ActiveValidatorTracker;
 
@@ -66,6 +62,7 @@ public class DefaultPerformanceTracker implements PerformanceTracker {
   private final ValidatorPerformanceMetrics validatorPerformanceMetrics;
   private final ValidatorPerformanceTrackingMode mode;
   private final ActiveValidatorTracker validatorTracker;
+  private final Spec spec;
 
   private Optional<UInt64> nodeStartEpoch = Optional.empty();
   private AtomicReference<UInt64> latestAnalyzedEpoch = new AtomicReference<>(UInt64.ZERO);
@@ -75,17 +72,19 @@ public class DefaultPerformanceTracker implements PerformanceTracker {
       StatusLogger statusLogger,
       ValidatorPerformanceMetrics validatorPerformanceMetrics,
       ValidatorPerformanceTrackingMode mode,
-      ActiveValidatorTracker validatorTracker) {
+      ActiveValidatorTracker validatorTracker,
+      final Spec spec) {
     this.combinedChainDataClient = combinedChainDataClient;
     this.statusLogger = statusLogger;
     this.validatorPerformanceMetrics = validatorPerformanceMetrics;
     this.mode = mode;
     this.validatorTracker = validatorTracker;
+    this.spec = spec;
   }
 
   @Override
   public void start(UInt64 nodeStartSlot) {
-    this.nodeStartEpoch = Optional.of(compute_epoch_at_slot(nodeStartSlot));
+    this.nodeStartEpoch = Optional.of(spec.computeEpochAtSlot(nodeStartSlot));
   }
 
   @Override
@@ -94,11 +93,11 @@ public class DefaultPerformanceTracker implements PerformanceTracker {
       return;
     }
 
-    if (slot.mod(Constants.SLOTS_PER_EPOCH).isGreaterThan(UInt64.ZERO)) {
+    if (slot.mod(spec.getSlotsPerEpoch(slot)).isGreaterThan(UInt64.ZERO)) {
       return;
     }
 
-    UInt64 currentEpoch = compute_epoch_at_slot(slot);
+    UInt64 currentEpoch = spec.computeEpochAtSlot(slot);
     if (currentEpoch.isLessThanOrEqualTo(
         latestAnalyzedEpoch.getAndUpdate(
             val -> val.isLessThan(currentEpoch) ? currentEpoch : val))) {
@@ -232,12 +231,12 @@ public class DefaultPerformanceTracker implements PerformanceTracker {
 
       // Check if the attestation had correct target
       Bytes32 attestationTargetRoot = sentAttestation.getData().getTarget().getRoot();
-      if (attestationTargetRoot.equals(get_block_root(state, analyzedEpoch))) {
+      if (attestationTargetRoot.equals(spec.getBlockRoot(state, analyzedEpoch))) {
         correctTargetCount++;
 
         // Check if the attestation had correct head block root
         Bytes32 attestationHeadBlockRoot = sentAttestation.getData().getBeacon_block_root();
-        if (attestationHeadBlockRoot.equals(get_block_root_at_slot(state, sentAttestationSlot))) {
+        if (attestationHeadBlockRoot.equals(spec.getBlockRootAtSlot(state, sentAttestationSlot))) {
           correctHeadBlockCount++;
         }
       }
@@ -263,8 +262,8 @@ public class DefaultPerformanceTracker implements PerformanceTracker {
   }
 
   private Set<BeaconBlock> getBlocksInEpochs(UInt64 startEpochInclusive, UInt64 endEpochExclusive) {
-    UInt64 epochStartSlot = compute_start_slot_at_epoch(startEpochInclusive);
-    UInt64 inclusiveEndEpochEndSlot = compute_start_slot_at_epoch(endEpochExclusive).decrement();
+    UInt64 epochStartSlot = spec.computeStartSlotAtEpoch(startEpochInclusive);
+    UInt64 inclusiveEndEpochEndSlot = spec.computeStartSlotAtEpoch(endEpochExclusive).decrement();
 
     Set<BeaconBlock> blocksInEpoch = new HashSet<>();
     UInt64 currSlot = inclusiveEndEpochEndSlot;
@@ -295,7 +294,7 @@ public class DefaultPerformanceTracker implements PerformanceTracker {
 
   @Override
   public void saveProducedAttestation(Attestation attestation) {
-    UInt64 epoch = compute_epoch_at_slot(attestation.getData().getSlot());
+    UInt64 epoch = spec.computeEpochAtSlot(attestation.getData().getSlot());
     Set<Attestation> attestationsInEpoch =
         producedAttestationsByEpoch.computeIfAbsent(epoch, __ -> new HashSet<>());
     attestationsInEpoch.add(attestation);
@@ -303,7 +302,7 @@ public class DefaultPerformanceTracker implements PerformanceTracker {
 
   @Override
   public void saveProducedBlock(SignedBeaconBlock block) {
-    UInt64 epoch = compute_epoch_at_slot(block.getSlot());
+    UInt64 epoch = spec.computeEpochAtSlot(block.getSlot());
     Set<SignedBeaconBlock> blocksInEpoch =
         producedBlocksByEpoch.computeIfAbsent(epoch, __ -> new HashSet<>());
     blocksInEpoch.add(block);

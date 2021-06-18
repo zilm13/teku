@@ -13,29 +13,21 @@
 
 package tech.pegasys.teku.statetransition;
 
-import static tech.pegasys.teku.util.config.Constants.MAX_ATTESTATIONS;
-import static tech.pegasys.teku.util.config.Constants.MAX_ATTESTER_SLASHINGS;
-import static tech.pegasys.teku.util.config.Constants.MAX_PROPOSER_SLASHINGS;
-import static tech.pegasys.teku.util.config.Constants.MAX_VOLUNTARY_EXITS;
-
 import java.util.Collection;
-import java.util.List;
 import java.util.NavigableMap;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.tuweni.bytes.Bytes32;
-import tech.pegasys.teku.datastructures.attestation.ValidateableAttestation;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlockBody;
-import tech.pegasys.teku.datastructures.operations.Attestation;
-import tech.pegasys.teku.datastructures.operations.AttesterSlashing;
-import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
-import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.SSZList;
+import tech.pegasys.teku.spec.datastructures.attestation.ValidateableAttestation;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBody;
+import tech.pegasys.teku.spec.datastructures.operations.Attestation;
+import tech.pegasys.teku.spec.datastructures.operations.AttesterSlashing;
+import tech.pegasys.teku.spec.datastructures.operations.ProposerSlashing;
+import tech.pegasys.teku.spec.datastructures.operations.SignedVoluntaryExit;
 import tech.pegasys.teku.statetransition.attestation.AggregatingAttestationPool;
 import tech.pegasys.teku.statetransition.attestation.AttestationManager;
 import tech.pegasys.teku.storage.api.ChainHeadChannel;
@@ -101,28 +93,11 @@ public class OperationsReOrgManager implements ChainHeadChannel {
                       maybeBlock.ifPresentOrElse(
                           block -> {
                             BeaconBlockBody blockBody = block.getBody();
-                            proposerSlashingPool.addAll(
-                                SSZList.createMutable(
-                                    blockBody.getProposer_slashings().stream(),
-                                    MAX_PROPOSER_SLASHINGS,
-                                    tech.pegasys.teku.datastructures.operations.ProposerSlashing
-                                        .class));
-                            attesterSlashingPool.addAll(
-                                SSZList.createMutable(
-                                    blockBody.getAttester_slashings().stream(),
-                                    MAX_ATTESTER_SLASHINGS,
-                                    tech.pegasys.teku.datastructures.operations.AttesterSlashing
-                                        .class));
-                            exitPool.addAll(
-                                SSZList.createMutable(
-                                    blockBody.getVoluntary_exits().stream(),
-                                    MAX_VOLUNTARY_EXITS,
-                                    tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit
-                                        .class));
+                            proposerSlashingPool.addAll(blockBody.getProposer_slashings());
+                            attesterSlashingPool.addAll(blockBody.getAttester_slashings());
+                            exitPool.addAll(blockBody.getVoluntary_exits());
 
-                            processNonCanonicalBlockAttestations(
-                                blockBody.getAttestations().stream().collect(Collectors.toList()),
-                                root);
+                            processNonCanonicalBlockAttestations(blockBody.getAttestations(), root);
                           },
                           () ->
                               LOG.debug(
@@ -138,7 +113,7 @@ public class OperationsReOrgManager implements ChainHeadChannel {
   }
 
   private void processNonCanonicalBlockAttestations(
-      List<Attestation> attestations, Bytes32 blockRoot) {
+      Iterable<Attestation> attestations, Bytes32 blockRoot) {
     // Attestations need to get re-processed through AttestationManager
     // because we don't have access to the state with which they were
     // verified anymore and we need to make sure later on
@@ -174,29 +149,10 @@ public class OperationsReOrgManager implements ChainHeadChannel {
                       maybeBlock.ifPresentOrElse(
                           block -> {
                             BeaconBlockBody blockBody = block.getBody();
-                            proposerSlashingPool.removeAll(
-                                SSZList.createMutable(
-                                    blockBody.getProposer_slashings().stream(),
-                                    MAX_PROPOSER_SLASHINGS,
-                                    tech.pegasys.teku.datastructures.operations.ProposerSlashing
-                                        .class));
-                            attesterSlashingPool.removeAll(
-                                SSZList.createMutable(
-                                    blockBody.getAttester_slashings().stream(),
-                                    MAX_ATTESTER_SLASHINGS,
-                                    tech.pegasys.teku.datastructures.operations.AttesterSlashing
-                                        .class));
-                            exitPool.removeAll(
-                                SSZList.createMutable(
-                                    blockBody.getVoluntary_exits().stream(),
-                                    MAX_VOLUNTARY_EXITS,
-                                    tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit
-                                        .class));
-                            attestationPool.removeAll(
-                                SSZList.createMutable(
-                                    blockBody.getAttestations().stream(),
-                                    MAX_ATTESTATIONS,
-                                    tech.pegasys.teku.datastructures.operations.Attestation.class));
+                            proposerSlashingPool.removeAll(blockBody.getProposer_slashings());
+                            attesterSlashingPool.removeAll(blockBody.getAttester_slashings());
+                            exitPool.removeAll(blockBody.getVoluntary_exits());
+                            attestationPool.removeAll(blockBody.getAttestations());
                           },
                           () ->
                               LOG.debug(

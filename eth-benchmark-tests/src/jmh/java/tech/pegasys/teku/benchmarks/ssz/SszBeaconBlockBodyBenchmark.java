@@ -14,52 +14,52 @@
 package tech.pegasys.teku.benchmarks.ssz;
 
 import org.openjdk.jmh.infra.Blackhole;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlockBody;
+import tech.pegasys.teku.benchmarks.util.CustomRunner;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBody;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
-import tech.pegasys.teku.ssz.backing.schema.SszSchema;
+import tech.pegasys.teku.ssz.schema.SszSchema;
 
 public class SszBeaconBlockBodyBenchmark extends SszAbstractContainerBenchmark<BeaconBlockBody> {
 
-  private static final DataStructureUtil dataStructureUtil = new DataStructureUtil(1);
+  private static final Spec spec = TestSpecFactory.createMinimalPhase0();
+  private static final DataStructureUtil dataStructureUtil = new DataStructureUtil(1, spec);
   private static final BeaconBlockBody beaconBlockBody = dataStructureUtil.randomBeaconBlockBody();
 
   @Override
   protected BeaconBlockBody createContainer() {
-    return new BeaconBlockBody(
-        beaconBlockBody.getRandao_reveal(),
-        beaconBlockBody.getEth1_data(),
-        beaconBlockBody.getGraffiti(),
-        beaconBlockBody.getProposer_slashings(),
-        beaconBlockBody.getAttester_slashings(),
-        beaconBlockBody.getAttestations(),
-        beaconBlockBody.getDeposits(),
-        beaconBlockBody.getVoluntary_exits());
+    return spec.getGenesisSpec()
+        .getSchemaDefinitions()
+        .getBeaconBlockBodySchema()
+        .createBlockBody(
+            builder ->
+                builder
+                    .randaoReveal(beaconBlockBody.getRandao_reveal())
+                    .eth1Data(beaconBlockBody.getEth1_data())
+                    .graffiti(beaconBlockBody.getGraffiti())
+                    .attestations(beaconBlockBody.getAttestations())
+                    .proposerSlashings(beaconBlockBody.getProposer_slashings())
+                    .attesterSlashings(beaconBlockBody.getAttester_slashings())
+                    .deposits(beaconBlockBody.getDeposits())
+                    .voluntaryExits(beaconBlockBody.getVoluntary_exits()));
   }
 
   @Override
   protected SszSchema<BeaconBlockBody> getContainerType() {
-    return BeaconBlockBody.getSszSchema();
+    return SszSchema.as(
+        BeaconBlockBody.class,
+        spec.getGenesisSpec().getSchemaDefinitions().getBeaconBlockBodySchema());
   }
 
   @Override
-  protected void iterateData(BeaconBlockBody bbb, Blackhole bh) {
+  public void iterateData(BeaconBlockBody bbb, Blackhole bh) {
     SszBenchUtil.iterateData(bbb, bh);
   }
 
   public static void main(String[] args) {
-    new SszBeaconBlockBodyBenchmark().customRun(10, 10000);
-  }
-
-  public static void main1(String[] args) {
-    SszBeaconBlockBodyBenchmark bench = new SszBeaconBlockBodyBenchmark();
-    long cnt = 0;
-    while (true) {
-      bench.benchDeserializeAndIterate(bench.blackhole);
-      //      bench.benchIterate(bench.blackhole);
-      if (cnt % 10000 == 0) {
-        System.out.println("Iterated: " + cnt);
-      }
-      cnt++;
-    }
+    SszBeaconBlockBodyBenchmark benchmark = new SszBeaconBlockBodyBenchmark();
+    BeaconBlockBody blockBody = benchmark.createContainer();
+    new CustomRunner(1000000, 2000).withBench(bh -> benchmark.iterateData(blockBody, bh)).run();
   }
 }

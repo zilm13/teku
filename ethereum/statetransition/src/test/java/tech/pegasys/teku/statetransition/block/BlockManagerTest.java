@@ -29,14 +29,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.bls.BLSKeyGenerator;
 import tech.pegasys.teku.bls.BLSKeyPair;
-import tech.pegasys.teku.core.ForkChoiceAttestationValidator;
-import tech.pegasys.teku.core.ForkChoiceBlockTasks;
-import tech.pegasys.teku.core.StateTransition;
-import tech.pegasys.teku.core.results.BlockImportResult;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.eventthread.InlineEventThread;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.spec.logic.common.statetransition.results.BlockImportResult;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
 import tech.pegasys.teku.statetransition.forkchoice.ForkChoice;
@@ -50,7 +49,8 @@ import tech.pegasys.teku.weaksubjectivity.WeakSubjectivityFactory;
 
 @SuppressWarnings("FutureReturnValueIgnored")
 public class BlockManagerTest {
-  private final DataStructureUtil dataStructureUtil = new DataStructureUtil();
+  private final Spec spec = TestSpecFactory.createMinimalPhase0();
+  private final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
   private final List<BLSKeyPair> validatorKeys = BLSKeyGenerator.generateKeyPairs(2);
   private final EventBus localEventBus = new EventBus();
   private final EventBus remoteEventBus = new EventBus();
@@ -63,20 +63,15 @@ public class BlockManagerTest {
       FutureItems.create(SignedBeaconBlock::getSlot);
 
   private final RecentChainData localRecentChainData =
-      MemoryOnlyRecentChainData.create(localEventBus);
+      MemoryOnlyRecentChainData.builder().eventBus(localEventBus).specProvider(spec).build();
   private final RecentChainData remoteRecentChainData =
-      MemoryOnlyRecentChainData.create(remoteEventBus);
+      MemoryOnlyRecentChainData.builder().eventBus(remoteEventBus).specProvider(spec).build();
   private final BeaconChainUtil localChain =
       BeaconChainUtil.create(localRecentChainData, validatorKeys);
   private final BeaconChainUtil remoteChain =
       BeaconChainUtil.create(remoteRecentChainData, validatorKeys);
   private final ForkChoice forkChoice =
-      new ForkChoice(
-          new ForkChoiceAttestationValidator(),
-          new ForkChoiceBlockTasks(),
-          new InlineEventThread(),
-          localRecentChainData,
-          new StateTransition());
+      ForkChoice.create(spec, new InlineEventThread(), localRecentChainData);
 
   private final BlockImporter blockImporter =
       new BlockImporter(

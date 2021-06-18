@@ -18,16 +18,19 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Duration;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.infrastructure.io.resource.ResourceLoader;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
+import tech.pegasys.teku.ssz.type.Bytes4;
 
 public class Constants {
 
   public static final ImmutableList<String> NETWORK_DEFINITIONS =
-      ImmutableList.of("mainnet", "minimal", "swift", "medalla", "toledo", "pyrmont", "less-swift");
+      ImmutableList.of(
+          "mainnet", "minimal", "swift", "pyrmont", "prater", "less-swift", "mergenet-minimal");
 
   @Deprecated public static String CONFIG_NAME;
 
@@ -116,10 +119,6 @@ public class Constants {
   @Deprecated public static Bytes4 DOMAIN_SELECTION_PROOF;
   @Deprecated public static Bytes4 DOMAIN_AGGREGATE_AND_PROOF;
 
-  // Withdrawal
-  @Deprecated public static Byte WITHDRAWAL_ETH1_PREFIX = 1;
-  @Deprecated public static Bytes4 WITHDRAWAL_ETH1 = new Bytes4(Bytes.fromHexString("0x01000000"));
-
   // Validator
   @Deprecated public static int TARGET_AGGREGATORS_PER_COMMITTEE = 16;
   @Deprecated public static UInt64 SECONDS_PER_ETH1_BLOCK = UInt64.valueOf(14L);
@@ -136,6 +135,13 @@ public class Constants {
   @Deprecated
   public static Bytes DEPOSIT_CONTRACT_ADDRESS =
       Bytes.fromHexString("0x1234567890123456789012345678901234567890");
+
+  // Merge
+  @Deprecated public static Bytes4 MERGE_FORK_VERSION = Bytes4.fromHexString("0x02000001");
+  @Deprecated public static UInt64 MERGE_FORK_SLOT = UInt64.MAX_VALUE;
+  @Deprecated public static long TRANSITION_TOTAL_DIFFICULTY = Long.MAX_VALUE;
+  @Deprecated public static int MAX_BYTES_PER_OPAQUE_TRANSACTION = 1048576;
+  @Deprecated public static int MAX_APPLICATION_TRANSACTIONS = 16384;
 
   // SSZ
   public static final UInt64 BYTES_PER_LENGTH_OFFSET = UInt64.valueOf(4L);
@@ -160,6 +166,7 @@ public class Constants {
   public static final double TIME_TICKER_REFRESH_RATE = 2; // per sec
   public static final Duration ETH1_INDIVIDUAL_BLOCK_RETRY_TIMEOUT = Duration.ofMillis(500);
   public static final Duration ETH1_DEPOSIT_REQUEST_RETRY_TIMEOUT = Duration.ofSeconds(2);
+  public static final Duration ETH1_SYNCING_RETRY_TIMEOUT = Duration.ofSeconds(30);
   public static final Duration ETH1_LOCAL_CHAIN_BEHIND_FOLLOW_DISTANCE_WAIT = Duration.ofSeconds(3);
   public static final int MAXIMUM_CONCURRENT_ETH1_REQUESTS = 5;
   public static final int REPUTATION_MANAGER_CAPACITY = 1024;
@@ -190,7 +197,7 @@ public class Constants {
   }
 
   /**
-   * @deprecated Use tech.pegasys.teku.spec.constants.SpecConstants
+   * @deprecated Use tech.pegasys.teku.spec.constants.SpecConfig
    * @param source The source from which to load constants
    */
   @Deprecated
@@ -203,10 +210,19 @@ public class Constants {
     SpecDependent.resetAll();
   }
 
-  public static InputStream createInputStream(final String source) throws IOException {
+  private static InputStream createInputStream(final String source) throws IOException {
     return ResourceLoader.classpathUrlOrFile(
-            Constants.class, name -> name + ".yaml", NETWORK_DEFINITIONS.toArray(String[]::new))
-        .load(source)
+            Constants.class,
+            enumerateNetworkResources(),
+            s -> s.endsWith(".yaml") || s.endsWith(".yml"))
+        .load(source + ".yaml", source + "/phase0.yaml", source)
         .orElseThrow(() -> new FileNotFoundException("Could not load constants from " + source));
+  }
+
+  private static List<String> enumerateNetworkResources() {
+    return NETWORK_DEFINITIONS.stream()
+        .map(s -> List.of(s + ".yaml", s + "/phase0.yaml"))
+        .flatMap(List::stream)
+        .collect(Collectors.toList());
   }
 }

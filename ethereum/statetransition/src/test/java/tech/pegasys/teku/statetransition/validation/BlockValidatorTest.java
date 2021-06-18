@@ -15,8 +15,8 @@ package tech.pegasys.teku.statetransition.validation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_start_slot_at_epoch;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ONE;
+import static tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil.compute_start_slot_at_epoch;
 
 import com.google.common.eventbus.EventBus;
 import java.util.List;
@@ -28,11 +28,13 @@ import tech.pegasys.teku.bls.BLSKeyPair;
 import tech.pegasys.teku.bls.BLSSignature;
 import tech.pegasys.teku.bls.BLSTestUtil;
 import tech.pegasys.teku.core.ChainBuilder;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.SignedBlockAndState;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBlockAndState;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
 import tech.pegasys.teku.storage.client.ChainUpdater;
 import tech.pegasys.teku.storage.client.MemoryOnlyRecentChainData;
@@ -43,15 +45,17 @@ import tech.pegasys.teku.storage.storageSystem.StorageSystem;
 public class BlockValidatorTest {
   private final EventBus eventBus = new EventBus();
 
-  private final RecentChainData recentChainData = MemoryOnlyRecentChainData.create(eventBus);
-  private final BeaconChainUtil beaconChainUtil = BeaconChainUtil.create(10, recentChainData);
+  private final Spec spec = TestSpecFactory.createMinimalPhase0();
+  private final RecentChainData recentChainData =
+      MemoryOnlyRecentChainData.builder().eventBus(eventBus).specProvider(spec).build();
+  private final BeaconChainUtil beaconChainUtil = BeaconChainUtil.create(spec, 10, recentChainData);
 
   private BlockValidator blockValidator;
 
   @BeforeEach
   void setUp() {
     beaconChainUtil.initializeStorage();
-    blockValidator = new BlockValidator(recentChainData);
+    blockValidator = new BlockValidator(spec, recentChainData);
   }
 
   @Test
@@ -104,6 +108,7 @@ public class BlockValidatorTest {
     final UInt64 proposerIndex = signedBlock.getMessage().getProposerIndex();
     final BeaconBlock block =
         new BeaconBlock(
+            spec.getGenesisSchemaDefinitions().getBeaconBlockSchema(),
             signedBlock.getSlot(),
             proposerIndex,
             Bytes32.ZERO,
@@ -115,7 +120,8 @@ public class BlockValidatorTest {
             .getSigner(proposerIndex.intValue())
             .signBlock(block, recentChainData.getBestState().orElseThrow().getForkInfo())
             .join();
-    final SignedBeaconBlock blockWithNoParent = new SignedBeaconBlock(block, blockSignature);
+    final SignedBeaconBlock blockWithNoParent =
+        SignedBeaconBlock.create(spec, block, blockSignature);
 
     InternalValidationResult result = blockValidator.validate(blockWithNoParent).join();
     assertTrue(result.isSaveForFuture());
@@ -144,6 +150,7 @@ public class BlockValidatorTest {
 
     final BeaconBlock block =
         new BeaconBlock(
+            spec.getGenesisSchemaDefinitions().getBeaconBlockSchema(),
             signedBlock.getSlot(),
             invalidProposerIndex,
             signedBlock.getParentRoot(),
@@ -156,7 +163,7 @@ public class BlockValidatorTest {
             .signBlock(block, recentChainData.getBestState().orElseThrow().getForkInfo())
             .join();
     final SignedBeaconBlock invalidProposerSignedBlock =
-        new SignedBeaconBlock(block, blockSignature);
+        SignedBeaconBlock.create(spec, block, blockSignature);
 
     InternalValidationResult result = blockValidator.validate(invalidProposerSignedBlock).join();
     assertTrue(result.isReject());
@@ -168,7 +175,8 @@ public class BlockValidatorTest {
     beaconChainUtil.setSlot(nextSlot);
 
     final SignedBeaconBlock block =
-        new SignedBeaconBlock(
+        SignedBeaconBlock.create(
+            spec,
             beaconChainUtil.createBlockAtSlot(nextSlot).getMessage(),
             BLSTestUtil.randomSignature(0));
 
@@ -184,7 +192,7 @@ public class BlockValidatorTest {
     ChainBuilder chainBuilder = ChainBuilder.create(VALIDATOR_KEYS);
     ChainUpdater chainUpdater = new ChainUpdater(storageSystem.recentChainData(), chainBuilder);
 
-    BlockValidator blockValidator = new BlockValidator(storageSystem.recentChainData());
+    BlockValidator blockValidator = new BlockValidator(spec, storageSystem.recentChainData());
     chainUpdater.initializeGenesis();
 
     chainUpdater.updateBestBlock(chainUpdater.advanceChainUntil(1));

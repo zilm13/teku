@@ -20,7 +20,6 @@ import org.assertj.core.api.Assertions;
 import org.assertj.core.api.Condition;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import tech.pegasys.teku.datastructures.networking.libp2p.rpc.StatusMessage;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.Waiter;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
@@ -29,10 +28,14 @@ import tech.pegasys.teku.networking.eth2.rpc.core.Eth2RpcMethod;
 import tech.pegasys.teku.networking.eth2.rpc.core.RpcException;
 import tech.pegasys.teku.networking.eth2.rpc.core.RpcException.LengthOutOfBoundsException;
 import tech.pegasys.teku.networking.eth2.rpc.core.encodings.RpcEncoding;
-import tech.pegasys.teku.util.config.Constants;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.StatusMessage;
+import tech.pegasys.teku.ssz.type.Bytes4;
 
 public class ErrorConditionsIntegrationTest {
 
+  private final Spec spec = TestSpecFactory.createMinimalPhase0();
   private final Eth2P2PNetworkFactory networkFactory = new Eth2P2PNetworkFactory();
 
   @AfterEach
@@ -52,7 +55,8 @@ public class ErrorConditionsIntegrationTest {
     final Eth2RpcMethod<StatusMessage, StatusMessage> status =
         ((ActiveEth2P2PNetwork) network1).getBeaconChainMethods().status();
     final SafeFuture<StatusMessage> response =
-        peer.requestSingleItem(status, new InvalidStatusMessage());
+        peer.requestSingleItem(
+            status, new InvalidStatusMessage(spec.getGenesisSpecConfig().getGenesisForkVersion()));
 
     final RpcException expected = new LengthOutOfBoundsException();
 
@@ -76,8 +80,8 @@ public class ErrorConditionsIntegrationTest {
   // Deliberately doesn't serialize to a valid STATUS message.
   private static class InvalidStatusMessage extends StatusMessage {
 
-    public InvalidStatusMessage() {
-      super(Constants.GENESIS_FORK_VERSION, Bytes32.ZERO, UInt64.ZERO, Bytes32.ZERO, UInt64.ZERO);
+    public InvalidStatusMessage(final Bytes4 forkVersion) {
+      super(forkVersion, Bytes32.ZERO, UInt64.ZERO, Bytes32.ZERO, UInt64.ZERO);
     }
 
     @Override

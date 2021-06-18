@@ -19,8 +19,8 @@ import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.cli.AbstractBeaconNodeCommandTest;
 import tech.pegasys.teku.cli.converter.CheckpointConverter;
 import tech.pegasys.teku.config.TekuConfiguration;
-import tech.pegasys.teku.datastructures.state.Checkpoint;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
 
 public class WeakSubjectivityOptionsTest extends AbstractBeaconNodeCommandTest {
@@ -39,6 +39,19 @@ public class WeakSubjectivityOptionsTest extends AbstractBeaconNodeCommandTest {
   public void weakSubjectivityCheckpoint_shouldDefault() {
     final TekuConfiguration config = getTekuConfigurationFromArguments();
     assertThat(config.weakSubjectivity().getWeakSubjectivityCheckpoint()).isEmpty();
+  }
+
+  @Test
+  public void weakSubjectivityCheckpoint_shouldLoadFromUrl() {
+    final String checkpointParam =
+        this.getClass().getResource("/" + "ws_checkpoint.json").getPath();
+    final TekuConfiguration config =
+        getTekuConfigurationFromArguments("--ws-checkpoint", checkpointParam);
+    assertThat(config.weakSubjectivity().getWeakSubjectivityCheckpoint()).isPresent();
+    final Checkpoint checkpoint =
+        getResultingTekuConfiguration().weakSubjectivity().getWeakSubjectivityCheckpoint().get();
+
+    assertThat(checkpoint.getEpoch()).isEqualTo(UInt64.valueOf(24187));
   }
 
   @Test

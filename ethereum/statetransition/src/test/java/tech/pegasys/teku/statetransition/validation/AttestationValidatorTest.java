@@ -17,11 +17,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.BLS_VERIFY_DEPOSIT;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_committee_count_per_slot;
-import static tech.pegasys.teku.datastructures.util.CommitteeUtil.computeSubnetForAttestation;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ONE;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ZERO;
+import static tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil.get_committee_count_per_slot;
+import static tech.pegasys.teku.spec.datastructures.util.CommitteeUtil.computeSubnetForAttestation;
 import static tech.pegasys.teku.statetransition.validation.ValidationResultCode.ACCEPT;
 import static tech.pegasys.teku.statetransition.validation.ValidationResultCode.IGNORE;
 import static tech.pegasys.teku.statetransition.validation.ValidationResultCode.REJECT;
@@ -40,17 +39,19 @@ import tech.pegasys.teku.bls.BLSKeyGenerator;
 import tech.pegasys.teku.bls.BLSKeyPair;
 import tech.pegasys.teku.core.AttestationGenerator;
 import tech.pegasys.teku.core.ChainBuilder;
-import tech.pegasys.teku.core.ForkChoiceUtilWrapper;
-import tech.pegasys.teku.datastructures.attestation.ValidateableAttestation;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlockAndState;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.StateAndBlockSummary;
-import tech.pegasys.teku.datastructures.operations.Attestation;
-import tech.pegasys.teku.datastructures.operations.AttestationData;
-import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.datastructures.state.Checkpoint;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.backing.collections.SszBitlist;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.datastructures.attestation.ValidateableAttestation;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlockAndState;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.StateAndBlockSummary;
+import tech.pegasys.teku.spec.datastructures.operations.Attestation;
+import tech.pegasys.teku.spec.datastructures.operations.AttestationData;
+import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
+import tech.pegasys.teku.spec.logic.common.block.AbstractBlockProcessor;
+import tech.pegasys.teku.ssz.collections.SszBitlist;
 import tech.pegasys.teku.storage.client.ChainUpdater;
 import tech.pegasys.teku.storage.client.RecentChainData;
 import tech.pegasys.teku.storage.server.StateStorageMode;
@@ -80,6 +81,7 @@ import tech.pegasys.teku.storage.storageSystem.StorageSystem;
 class AttestationValidatorTest {
 
   private static final List<BLSKeyPair> VALIDATOR_KEYS = BLSKeyGenerator.generateKeyPairs(64);
+  private final Spec spec = TestSpecFactory.createMinimalPhase0();
   private final StorageSystem storageSystem =
       InMemoryStorageSystemBuilder.buildDefault(StateStorageMode.ARCHIVE);
   private final RecentChainData recentChainData = storageSystem.recentChainData();
@@ -87,19 +89,18 @@ class AttestationValidatorTest {
   private final ChainUpdater chainUpdater =
       new ChainUpdater(storageSystem.recentChainData(), chainBuilder);
   private final AttestationGenerator attestationGenerator =
-      new AttestationGenerator(chainBuilder.getValidatorKeys());
+      new AttestationGenerator(spec, chainBuilder.getValidatorKeys());
 
-  private final AttestationValidator validator =
-      new AttestationValidator(recentChainData, new ForkChoiceUtilWrapper());
+  private final AttestationValidator validator = new AttestationValidator(spec, recentChainData);
 
   @BeforeAll
   public static void init() {
-    BLS_VERIFY_DEPOSIT = false;
+    AbstractBlockProcessor.BLS_VERIFY_DEPOSIT = false;
   }
 
   @AfterAll
   public static void reset() {
-    BLS_VERIFY_DEPOSIT = true;
+    AbstractBlockProcessor.BLS_VERIFY_DEPOSIT = true;
   }
 
   @BeforeEach
@@ -358,11 +359,9 @@ class AttestationValidatorTest {
 
   @Test
   public void shouldRejectAttestationsThatHaveLMDVotesInconsistentWithTargetRoot() {
-    ForkChoiceUtilWrapper forkChoiceUtilWrapper = mock(ForkChoiceUtilWrapper.class);
-    when(forkChoiceUtilWrapper.get_ancestor(any(), any(), any()))
-        .thenReturn(Optional.of(Bytes32.ZERO));
-    final AttestationValidator validator =
-        new AttestationValidator(recentChainData, forkChoiceUtilWrapper);
+    Spec spec = mock(Spec.class);
+    when(spec.getAncestor(any(), any(), any())).thenReturn(Optional.of(Bytes32.ZERO));
+    final AttestationValidator validator = new AttestationValidator(spec, recentChainData);
     final StateAndBlockSummary blockAndState = recentChainData.getChainHead().orElseThrow();
     final Attestation attestation = attestationGenerator.validAttestation(blockAndState);
     final int expectedSubnetId = computeSubnetForAttestation(blockAndState.getState(), attestation);
@@ -373,12 +372,11 @@ class AttestationValidatorTest {
 
   @Test
   public void shouldRejectAttestationsThatHaveLMDVotesInconsistentWithFinalizedCheckpointRoot() {
-    ForkChoiceUtilWrapper forkChoiceUtilWrapper = mock(ForkChoiceUtilWrapper.class);
-    final AttestationValidator validator =
-        new AttestationValidator(recentChainData, forkChoiceUtilWrapper);
+    Spec spec = mock(Spec.class);
+    final AttestationValidator validator = new AttestationValidator(spec, recentChainData);
     final StateAndBlockSummary blockAndState = recentChainData.getChainHead().orElseThrow();
     final Attestation attestation = attestationGenerator.validAttestation(blockAndState);
-    when(forkChoiceUtilWrapper.get_ancestor(any(), any(), any()))
+    when(spec.getAncestor(any(), any(), any()))
         .thenReturn(Optional.of(attestation.getData().getTarget().getRoot()))
         .thenReturn(Optional.of(Bytes32.ZERO));
     final int expectedSubnetId = computeSubnetForAttestation(blockAndState.getState(), attestation);

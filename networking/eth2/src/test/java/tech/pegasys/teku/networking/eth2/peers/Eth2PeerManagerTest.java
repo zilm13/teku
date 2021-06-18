@@ -43,13 +43,16 @@ import tech.pegasys.teku.networking.p2p.mock.MockNodeId;
 import tech.pegasys.teku.networking.p2p.peer.DisconnectReason;
 import tech.pegasys.teku.networking.p2p.peer.NodeId;
 import tech.pegasys.teku.networking.p2p.peer.Peer;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
 import tech.pegasys.teku.storage.client.CombinedChainDataClient;
 import tech.pegasys.teku.storage.client.RecentChainData;
 
 public class Eth2PeerManagerTest {
 
+  private final Spec spec = TestSpecFactory.createMinimalPhase0();
   private final StubAsyncRunner asyncRunner = new StubAsyncRunner();
-  private final PeerStatusFactory statusFactory = PeerStatusFactory.create(1L);
+  private final PeerStatusFactory statusFactory = PeerStatusFactory.create(1L, spec);
   private final CombinedChainDataClient combinedChainDataClient =
       mock(CombinedChainDataClient.class);
   private final RecentChainData recentChainData = mock(RecentChainData.class);
@@ -62,6 +65,7 @@ public class Eth2PeerManagerTest {
   private final RpcEncoding rpcEncoding = RpcEncoding.SSZ_SNAPPY;
   private final Eth2PeerManager peerManager =
       new Eth2PeerManager(
+          spec,
           asyncRunner,
           combinedChainDataClient,
           recentChainData,

@@ -39,7 +39,6 @@ import tech.pegasys.teku.cli.options.BeaconRestApiOptions;
 import tech.pegasys.teku.cli.options.DataStorageOptions;
 import tech.pegasys.teku.cli.options.DepositOptions;
 import tech.pegasys.teku.cli.options.Eth2NetworkOptions;
-import tech.pegasys.teku.cli.options.ExecutionOptions;
 import tech.pegasys.teku.cli.options.InteropOptions;
 import tech.pegasys.teku.cli.options.LoggingOptions;
 import tech.pegasys.teku.cli.options.MetricsOptions;
@@ -179,9 +178,6 @@ public class BeaconNodeCommand implements Callable<Integer> {
 
   @Mixin(name = "NAT")
   private NatOptions natOptions;
-
-  @Mixin(name = "Execution")
-  private ExecutionOptions executionOptions;
 
   public BeaconNodeCommand(
       final PrintWriter outputWriter,
@@ -356,7 +352,6 @@ public class BeaconNodeCommand implements Callable<Integer> {
       metricsOptions.configure(builder);
       natOptions.configure(builder);
       storeOptions.configure(builder);
-      executionOptions.configure(builder);
 
       return builder.build();
     } catch (IllegalArgumentException | NullPointerException e) {

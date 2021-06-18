@@ -21,8 +21,8 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Optional;
-import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
 
 public class ValidatorBalanceResponse {
   @JsonProperty("index")
@@ -52,7 +52,7 @@ public class ValidatorBalanceResponse {
       return Optional.empty();
     }
     return Optional.of(
-        new ValidatorBalanceResponse(UInt64.valueOf(index), state.getBalances().get(index)));
+        new ValidatorBalanceResponse(UInt64.valueOf(index), state.getBalances().getElement(index)));
   }
 
   @Override

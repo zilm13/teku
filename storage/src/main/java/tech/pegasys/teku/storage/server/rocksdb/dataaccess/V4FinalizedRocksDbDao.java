@@ -17,10 +17,10 @@ import com.google.errorprone.annotations.MustBeClosed;
 import java.util.Optional;
 import java.util.stream.Stream;
 import org.apache.tuweni.bytes.Bytes32;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.SlotAndBlockRoot;
-import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.SlotAndBlockRoot;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
 import tech.pegasys.teku.storage.server.rocksdb.core.ColumnEntry;
 import tech.pegasys.teku.storage.server.rocksdb.core.RocksDbAccessor;
 import tech.pegasys.teku.storage.server.rocksdb.schema.SchemaFinalized;
@@ -98,6 +98,11 @@ public class V4FinalizedRocksDbDao implements RocksDbFinalizedDao {
   }
 
   @Override
+  public Optional<? extends SignedBeaconBlock> getNonCanonicalBlock(final Bytes32 root) {
+    return db.get(schema.getColumnNonCanonicalBlocksByRoot(), root);
+  }
+
+  @Override
   public Optional<SignedBeaconBlock> getFinalizedBlock(final Bytes32 root) {
     return db.get(schema.getColumnSlotsByFinalizedRoot(), root)
         .flatMap(this::getFinalizedBlockAtSlot);
@@ -131,6 +136,11 @@ public class V4FinalizedRocksDbDao implements RocksDbFinalizedDao {
     public void addFinalizedBlock(final SignedBeaconBlock block) {
       transaction.put(schema.getColumnSlotsByFinalizedRoot(), block.getRoot(), block.getSlot());
       transaction.put(schema.getColumnFinalizedBlocksBySlot(), block.getSlot(), block);
+    }
+
+    @Override
+    public void addNonCanonicalBlock(final SignedBeaconBlock block) {
+      transaction.put(schema.getColumnNonCanonicalBlocksByRoot(), block.getRoot(), block);
     }
 
     @Override

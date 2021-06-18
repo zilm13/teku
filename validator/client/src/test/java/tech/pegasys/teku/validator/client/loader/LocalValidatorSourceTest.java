@@ -35,12 +35,14 @@ import tech.pegasys.teku.bls.BLSSecretKey;
 import tech.pegasys.teku.bls.BLSSignature;
 import tech.pegasys.teku.core.signatures.Signer;
 import tech.pegasys.teku.core.signatures.SigningRootUtil;
-import tech.pegasys.teku.datastructures.state.Fork;
-import tech.pegasys.teku.datastructures.state.ForkInfo;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.StubAsyncRunner;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.datastructures.state.Fork;
+import tech.pegasys.teku.spec.datastructures.state.ForkInfo;
+import tech.pegasys.teku.ssz.type.Bytes4;
 import tech.pegasys.teku.util.config.InvalidConfigurationException;
 import tech.pegasys.teku.validator.api.ValidatorConfig;
 import tech.pegasys.teku.validator.client.loader.ValidatorSource.ValidatorProvider;
@@ -54,11 +56,12 @@ class LocalValidatorSourceTest {
       new BLSKeyPair(BLSSecretKey.fromBytes(BLS_PRIVATE_KEY));
 
   private final StubAsyncRunner asyncRunner = new StubAsyncRunner();
+  private final Spec spec = TestSpecFactory.createMinimalPhase0();
   private final ValidatorConfig config = mock(ValidatorConfig.class);
   private final KeystoreLocker keystoreLocker = mock(KeystoreLocker.class);
 
   private final LocalValidatorSource validatorSource =
-      new LocalValidatorSource(config, keystoreLocker, asyncRunner);
+      new LocalValidatorSource(spec, config, keystoreLocker, asyncRunner);
 
   @Test
   void shouldLoadKeysFromKeyStores(@TempDir final Path tempDir) throws Exception {

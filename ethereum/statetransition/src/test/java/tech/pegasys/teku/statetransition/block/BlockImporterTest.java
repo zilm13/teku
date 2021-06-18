@@ -21,8 +21,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_epoch_at_slot;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_start_slot_at_epoch;
 
 import com.google.common.eventbus.EventBus;
 import java.util.ArrayList;
@@ -37,25 +35,23 @@ import tech.pegasys.teku.bls.BLSKeyGenerator;
 import tech.pegasys.teku.bls.BLSKeyPair;
 import tech.pegasys.teku.bls.BLSTestUtil;
 import tech.pegasys.teku.core.AttestationGenerator;
-import tech.pegasys.teku.core.ForkChoiceAttestationValidator;
-import tech.pegasys.teku.core.ForkChoiceBlockTasks;
-import tech.pegasys.teku.core.StateTransition;
-import tech.pegasys.teku.core.results.BlockImportResult;
-import tech.pegasys.teku.core.results.BlockImportResult.FailureReason;
 import tech.pegasys.teku.core.signatures.Signer;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.SignedBlockAndState;
-import tech.pegasys.teku.datastructures.blocks.StateAndBlockSummary;
-import tech.pegasys.teku.datastructures.operations.Attestation;
-import tech.pegasys.teku.datastructures.state.Checkpoint;
-import tech.pegasys.teku.datastructures.state.CheckpointState;
-import tech.pegasys.teku.datastructures.util.BeaconStateUtil;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.eventthread.InlineEventThread;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.networks.SpecProviderFactory;
-import tech.pegasys.teku.spec.SpecProvider;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.config.SpecConfig;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBlockAndState;
+import tech.pegasys.teku.spec.datastructures.blocks.StateAndBlockSummary;
+import tech.pegasys.teku.spec.datastructures.operations.Attestation;
+import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
+import tech.pegasys.teku.spec.datastructures.state.CheckpointState;
+import tech.pegasys.teku.spec.logic.common.block.AbstractBlockProcessor;
+import tech.pegasys.teku.spec.logic.common.statetransition.results.BlockImportResult;
+import tech.pegasys.teku.spec.logic.common.statetransition.results.BlockImportResult.FailureReason;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
 import tech.pegasys.teku.statetransition.forkchoice.ForkChoice;
 import tech.pegasys.teku.storage.client.MemoryOnlyRecentChainData;
@@ -63,25 +59,22 @@ import tech.pegasys.teku.storage.client.RecentChainData;
 import tech.pegasys.teku.storage.storageSystem.InMemoryStorageSystemBuilder;
 import tech.pegasys.teku.storage.storageSystem.StorageSystem;
 import tech.pegasys.teku.storage.store.UpdatableStore.StoreTransaction;
-import tech.pegasys.teku.util.config.Constants;
 import tech.pegasys.teku.weaksubjectivity.WeakSubjectivityValidator;
 import tech.pegasys.teku.weaksubjectivity.config.WeakSubjectivityConfig;
 
 public class BlockImporterTest {
+  private final Spec spec = TestSpecFactory.createMinimalPhase0();
+  private final SpecConfig genesisConfig = spec.getGenesisSpecConfig();
   private final List<BLSKeyPair> validatorKeys = BLSKeyGenerator.generateKeyPairs(8);
   private final EventBus localEventBus = mock(EventBus.class);
-  private final RecentChainData recentChainData = MemoryOnlyRecentChainData.create(localEventBus);
+  private final RecentChainData recentChainData =
+      MemoryOnlyRecentChainData.builder().eventBus(localEventBus).specProvider(spec).build();
   private final WeakSubjectivityValidator weakSubjectivityValidator =
       mock(WeakSubjectivityValidator.class);
   private final ForkChoice forkChoice =
-      new ForkChoice(
-          new ForkChoiceAttestationValidator(),
-          new ForkChoiceBlockTasks(),
-          new InlineEventThread(),
-          recentChainData,
-          new StateTransition());
+      ForkChoice.create(spec, new InlineEventThread(), recentChainData);
   private final BeaconChainUtil localChain =
-      BeaconChainUtil.create(recentChainData, validatorKeys, forkChoice, false);
+      BeaconChainUtil.create(spec, recentChainData, validatorKeys, forkChoice, false);
 
   private final EventBus otherEventBus = mock(EventBus.class);
   private final RecentChainData otherStorage = MemoryOnlyRecentChainData.create(otherEventBus);
@@ -93,14 +86,12 @@ public class BlockImporterTest {
 
   @BeforeAll
   public static void init() {
-    Constants.SLOTS_PER_EPOCH = 6;
-    BeaconStateUtil.BLS_VERIFY_DEPOSIT = false;
+    AbstractBlockProcessor.BLS_VERIFY_DEPOSIT = false;
   }
 
   @AfterAll
   public static void dispose() {
-    BeaconStateUtil.BLS_VERIFY_DEPOSIT = true;
-    Constants.setConstants("minimal");
+    AbstractBlockProcessor.BLS_VERIFY_DEPOSIT = true;
   }
 
   @BeforeEach
@@ -150,7 +141,7 @@ public class BlockImporterTest {
     SignedBeaconBlock block1 = localChain.createAndImportBlockAtSlot(currentSlot);
     currentSlot = currentSlot.plus(UInt64.ONE);
 
-    AttestationGenerator attestationGenerator = new AttestationGenerator(validatorKeys);
+    AttestationGenerator attestationGenerator = new AttestationGenerator(spec, validatorKeys);
     final StateAndBlockSummary stateAndBlock =
         recentChainData
             .getStore()
@@ -174,7 +165,7 @@ public class BlockImporterTest {
     SignedBeaconBlock block1 = localChain.createAndImportBlockAtSlot(currentSlot);
     currentSlot = currentSlot.plus(UInt64.ONE);
 
-    AttestationGenerator attestationGenerator = new AttestationGenerator(validatorKeys);
+    AttestationGenerator attestationGenerator = new AttestationGenerator(spec, validatorKeys);
     final StateAndBlockSummary stateAndBlock =
         recentChainData
             .getStore()
@@ -205,11 +196,9 @@ public class BlockImporterTest {
 
   @Test
   public void importBlock_latestFinalizedBlock() throws Exception {
-    Constants.SLOTS_PER_EPOCH = 6;
-
     final List<SignedBeaconBlock> blocks = new ArrayList<>();
     UInt64 currentSlot = recentChainData.getHeadSlot();
-    for (int i = 0; i < Constants.SLOTS_PER_EPOCH; i++) {
+    for (int i = 0; i < genesisConfig.getSlotsPerEpoch(); i++) {
       currentSlot = currentSlot.plus(UInt64.ONE);
       final SignedBeaconBlock block = localChain.createAndImportBlockAtSlot(currentSlot);
       blocks.add(block);
@@ -218,8 +207,8 @@ public class BlockImporterTest {
     // Update finalized epoch
     final StoreTransaction tx = recentChainData.startStoreTransaction();
     final Bytes32 bestRoot = recentChainData.getBestBlockRoot().orElseThrow();
-    final UInt64 bestEpoch = compute_epoch_at_slot(recentChainData.getHeadSlot());
-    assertThat(bestEpoch.longValue()).isEqualTo(Constants.GENESIS_EPOCH + 1L);
+    final UInt64 bestEpoch = spec.computeEpochAtSlot(recentChainData.getHeadSlot());
+    assertThat(bestEpoch).isEqualTo(SpecConfig.GENESIS_EPOCH.plus(1));
     final Checkpoint finalized = new Checkpoint(bestEpoch, bestRoot);
     tx.setFinalizedCheckpoint(finalized);
     tx.commit().join();
@@ -231,11 +220,9 @@ public class BlockImporterTest {
 
   @Test
   public void importBlock_knownBlockOlderThanLatestFinalized() throws Exception {
-    Constants.SLOTS_PER_EPOCH = 6;
-
     final List<SignedBeaconBlock> blocks = new ArrayList<>();
     UInt64 currentSlot = recentChainData.getHeadSlot();
-    for (int i = 0; i < Constants.SLOTS_PER_EPOCH; i++) {
+    for (int i = 0; i < genesisConfig.getSlotsPerEpoch(); i++) {
       currentSlot = currentSlot.plus(UInt64.ONE);
       final SignedBeaconBlock block = localChain.createAndImportBlockAtSlot(currentSlot);
       blocks.add(block);
@@ -244,8 +231,8 @@ public class BlockImporterTest {
     // Update finalized epoch
     final StoreTransaction tx = recentChainData.startStoreTransaction();
     final Bytes32 bestRoot = recentChainData.getBestBlockRoot().orElseThrow();
-    final UInt64 bestEpoch = compute_epoch_at_slot(recentChainData.getHeadSlot());
-    assertThat(bestEpoch.longValue()).isEqualTo(Constants.GENESIS_EPOCH + 1L);
+    final UInt64 bestEpoch = spec.computeEpochAtSlot(recentChainData.getHeadSlot());
+    assertThat(bestEpoch).isEqualTo(SpecConfig.GENESIS_EPOCH.plus(1));
     final Checkpoint finalized = new Checkpoint(bestEpoch, bestRoot);
     tx.setFinalizedCheckpoint(finalized);
     tx.commit().join();
@@ -265,6 +252,7 @@ public class BlockImporterTest {
     // Now create an alternate block 1 with the real block one as the parent block
     final BeaconBlock invalidAncestryUnsignedBlock =
         new BeaconBlock(
+            spec.getGenesisSchemaDefinitions().getBeaconBlockSchema(),
             block.getSlot(),
             block.getMessage().getProposerIndex(),
             block.getMessage().hashTreeRoot(),
@@ -272,7 +260,8 @@ public class BlockImporterTest {
             block.getMessage().getBody());
     final Signer signer = localChain.getSigner(block.getMessage().getProposerIndex().intValue());
     final SignedBeaconBlock invalidAncestryBlock =
-        new SignedBeaconBlock(
+        SignedBeaconBlock.create(
+            spec,
             invalidAncestryUnsignedBlock,
             signer
                 .signBlock(
@@ -325,7 +314,7 @@ public class BlockImporterTest {
     tx.commit().join();
 
     // Now create a new block that is not descendant from the finalized block
-    AttestationGenerator attestationGenerator = new AttestationGenerator(validatorKeys);
+    AttestationGenerator attestationGenerator = new AttestationGenerator(spec, validatorKeys);
     final StateAndBlockSummary blockAndState = otherStorage.getChainHead().orElseThrow();
     final Attestation attestation = attestationGenerator.validAttestation(blockAndState);
     final SignedBeaconBlock block =
@@ -339,7 +328,8 @@ public class BlockImporterTest {
   public void importBlock_invalidStateTransition() throws Exception {
     final SignedBeaconBlock block = otherChain.createBlockAtSlot(UInt64.ONE);
     SignedBeaconBlock newBlock =
-        new SignedBeaconBlock(block.getMessage().withStateRoot(Bytes32.ZERO), block.getSignature());
+        SignedBeaconBlock.create(
+            spec, block.getMessage().withStateRoot(Bytes32.ZERO), block.getSignature());
     localChain.setSlot(block.getSlot());
 
     final BlockImportResult result = blockImporter.importBlock(newBlock).get();
@@ -349,15 +339,15 @@ public class BlockImporterTest {
   @Test
   public void importBlock_weakSubjectivityFailure_wrongAncestor() throws Exception {
     final UInt64 wsEpoch = UInt64.valueOf(10);
-    final UInt64 wsEpochSlot = compute_start_slot_at_epoch(wsEpoch);
+    final UInt64 wsEpochSlot = this.spec.computeStartSlotAtEpoch(wsEpoch);
     final SignedBeaconBlock wsBlock = localChain.createBlockAtSlot(wsEpochSlot);
     final SignedBeaconBlock otherBlock = otherChain.createBlockAtSlot(wsEpochSlot.plus(1));
 
-    final SpecProvider specProvider = SpecProviderFactory.createMinimal();
+    final Spec spec = TestSpecFactory.createMinimalPhase0();
     final Checkpoint wsCheckpoint = new Checkpoint(wsEpoch, wsBlock.getRoot());
     final WeakSubjectivityConfig wsConfig =
         WeakSubjectivityConfig.builder()
-            .specProvider(specProvider)
+            .specProvider(spec)
             .weakSubjectivityCheckpoint(wsCheckpoint)
             .build();
     final WeakSubjectivityValidator weakSubjectivityValidator =
@@ -372,16 +362,16 @@ public class BlockImporterTest {
   @Test
   public void importBlock_weakSubjectivityChecksPass() throws Exception {
     final UInt64 wsEpoch = UInt64.valueOf(10);
-    final UInt64 wsEpochSlot = compute_start_slot_at_epoch(wsEpoch);
+    final UInt64 wsEpochSlot = this.spec.computeStartSlotAtEpoch(wsEpoch);
     final SignedBeaconBlock wsBlock = localChain.createBlockAtSlot(wsEpochSlot);
     final SignedBeaconBlock nextBlock = localChain.createAndImportBlockAtSlot(wsEpochSlot.plus(1));
     localChain.setSlot(wsEpochSlot.plus(1));
 
-    final SpecProvider specProvider = SpecProviderFactory.createMinimal();
+    final Spec spec = TestSpecFactory.createMinimalPhase0();
     final Checkpoint wsCheckpoint = new Checkpoint(wsEpoch, wsBlock.getRoot());
     final WeakSubjectivityConfig wsConfig =
         WeakSubjectivityConfig.builder()
-            .specProvider(specProvider)
+            .specProvider(spec)
             .weakSubjectivityCheckpoint(wsCheckpoint)
             .build();
     final WeakSubjectivityValidator weakSubjectivityValidator =
@@ -402,12 +392,7 @@ public class BlockImporterTest {
     final StorageSystem storageSystem = InMemoryStorageSystemBuilder.buildDefault();
     final SignedBlockAndState genesis = storageSystem.chainUpdater().initializeGenesis();
     final ForkChoice forkChoice =
-        new ForkChoice(
-            new ForkChoiceAttestationValidator(),
-            new ForkChoiceBlockTasks(),
-            new InlineEventThread(),
-            storageSystem.recentChainData(),
-            new StateTransition());
+        ForkChoice.create(spec, new InlineEventThread(), storageSystem.recentChainData());
     final BlockImporter blockImporter =
         new BlockImporter(
             storageSystem.recentChainData(),
@@ -418,7 +403,7 @@ public class BlockImporterTest {
     // The current slot is far ahead of the block being imported
     final UInt64 wsPeriod = UInt64.valueOf(10);
     when(weakSubjectivityValidator.getWSPeriod(any())).thenReturn(Optional.of(wsPeriod));
-    final UInt64 currentSlot = compute_start_slot_at_epoch(wsPeriod).plus(1);
+    final UInt64 currentSlot = spec.computeStartSlotAtEpoch(wsPeriod).plus(1);
     storageSystem.chainUpdater().setCurrentSlot(currentSlot);
 
     final SignedBlockAndState blockToImport = storageSystem.chainBuilder().generateBlockAtSlot(1);
@@ -440,12 +425,7 @@ public class BlockImporterTest {
     final StorageSystem storageSystem = InMemoryStorageSystemBuilder.buildDefault();
     final SignedBlockAndState genesis = storageSystem.chainUpdater().initializeGenesis();
     final ForkChoice forkChoice =
-        new ForkChoice(
-            new ForkChoiceAttestationValidator(),
-            new ForkChoiceBlockTasks(),
-            new InlineEventThread(),
-            storageSystem.recentChainData(),
-            new StateTransition());
+        ForkChoice.create(spec, new InlineEventThread(), storageSystem.recentChainData());
     final BlockImporter blockImporter =
         new BlockImporter(
             storageSystem.recentChainData(),
@@ -455,7 +435,7 @@ public class BlockImporterTest {
 
     // Set current time to be several WSP's ahead of finalized checkpoint
     final UInt64 wsPeriod = UInt64.valueOf(10);
-    final UInt64 wsPeriodInSlots = wsPeriod.times(Constants.SLOTS_PER_EPOCH);
+    final UInt64 wsPeriodInSlots = wsPeriod.times(genesisConfig.getSlotsPerEpoch());
     when(weakSubjectivityValidator.getWSPeriod(any())).thenReturn(Optional.of(wsPeriod));
     final UInt64 currentSlot = wsPeriodInSlots.times(3).plus(1);
     storageSystem.chainUpdater().setCurrentSlot(currentSlot);
@@ -486,12 +466,7 @@ public class BlockImporterTest {
     final StorageSystem storageSystem = InMemoryStorageSystemBuilder.buildDefault();
     storageSystem.chainUpdater().initializeGenesis();
     final ForkChoice forkChoice =
-        new ForkChoice(
-            new ForkChoiceAttestationValidator(),
-            new ForkChoiceBlockTasks(),
-            new InlineEventThread(),
-            storageSystem.recentChainData(),
-            new StateTransition());
+        ForkChoice.create(spec, new InlineEventThread(), storageSystem.recentChainData());
     final BlockImporter blockImporter =
         new BlockImporter(
             storageSystem.recentChainData(),
@@ -501,7 +476,7 @@ public class BlockImporterTest {
 
     // Set current time to be several WSP's ahead of finalized checkpoint
     final UInt64 wsPeriod = UInt64.valueOf(10);
-    final UInt64 wsPeriodInSlots = wsPeriod.times(Constants.SLOTS_PER_EPOCH);
+    final UInt64 wsPeriodInSlots = wsPeriod.times(genesisConfig.getSlotsPerEpoch());
     when(weakSubjectivityValidator.getWSPeriod(any())).thenReturn(Optional.of(wsPeriod));
     final UInt64 currentSlot = wsPeriodInSlots.times(3).plus(1);
     storageSystem.chainUpdater().setCurrentSlot(currentSlot);
@@ -527,12 +502,7 @@ public class BlockImporterTest {
   public void getLatestCheckpointState_initialCall() {
     final StorageSystem storageSystem = InMemoryStorageSystemBuilder.buildDefault();
     final ForkChoice forkChoice =
-        new ForkChoice(
-            new ForkChoiceAttestationValidator(),
-            new ForkChoiceBlockTasks(),
-            new InlineEventThread(),
-            storageSystem.recentChainData(),
-            new StateTransition());
+        ForkChoice.create(spec, new InlineEventThread(), storageSystem.recentChainData());
     final BlockImporter blockImporter =
         new BlockImporter(
             storageSystem.recentChainData(),
@@ -556,12 +526,7 @@ public class BlockImporterTest {
   public void getLatestCheckpointState_shouldPullUpdatedFinalizedCheckpoint() {
     final StorageSystem storageSystem = InMemoryStorageSystemBuilder.buildDefault();
     final ForkChoice forkChoice =
-        new ForkChoice(
-            new ForkChoiceAttestationValidator(),
-            new ForkChoiceBlockTasks(),
-            new InlineEventThread(),
-            storageSystem.recentChainData(),
-            new StateTransition());
+        ForkChoice.create(spec, new InlineEventThread(), storageSystem.recentChainData());
     final BlockImporter blockImporter =
         new BlockImporter(
             storageSystem.recentChainData(),
@@ -579,7 +544,7 @@ public class BlockImporterTest {
     // Update latest finalized
     final UInt64 newFinalizedEpoch = UInt64.valueOf(2);
     final SignedBlockAndState newFinalizedBlock =
-        storageSystem.chainUpdater().advanceChain(compute_start_slot_at_epoch(newFinalizedEpoch));
+        storageSystem.chainUpdater().advanceChain(spec.computeStartSlotAtEpoch(newFinalizedEpoch));
     storageSystem.chainUpdater().finalizeEpoch(newFinalizedEpoch);
 
     // Second call should pull new finalized checkpoint

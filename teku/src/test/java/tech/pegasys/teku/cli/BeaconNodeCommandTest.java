@@ -47,10 +47,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import tech.pegasys.teku.cli.options.BeaconRestApiOptions;
 import tech.pegasys.teku.config.TekuConfiguration;
-import tech.pegasys.teku.datastructures.eth1.Eth1Address;
 import tech.pegasys.teku.infrastructure.version.VersionProvider;
 import tech.pegasys.teku.networking.nat.NatMethod;
 import tech.pegasys.teku.networks.Eth2NetworkConfiguration;
+import tech.pegasys.teku.spec.datastructures.eth1.Eth1Address;
 import tech.pegasys.teku.storage.server.DatabaseVersion;
 import tech.pegasys.teku.storage.server.VersionedDatabaseFactory;
 import tech.pegasys.teku.validator.api.FileBackedGraffitiProvider;
@@ -362,7 +362,7 @@ public class BeaconNodeCommandTest extends AbstractBeaconNodeCommandTest {
         .eth2NetworkConfig(b -> b.applyNetworkDefaults("mainnet"))
         .powchain(
             b -> {
-              networkConfig.getEth1DepositContractAddress().ifPresent(b::depositContract);
+              b.depositContract(networkConfig.getEth1DepositContractAddress());
               b.eth1Endpoint(Optional.empty())
                   .depositContractDeployBlock(networkConfig.getEth1DepositContractDeployBlock());
             })
@@ -403,8 +403,7 @@ public class BeaconNodeCommandTest extends AbstractBeaconNodeCommandTest {
 
   private TekuConfiguration.Builder expectedConfigurationBuilder() {
     return TekuConfiguration.builder()
-        .eth2NetworkConfig(
-            b -> b.applyMinimalNetworkDefaults().eth1DepositContractAddress(Optional.of(address)))
+        .eth2NetworkConfig(b -> b.applyMinimalNetworkDefaults().eth1DepositContractAddress(address))
         .powchain(
             b ->
                 b.eth1Endpoint("http://localhost:8545")
@@ -413,7 +412,7 @@ public class BeaconNodeCommandTest extends AbstractBeaconNodeCommandTest {
         .store(b -> b.hotStatePersistenceFrequencyInEpochs(2))
         .storageConfiguration(
             b ->
-                b.eth1DepositContract(Optional.of(address))
+                b.eth1DepositContract(address)
                     .dataStorageMode(PRUNE)
                     .dataStorageFrequency(VersionedDatabaseFactory.DEFAULT_STORAGE_FREQUENCY)
                     .dataStorageCreateDbVersion(DatabaseVersion.DEFAULT_VERSION))
@@ -438,7 +437,7 @@ public class BeaconNodeCommandTest extends AbstractBeaconNodeCommandTest {
                     .restApiInterface("127.0.0.1")
                     .restApiHostAllowlist(List.of("127.0.0.1", "localhost"))
                     .restApiCorsAllowedOrigins(new ArrayList<>())
-                    .eth1DepositContractAddress(Optional.of(address))
+                    .eth1DepositContractAddress(address)
                     .maxPendingEvents(BeaconRestApiOptions.DEFAULT_MAX_EVENT_QUEUE_SIZE))
         .validator(
             b ->

@@ -13,111 +13,117 @@
 
 package tech.pegasys.teku.spec.util;
 
-import static java.lang.Math.toIntExact;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_domain;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_signing_root;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_start_slot_at_epoch;
-import static tech.pegasys.teku.spec.constants.SpecConstants.FAR_FUTURE_EPOCH;
+import static tech.pegasys.teku.spec.config.SpecConfig.FAR_FUTURE_EPOCH;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 import java.util.Random;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
-import java.util.stream.LongStream;
+import java.util.stream.Stream;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.Bytes48;
-import org.apache.tuweni.units.bigints.UInt256;
 import tech.pegasys.teku.bls.BLS;
 import tech.pegasys.teku.bls.BLSKeyPair;
 import tech.pegasys.teku.bls.BLSPublicKey;
 import tech.pegasys.teku.bls.BLSSignature;
 import tech.pegasys.teku.bls.BLSTestUtil;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlockAndState;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlockBody;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlockHeader;
-import tech.pegasys.teku.datastructures.blocks.Eth1Data;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlockHeader;
-import tech.pegasys.teku.datastructures.blocks.SignedBlockAndState;
-import tech.pegasys.teku.datastructures.blocks.SlotAndBlockRoot;
-import tech.pegasys.teku.datastructures.blocks.exec.Eth1Transaction;
-import tech.pegasys.teku.datastructures.blocks.exec.ExecutableData;
-import tech.pegasys.teku.datastructures.eth1.Eth1Address;
-import tech.pegasys.teku.datastructures.forkchoice.VoteTracker;
-import tech.pegasys.teku.datastructures.networking.libp2p.rpc.EnrForkId;
-import tech.pegasys.teku.datastructures.operations.AggregateAndProof;
-import tech.pegasys.teku.datastructures.operations.Attestation;
-import tech.pegasys.teku.datastructures.operations.AttestationData;
-import tech.pegasys.teku.datastructures.operations.AttesterSlashing;
-import tech.pegasys.teku.datastructures.operations.Deposit;
-import tech.pegasys.teku.datastructures.operations.DepositData;
-import tech.pegasys.teku.datastructures.operations.DepositMessage;
-import tech.pegasys.teku.datastructures.operations.DepositWithIndex;
-import tech.pegasys.teku.datastructures.operations.IndexedAttestation;
-import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
-import tech.pegasys.teku.datastructures.operations.SignedAggregateAndProof;
-import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
-import tech.pegasys.teku.datastructures.operations.VoluntaryExit;
-import tech.pegasys.teku.datastructures.state.AnchorPoint;
-import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.datastructures.state.Checkpoint;
-import tech.pegasys.teku.datastructures.state.Fork;
-import tech.pegasys.teku.datastructures.state.ForkInfo;
-import tech.pegasys.teku.datastructures.state.PendingAttestation;
-import tech.pegasys.teku.datastructures.state.Validator;
-import tech.pegasys.teku.datastructures.state.Withdrawal;
-import tech.pegasys.teku.datastructures.util.BeaconStateUtil;
-import tech.pegasys.teku.datastructures.util.DepositGenerator;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.pow.event.DepositsFromBlockEvent;
 import tech.pegasys.teku.pow.event.MinGenesisTimeBlockEvent;
 import tech.pegasys.teku.spec.Spec;
-import tech.pegasys.teku.spec.SpecProvider;
-import tech.pegasys.teku.spec.constants.SpecConstants;
-import tech.pegasys.teku.ssz.SSZTypes.Bytes20;
-import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
-import tech.pegasys.teku.ssz.SSZTypes.SSZList;
-import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
-import tech.pegasys.teku.ssz.SSZTypes.SSZMutableVector;
-import tech.pegasys.teku.ssz.SSZTypes.SSZVector;
-import tech.pegasys.teku.ssz.backing.collections.SszBitlist;
-import tech.pegasys.teku.ssz.backing.collections.SszBitvector;
-import tech.pegasys.teku.ssz.backing.schema.collections.SszBitlistSchema;
-import tech.pegasys.teku.ssz.backing.schema.collections.SszBitvectorSchema;
-import tech.pegasys.teku.util.config.Constants;
+import tech.pegasys.teku.spec.SpecVersion;
+import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.config.SpecConfig;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlockAndState;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlockHeader;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlockSchema;
+import tech.pegasys.teku.spec.datastructures.blocks.Eth1Data;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlockHeader;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBlockAndState;
+import tech.pegasys.teku.spec.datastructures.blocks.SlotAndBlockRoot;
+import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBody;
+import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBodySchema;
+import tech.pegasys.teku.spec.datastructures.eth1.Eth1Address;
+import tech.pegasys.teku.spec.datastructures.forkchoice.VoteTracker;
+import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.EnrForkId;
+import tech.pegasys.teku.spec.datastructures.operations.AggregateAndProof;
+import tech.pegasys.teku.spec.datastructures.operations.Attestation;
+import tech.pegasys.teku.spec.datastructures.operations.AttestationData;
+import tech.pegasys.teku.spec.datastructures.operations.AttesterSlashing;
+import tech.pegasys.teku.spec.datastructures.operations.Deposit;
+import tech.pegasys.teku.spec.datastructures.operations.DepositData;
+import tech.pegasys.teku.spec.datastructures.operations.DepositMessage;
+import tech.pegasys.teku.spec.datastructures.operations.DepositWithIndex;
+import tech.pegasys.teku.spec.datastructures.operations.IndexedAttestation;
+import tech.pegasys.teku.spec.datastructures.operations.ProposerSlashing;
+import tech.pegasys.teku.spec.datastructures.operations.SignedAggregateAndProof;
+import tech.pegasys.teku.spec.datastructures.operations.SignedVoluntaryExit;
+import tech.pegasys.teku.spec.datastructures.operations.VoluntaryExit;
+import tech.pegasys.teku.spec.datastructures.state.AnchorPoint;
+import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
+import tech.pegasys.teku.spec.datastructures.state.Fork;
+import tech.pegasys.teku.spec.datastructures.state.ForkInfo;
+import tech.pegasys.teku.spec.datastructures.state.PendingAttestation;
+import tech.pegasys.teku.spec.datastructures.state.SyncCommittee;
+import tech.pegasys.teku.spec.datastructures.state.SyncCommittee.SyncCommitteeSchema;
+import tech.pegasys.teku.spec.datastructures.state.Validator;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconStateSchema;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.versions.altair.BeaconStateSchemaAltair;
+import tech.pegasys.teku.spec.datastructures.type.SszPublicKey;
+import tech.pegasys.teku.spec.datastructures.util.DepositGenerator;
+import tech.pegasys.teku.spec.schemas.SchemaDefinitions;
+import tech.pegasys.teku.ssz.SszData;
+import tech.pegasys.teku.ssz.SszList;
+import tech.pegasys.teku.ssz.SszPrimitive;
+import tech.pegasys.teku.ssz.SszVector;
+import tech.pegasys.teku.ssz.collections.SszBitlist;
+import tech.pegasys.teku.ssz.collections.SszBitvector;
+import tech.pegasys.teku.ssz.collections.SszBytes32Vector;
+import tech.pegasys.teku.ssz.collections.SszPrimitiveList;
+import tech.pegasys.teku.ssz.collections.SszPrimitiveVector;
+import tech.pegasys.teku.ssz.collections.SszUInt64List;
+import tech.pegasys.teku.ssz.primitive.SszByte;
+import tech.pegasys.teku.ssz.schema.SszListSchema;
+import tech.pegasys.teku.ssz.schema.SszVectorSchema;
+import tech.pegasys.teku.ssz.schema.collections.SszBitlistSchema;
+import tech.pegasys.teku.ssz.schema.collections.SszBitvectorSchema;
+import tech.pegasys.teku.ssz.schema.collections.SszBytes32VectorSchema;
+import tech.pegasys.teku.ssz.schema.collections.SszPrimitiveListSchema;
+import tech.pegasys.teku.ssz.schema.collections.SszPrimitiveVectorSchema;
+import tech.pegasys.teku.ssz.schema.collections.SszUInt64ListSchema;
+import tech.pegasys.teku.ssz.type.Bytes4;
 
 public final class DataStructureUtil {
+  private static final Spec DEFAULT_SPEC_PROVIDER = TestSpecFactory.createMinimalPhase0();
+
+  private final Spec spec;
 
   private int seed;
   private Supplier<BLSPublicKey> pubKeyGenerator = () -> BLSTestUtil.randomPublicKey(nextSeed());
-  private Optional<SpecProvider> maybeSpecProvider;
 
   @Deprecated
   public DataStructureUtil() {
-    this(92892824, Optional.empty());
+    this(92892824, DEFAULT_SPEC_PROVIDER);
   }
 
+  @Deprecated
   public DataStructureUtil(final int seed) {
-    this(seed, Optional.empty());
+    this(seed, DEFAULT_SPEC_PROVIDER);
   }
 
-  public DataStructureUtil(final SpecProvider specProvider) {
-    this(92892824, Optional.of(specProvider));
+  public DataStructureUtil(final Spec spec) {
+    this(92892824, spec);
   }
 
-  public DataStructureUtil(final int seed, final SpecProvider specProvider) {
-    this(seed, Optional.of(specProvider));
-  }
-
-  private DataStructureUtil(final int seed, final Optional<SpecProvider> maybeSpecProvider) {
+  public DataStructureUtil(final int seed, final Spec spec) {
     this.seed = seed;
-    this.maybeSpecProvider = maybeSpecProvider;
+    this.spec = spec;
   }
 
   public DataStructureUtil withPubKeyGenerator(Supplier<BLSPublicKey> pubKeyGenerator) {
@@ -133,12 +139,18 @@ public final class DataStructureUtil {
     return new Random(nextSeed()).nextLong();
   }
 
-  public UInt64 randomUInt64() {
-    return UInt64.fromLongBits(randomLong());
+  public int randomPositiveInt() {
+    return new Random(nextSeed()).nextInt(Integer.MAX_VALUE);
   }
 
-  public UInt256 randomUInt256() {
-    return UInt256.fromBytes(randomBytes32());
+  public byte randomByte() {
+    final byte[] bytes = new byte[1];
+    new Random(nextSeed()).nextBytes(bytes);
+    return bytes[0];
+  }
+
+  public UInt64 randomUInt64() {
+    return UInt64.fromLongBits(randomLong());
   }
 
   public Eth1Address randomEth1Address() {
@@ -147,10 +159,6 @@ public final class DataStructureUtil {
 
   public Bytes4 randomBytes4() {
     return new Bytes4(randomBytes32().slice(0, 4));
-  }
-
-  public Bytes20 randomBytes20() {
-    return new Bytes20(randomBytes32().slice(0, Bytes20.SIZE));
   }
 
   public Bytes32 randomBytes32() {
@@ -162,35 +170,73 @@ public final class DataStructureUtil {
     return BLSTestUtil.randomSignature(nextSeed());
   }
 
-  public <T> SSZList<T> randomSSZList(
-      Class<? extends T> classInfo, long maxSize, Supplier<T> valueGenerator) {
-    return randomSSZList(classInfo, maxSize / 10, maxSize, valueGenerator);
+  public <T extends SszData> SszList<T> randomSszList(
+      SszListSchema<T, ?> schema, Supplier<T> valueGenerator, long numItems) {
+    return randomSszList(schema, numItems, valueGenerator);
   }
 
-  public <T> SSZList<T> randomSSZList(
-      Class<? extends T> classInfo, long maxSize, Supplier<T> valueGenerator, long numItems) {
-    return randomSSZList(classInfo, numItems, maxSize, valueGenerator);
+  public <T extends SszData> SszList<T> randomFullSszList(
+      SszListSchema<T, ?> schema, Supplier<T> valueGenerator) {
+    return randomSszList(schema, schema.getMaxLength(), valueGenerator);
   }
 
-  public <T> SSZList<T> randomFullSSZList(
-      Class<? extends T> classInfo, long maxSize, Supplier<T> valueGenerator) {
-    return randomSSZList(classInfo, maxSize, maxSize, valueGenerator);
+  public <T extends SszData> SszList<T> randomSszList(
+      SszListSchema<T, ?> schema, final long numItems, Supplier<T> valueGenerator) {
+    return Stream.generate(valueGenerator).limit(numItems).collect(schema.collector());
   }
 
-  public <T> SSZList<T> randomSSZList(
-      Class<? extends T> classInfo, final long numItems, long maxSize, Supplier<T> valueGenerator) {
-    SSZMutableList<T> sszList = SSZList.createMutable(classInfo, maxSize);
-    LongStream.range(0, numItems).forEach(i -> sszList.add(valueGenerator.get()));
-    return sszList;
+  public <ElementT, SszElementT extends SszPrimitive<ElementT, SszElementT>>
+      SszPrimitiveList<ElementT, SszElementT> randomSszPrimitiveList(
+          SszPrimitiveListSchema<ElementT, SszElementT, ?> schema,
+          final long numItems,
+          Supplier<ElementT> valueGenerator) {
+    return Stream.generate(valueGenerator).limit(numItems).collect(schema.collectorUnboxed());
   }
 
-  public <T> SSZVector<T> randomSSZVector(
-      T defaultClassObject, long maxSize, Supplier<T> valueGenerator) {
-    SSZMutableVector<T> sszvector =
-        SSZVector.createMutable(toIntExact(maxSize), defaultClassObject);
-    long numItems = maxSize / 10;
-    LongStream.range(0, numItems).forEach(i -> sszvector.set(toIntExact(i), valueGenerator.get()));
-    return sszvector;
+  public SszUInt64List randomSszUInt64List(SszUInt64ListSchema<?> schema, final long numItems) {
+    return randomSszUInt64List(schema, numItems, this::randomUInt64);
+  }
+
+  public SszUInt64List randomSszUInt64List(
+      SszUInt64ListSchema<?> schema, final long numItems, Supplier<UInt64> valueGenerator) {
+    return Stream.generate(valueGenerator).limit(numItems).collect(schema.collectorUnboxed());
+  }
+
+  public SszBytes32Vector randomSszBytes32Vector(
+      SszBytes32VectorSchema<?> schema, Supplier<Bytes32> valueGenerator) {
+    int numItems = schema.getLength() / 10;
+    Bytes32 defaultElement = schema.getPrimitiveElementSchema().getDefault().get();
+    return Stream.concat(
+            Stream.generate(valueGenerator).limit(numItems),
+            Stream.generate(() -> defaultElement).limit(schema.getLength() - numItems))
+        .collect(schema.collectorUnboxed());
+  }
+
+  public <ElementT, SszElementT extends SszPrimitive<ElementT, SszElementT>>
+      SszPrimitiveVector<ElementT, SszElementT> randomSszPrimitiveVector(
+          SszPrimitiveVectorSchema<ElementT, SszElementT, ?> schema,
+          Supplier<ElementT> valueGenerator) {
+    int numItems = schema.getLength() / 10;
+    ElementT defaultElement = schema.getPrimitiveElementSchema().getDefault().get();
+    return Stream.concat(
+            Stream.generate(valueGenerator).limit(numItems),
+            Stream.generate(() -> defaultElement).limit(schema.getLength() - numItems))
+        .collect(schema.collectorUnboxed());
+  }
+
+  public <SszElementT extends SszData, VectorT extends SszVector<SszElementT>>
+      VectorT randomSszVector(
+          SszVectorSchema<SszElementT, VectorT> schema, Supplier<SszElementT> valueGenerator) {
+    int numItems = schema.getLength() / 10;
+    SszElementT defaultElement = schema.getElementSchema().getDefault();
+    return Stream.concat(
+            Stream.generate(valueGenerator).limit(numItems),
+            Stream.generate(() -> defaultElement).limit(schema.getLength() - numItems))
+        .collect(schema.collector());
+  }
+
+  public SszByte randomSszByte() {
+    return SszByte.of(randomByte());
   }
 
   public SszBitlist randomBitlist() {
@@ -247,6 +293,18 @@ public final class DataStructureUtil {
 
   public Checkpoint randomCheckpoint() {
     return new Checkpoint(randomEpoch(), randomBytes32());
+  }
+
+  public SyncCommittee randomSyncCommittee() {
+    final SyncCommitteeSchema syncCommitteeSchema =
+        ((BeaconStateSchemaAltair) spec.getGenesisSchemaDefinitions().getBeaconStateSchema())
+            .getCurrentSyncCommitteeSchema();
+    return syncCommitteeSchema.create(
+        randomSszVector(
+            syncCommitteeSchema.getPubkeysSchema(), () -> new SszPublicKey(randomPublicKey())),
+        randomSszVector(
+            syncCommitteeSchema.getPubkeyAggregatesSchema(),
+            () -> new SszPublicKey(randomPublicKey())));
   }
 
   public AttestationData randomAttestationData() {
@@ -334,7 +392,7 @@ public final class DataStructureUtil {
 
   public SignedBeaconBlock randomSignedBeaconBlock(UInt64 slotNum) {
     final BeaconBlock beaconBlock = randomBeaconBlock(slotNum);
-    return new SignedBeaconBlock(beaconBlock, randomSignature());
+    return signedBlock(beaconBlock);
   }
 
   public SignedBeaconBlock randomSignedBeaconBlock(long slotNum, Bytes32 parentRoot) {
@@ -343,11 +401,15 @@ public final class DataStructureUtil {
 
   public SignedBeaconBlock randomSignedBeaconBlock(long slotNum, Bytes32 parentRoot, boolean full) {
     final BeaconBlock beaconBlock = randomBeaconBlock(slotNum, parentRoot, full);
-    return new SignedBeaconBlock(beaconBlock, randomSignature());
+    return signedBlock(beaconBlock);
   }
 
   public SignedBeaconBlock signedBlock(final BeaconBlock block) {
-    return new SignedBeaconBlock(block, randomSignature());
+    return signedBlock(block, randomSignature());
+  }
+
+  public SignedBeaconBlock signedBlock(final BeaconBlock block, final BLSSignature signature) {
+    return SignedBeaconBlock.create(spec, block, signature);
   }
 
   public SignedBeaconBlock randomSignedBeaconBlock(long slotNum, BeaconState state) {
@@ -358,9 +420,11 @@ public final class DataStructureUtil {
     final BeaconBlockBody body = randomBeaconBlockBody();
     final Bytes32 stateRoot = state.hashTreeRoot();
 
+    final BeaconBlockSchema blockSchema =
+        spec.atSlot(slotNum).getSchemaDefinitions().getBeaconBlockSchema();
     final BeaconBlock block =
-        new BeaconBlock(slotNum, randomUInt64(), randomBytes32(), stateRoot, body);
-    return new SignedBeaconBlock(block, randomSignature());
+        new BeaconBlock(blockSchema, slotNum, randomUInt64(), randomBytes32(), stateRoot, body);
+    return signedBlock(block);
   }
 
   public BeaconBlock randomBeaconBlock(long slotNum) {
@@ -373,7 +437,13 @@ public final class DataStructureUtil {
     Bytes32 state_root = randomBytes32();
     BeaconBlockBody body = randomBeaconBlockBody();
 
-    return new BeaconBlock(slotNum, proposer_index, previous_root, state_root, body);
+    return new BeaconBlock(
+        spec.atSlot(slotNum).getSchemaDefinitions().getBeaconBlockSchema(),
+        slotNum,
+        proposer_index,
+        previous_root,
+        state_root,
+        body);
   }
 
   public SignedBlockAndState randomSignedBlockAndState(final long slot) {
@@ -381,10 +451,25 @@ public final class DataStructureUtil {
   }
 
   public SignedBlockAndState randomSignedBlockAndState(final UInt64 slot) {
-    final BeaconBlockAndState blockAndState = randomBlockAndState(slot);
+    return randomSignedBlockAndState(slot, randomBytes32());
+  }
 
-    final SignedBeaconBlock signedBlock =
-        new SignedBeaconBlock(blockAndState.getBlock(), randomSignature());
+  public SignedBlockAndState randomSignedBlockAndState(
+      final UInt64 slot, final Bytes32 parentRoot) {
+    final BeaconBlockAndState blockAndState =
+        randomBlockAndState(slot, randomBeaconState(slot), parentRoot);
+
+    return toSigned(blockAndState);
+  }
+
+  public SignedBlockAndState randomSignedBlockAndState(final BeaconState state) {
+    final BeaconBlockAndState blockAndState = randomBlockAndState(state);
+
+    return toSigned(blockAndState);
+  }
+
+  public SignedBlockAndState toSigned(BeaconBlockAndState blockAndState) {
+    final SignedBeaconBlock signedBlock = signedBlock(blockAndState.getBlock());
     return new SignedBlockAndState(signedBlock, blockAndState.getState());
   }
 
@@ -394,11 +479,15 @@ public final class DataStructureUtil {
 
   public BeaconBlockAndState randomBlockAndState(final UInt64 slot) {
     final BeaconState state = randomBeaconState(slot);
-    return randomBlockAndState(slot, state);
+    return randomBlockAndState(state);
   }
 
-  private BeaconBlockAndState randomBlockAndState(final UInt64 slot, final BeaconState state) {
-    final Bytes32 parentRoot = randomBytes32();
+  public BeaconBlockAndState randomBlockAndState(final BeaconState state) {
+    return randomBlockAndState(state.getSlot(), state, randomBytes32());
+  }
+
+  private BeaconBlockAndState randomBlockAndState(
+      final UInt64 slot, final BeaconState state, final Bytes32 parentRoot) {
     final BeaconBlockBody body = randomBeaconBlockBody();
     final UInt64 proposer_index = randomUInt64();
     final BeaconBlockHeader latestHeader =
@@ -406,7 +495,13 @@ public final class DataStructureUtil {
 
     final BeaconState matchingState = state.updated(s -> s.setLatest_block_header(latestHeader));
     final BeaconBlock block =
-        new BeaconBlock(slot, proposer_index, parentRoot, matchingState.hashTreeRoot(), body);
+        new BeaconBlock(
+            spec.atSlot(slot).getSchemaDefinitions().getBeaconBlockSchema(),
+            slot,
+            proposer_index,
+            parentRoot,
+            matchingState.hashTreeRoot(),
+            body);
 
     return new BeaconBlockAndState(block, matchingState);
   }
@@ -422,7 +517,13 @@ public final class DataStructureUtil {
     final UInt64 proposer_index = randomUInt64();
     BeaconBlockBody body = !isFull ? randomBeaconBlockBody() : randomFullBeaconBlockBody();
 
-    return new BeaconBlock(slot, proposer_index, parentRoot, stateRoot, body);
+    return new BeaconBlock(
+        spec.atSlot(slot).getSchemaDefinitions().getBeaconBlockSchema(),
+        slot,
+        proposer_index,
+        parentRoot,
+        stateRoot,
+        body);
   }
 
   public BeaconBlock randomBeaconBlock(long slotNum, Bytes32 parentRoot) {
@@ -439,35 +540,51 @@ public final class DataStructureUtil {
   }
 
   public BeaconBlockBody randomBeaconBlockBody() {
-    return new BeaconBlockBody(
-        randomSignature(),
-        randomEth1Data(),
-        randomExecutableData(),
-        Bytes32.ZERO,
-        randomSSZList(
-            ProposerSlashing.class, getMaxProposerSlashings(), this::randomProposerSlashing, 1),
-        randomSSZList(
-            AttesterSlashing.class, getMaxAttesterSlashings(), this::randomAttesterSlashing, 1),
-        randomSSZList(Attestation.class, getMaxAttestations(), this::randomAttestation, 3),
-        randomSSZList(Deposit.class, getMaxDeposits(), this::randomDepositWithoutIndex, 1),
-        randomSSZList(
-            SignedVoluntaryExit.class, getMaxVoluntaryExits(), this::randomSignedVoluntaryExit, 1));
+    BeaconBlockBodySchema<?> schema =
+        spec.getGenesisSpec().getSchemaDefinitions().getBeaconBlockBodySchema();
+    return schema.createBlockBody(
+        builder ->
+            builder
+                .randaoReveal(randomSignature())
+                .eth1Data(randomEth1Data())
+                .graffiti(Bytes32.ZERO)
+                .proposerSlashings(
+                    randomSszList(
+                        schema.getProposerSlashingsSchema(), this::randomProposerSlashing, 1))
+                .attesterSlashings(
+                    randomSszList(
+                        schema.getAttesterSlashingsSchema(), this::randomAttesterSlashing, 1))
+                .attestations(
+                    randomSszList(schema.getAttestationsSchema(), this::randomAttestation, 3))
+                .deposits(
+                    randomSszList(schema.getDepositsSchema(), this::randomDepositWithoutIndex, 1))
+                .voluntaryExits(
+                    randomSszList(
+                        schema.getVoluntaryExitsSchema(), this::randomSignedVoluntaryExit, 1)));
   }
 
   public BeaconBlockBody randomFullBeaconBlockBody() {
-    return new BeaconBlockBody(
-        randomSignature(),
-        randomEth1Data(),
-        randomExecutableData(),
-        Bytes32.ZERO,
-        randomFullSSZList(
-            ProposerSlashing.class, getMaxProposerSlashings(), this::randomProposerSlashing),
-        randomFullSSZList(
-            AttesterSlashing.class, getMaxAttesterSlashings(), this::randomAttesterSlashing),
-        randomFullSSZList(Attestation.class, getMaxAttestations(), this::randomAttestation),
-        randomFullSSZList(Deposit.class, getMaxDeposits(), this::randomDepositWithoutIndex),
-        randomFullSSZList(
-            SignedVoluntaryExit.class, getMaxVoluntaryExits(), this::randomSignedVoluntaryExit));
+    BeaconBlockBodySchema<?> schema =
+        spec.getGenesisSpec().getSchemaDefinitions().getBeaconBlockBodySchema();
+    return schema.createBlockBody(
+        builder ->
+            builder
+                .randaoReveal(randomSignature())
+                .eth1Data(randomEth1Data())
+                .graffiti(Bytes32.ZERO)
+                .proposerSlashings(
+                    randomFullSszList(
+                        schema.getProposerSlashingsSchema(), this::randomProposerSlashing))
+                .attesterSlashings(
+                    randomFullSszList(
+                        schema.getAttesterSlashingsSchema(), this::randomAttesterSlashing))
+                .attestations(
+                    randomFullSszList(schema.getAttestationsSchema(), this::randomAttestation))
+                .deposits(
+                    randomFullSszList(schema.getDepositsSchema(), this::randomDepositWithoutIndex))
+                .voluntaryExits(
+                    randomFullSszList(
+                        schema.getVoluntaryExitsSchema(), this::randomSignedVoluntaryExit)));
   }
 
   public ProposerSlashing randomProposerSlashing() {
@@ -475,11 +592,10 @@ public final class DataStructureUtil {
   }
 
   public IndexedAttestation randomIndexedAttestation() {
-    SSZMutableList<UInt64> attesting_indices =
-        SSZList.createMutable(UInt64.class, getMaxValidatorsPerCommittee());
-    attesting_indices.add(randomUInt64());
-    attesting_indices.add(randomUInt64());
-    attesting_indices.add(randomUInt64());
+    SszUInt64List attesting_indices =
+        IndexedAttestation.SSZ_SCHEMA
+            .getAttestingIndicesSchema()
+            .of(randomUInt64(), randomUInt64(), randomUInt64());
     return new IndexedAttestation(attesting_indices, randomAttestationData(), randomSignature());
   }
 
@@ -504,8 +620,12 @@ public final class DataStructureUtil {
   }
 
   public DepositWithIndex randomDepositWithIndex(long depositIndex) {
+    Bytes32 randomBytes32 = randomBytes32();
+    SszBytes32VectorSchema<?> proofSchema = Deposit.SSZ_SCHEMA.getProofSchema();
     return new DepositWithIndex(
-        SSZVector.createMutable(32, randomBytes32()),
+        Stream.generate(() -> randomBytes32)
+            .limit(proofSchema.getLength())
+            .collect(proofSchema.collectorUnboxed()),
         randomDepositData(),
         UInt64.valueOf(depositIndex));
   }
@@ -532,14 +652,22 @@ public final class DataStructureUtil {
   }
 
   public Deposit randomDepositWithoutIndex() {
+    Bytes32 randomBytes32 = randomBytes32();
+    SszBytes32VectorSchema<?> proofSchema = Deposit.SSZ_SCHEMA.getProofSchema();
     return new Deposit(
-        SSZVector.createMutable(getDepositContractTreeDepth() + 1, randomBytes32()),
+        Stream.generate(() -> randomBytes32)
+            .limit(proofSchema.getLength())
+            .collect(proofSchema.collectorUnboxed()),
         randomDepositData());
   }
 
   public Deposit randomDeposit() {
+    Bytes32 randomBytes32 = randomBytes32();
+    SszBytes32VectorSchema<?> proofSchema = Deposit.SSZ_SCHEMA.getProofSchema();
     return new Deposit(
-        SSZVector.createMutable(getDepositContractTreeDepth() + 1, randomBytes32()),
+        Stream.generate(() -> randomBytes32)
+            .limit(proofSchema.getLength())
+            .collect(proofSchema.collectorUnboxed()),
         randomDepositData());
   }
 
@@ -578,9 +706,8 @@ public final class DataStructureUtil {
     return new VoluntaryExit(randomUInt64(), randomUInt64());
   }
 
-  public SSZList<DepositWithIndex> newDeposits(int numDeposits) {
-    SSZMutableList<DepositWithIndex> deposits =
-        SSZList.createMutable(DepositWithIndex.class, getMaxDeposits());
+  public List<DepositWithIndex> newDeposits(int numDeposits) {
+    List<DepositWithIndex> deposits = new ArrayList<>();
     final DepositGenerator depositGenerator = new DepositGenerator();
 
     for (int i = 0; i < numDeposits; i++) {
@@ -589,9 +716,9 @@ public final class DataStructureUtil {
           depositGenerator.createDepositData(
               keypair, getMaxEffectiveBalance(), keypair.getPublicKey());
 
-      SSZVector<Bytes32> proof =
-          SSZVector.createMutable(getDepositContractTreeDepth() + 1, Bytes32.ZERO);
-      DepositWithIndex deposit = new DepositWithIndex(proof, depositData, UInt64.valueOf(i));
+      DepositWithIndex deposit =
+          new DepositWithIndex(
+              Deposit.SSZ_SCHEMA.getProofSchema().getDefault(), depositData, UInt64.valueOf(i));
       deposits.add(deposit);
     }
     return deposits;
@@ -634,15 +761,20 @@ public final class DataStructureUtil {
   }
 
   public BeaconState randomBeaconState(final int validatorCount, final int numItemsInSSZLists) {
-    return BeaconStateBuilder.create(this, validatorCount, numItemsInSSZLists).build();
+    return BeaconStateBuilderPhase0.create(this, spec, validatorCount, numItemsInSSZLists).build();
   }
 
-  public BeaconStateBuilder stateBuilder() {
-    return BeaconStateBuilder.create(this, 10, 10);
+  public BeaconStateBuilderPhase0 stateBuilderPhase0() {
+    return BeaconStateBuilderPhase0.create(this, spec, 10, 10);
   }
 
-  public BeaconStateBuilder stateBuilder(final int validatorCount, final int numItemsInSSZLists) {
-    return BeaconStateBuilder.create(this, validatorCount, numItemsInSSZLists);
+  public BeaconStateBuilderPhase0 stateBuilderPhase0(
+      final int validatorCount, final int numItemsInSSZLists) {
+    return BeaconStateBuilderPhase0.create(this, spec, validatorCount, numItemsInSSZLists);
+  }
+
+  public BeaconStateBuilderAltair stateBuilderAltair() {
+    return BeaconStateBuilderAltair.create(this, spec, 10, 10);
   }
 
   public BeaconState randomBeaconState(UInt64 slot) {
@@ -661,163 +793,71 @@ public final class DataStructureUtil {
 
   public AnchorPoint createAnchorFromState(final BeaconState anchorState) {
     // Create corresponding block
+    final SchemaDefinitions schemaDefinitions =
+        spec.atSlot(anchorState.getSlot()).getSchemaDefinitions();
     final BeaconBlock anchorBlock =
         new BeaconBlock(
+            schemaDefinitions.getBeaconBlockSchema(),
             anchorState.getSlot(),
             UInt64.ZERO,
             anchorState.getLatest_block_header().getParentRoot(),
             anchorState.hashTreeRoot(),
-            new BeaconBlockBody());
+            spec.getGenesisSpec().getSchemaDefinitions().getBeaconBlockBodySchema().createEmpty());
     final SignedBeaconBlock signedAnchorBlock =
-        new SignedBeaconBlock(anchorBlock, BLSSignature.empty());
+        SignedBeaconBlock.create(spec, anchorBlock, BLSSignature.empty());
 
     final Bytes32 anchorRoot = anchorBlock.hashTreeRoot();
-    final UInt64 anchorEpoch = BeaconStateUtil.get_current_epoch(anchorState);
+    final UInt64 anchorEpoch = spec.getCurrentEpoch(anchorState);
     final Checkpoint anchorCheckpoint = new Checkpoint(anchorEpoch, anchorRoot);
 
     return AnchorPoint.create(anchorCheckpoint, signedAnchorBlock, anchorState);
   }
 
-  public Optional<SpecProvider> getSpecProvider() {
-    return maybeSpecProvider;
-  }
-
-  int getSlotsPerHistoricalRoot() {
-    return getConstant(
-        SpecConstants::getSlotsPerHistoricalRoot, Constants.SLOTS_PER_HISTORICAL_ROOT);
-  }
-
-  int getHistoricalRootsLimit() {
-    return getConstant(SpecConstants::getHistoricalRootsLimit, Constants.HISTORICAL_ROOTS_LIMIT);
-  }
-
   int getEpochsPerEth1VotingPeriod() {
-    return getConstant(
-        SpecConstants::getEpochsPerEth1VotingPeriod, Constants.EPOCHS_PER_ETH1_VOTING_PERIOD);
+    return getConstant(SpecConfig::getEpochsPerEth1VotingPeriod);
   }
 
   int getSlotsPerEpoch() {
-    return getConstant(SpecConstants::getSlotsPerEpoch, Constants.SLOTS_PER_EPOCH);
-  }
-
-  long getValidatorRegistryLimit() {
-    return getConstant(
-        SpecConstants::getValidatorRegistryLimit, Constants.VALIDATOR_REGISTRY_LIMIT);
-  }
-
-  long getWithdrawalRegistryLimit() {
-    return Constants.WITHDRAWAL_REGISTRY_LIMIT;
-  }
-
-  long getEpochsPerHistoricalVector() {
-    return getConstant(
-        SpecConstants::getEpochsPerHistoricalVector, Constants.EPOCHS_PER_HISTORICAL_VECTOR);
-  }
-
-  long getEpochsPerSlashingsVector() {
-    return getConstant(
-        SpecConstants::getEpochsPerSlashingsVector, Constants.EPOCHS_PER_SLASHINGS_VECTOR);
-  }
-
-  private int getMaxProposerSlashings() {
-    return getConstant(SpecConstants::getMaxProposerSlashings, Constants.MAX_PROPOSER_SLASHINGS);
+    return getConstant(SpecConfig::getSlotsPerEpoch);
   }
 
   int getJustificationBitsLength() {
-    return getConstant(
-        SpecConstants::getJustificationBitsLength, Constants.JUSTIFICATION_BITS_LENGTH);
-  }
-
-  private int getMaxAttesterSlashings() {
-    return getConstant(SpecConstants::getMaxAttesterSlashings, Constants.MAX_ATTESTER_SLASHINGS);
-  }
-
-  int getMaxAttestations() {
-    return getConstant(SpecConstants::getMaxAttestations, Constants.MAX_ATTESTATIONS);
-  }
-
-  private int getMaxDeposits() {
-    return getConstant(SpecConstants::getMaxDeposits, Constants.MAX_DEPOSITS);
-  }
-
-  private int getMaxVoluntaryExits() {
-    return getConstant(SpecConstants::getMaxVoluntaryExits, Constants.MAX_VOLUNTARY_EXITS);
+    return getConstant(SpecConfig::getJustificationBitsLength);
   }
 
   private int getMaxValidatorsPerCommittee() {
-    return getConstant(
-        SpecConstants::getMaxValidatorsPerCommittee, Constants.MAX_VALIDATORS_PER_COMMITTEE);
+    return getConstant(SpecConfig::getMaxValidatorsPerCommittee);
   }
 
   private UInt64 getMaxEffectiveBalance() {
-    return getConstant(SpecConstants::getMaxEffectiveBalance, Constants.MAX_EFFECTIVE_BALANCE);
-  }
-
-  private int getDepositContractTreeDepth() {
-    return getConstant(
-        SpecConstants::getDepositContractTreeDepth, Constants.DEPOSIT_CONTRACT_TREE_DEPTH);
+    return getConstant(SpecConfig::getMaxEffectiveBalance);
   }
 
   private Bytes32 computeDomain() {
-    return maybeSpecProvider
-        .map(
-            specProvider -> {
-              final Spec spec = specProvider.getGenesisSpec();
-              final Bytes4 domain = spec.getConstants().getDomainDeposit();
-              return spec.getBeaconStateUtil().computeDomain(domain);
-            })
-        .orElse(compute_domain(Constants.DOMAIN_DEPOSIT));
+    final SpecVersion genesisSpec = spec.getGenesisSpec();
+    final Bytes4 domain = genesisSpec.getConfig().getDomainDeposit();
+    return genesisSpec.getBeaconStateUtil().computeDomain(domain);
   }
 
   private Bytes getSigningRoot(final DepositMessage proofOfPossessionData, final Bytes32 domain) {
-    return maybeSpecProvider
-        .map(
-            specProvider ->
-                specProvider
-                    .getGenesisSpec()
-                    .getBeaconStateUtil()
-                    .computeSigningRoot(proofOfPossessionData, domain))
-        .orElse(compute_signing_root(proofOfPossessionData, domain));
+    return spec.getGenesisSpec()
+        .getBeaconStateUtil()
+        .computeSigningRoot(proofOfPossessionData, domain);
   }
 
   UInt64 computeStartSlotAtEpoch(final UInt64 epoch) {
-    return maybeSpecProvider
-        .map(
-            specProvider ->
-                specProvider.getGenesisSpec().getBeaconStateUtil().computeStartSlotAtEpoch(epoch))
-        .orElse(compute_start_slot_at_epoch(epoch));
+    return spec.computeStartSlotAtEpoch(epoch);
   }
 
-  private <T> T getConstant(final Function<SpecConstants, T> getter, final T defaultValue) {
-    return maybeSpecProvider
-        .map(specProvider -> getter.apply(specProvider.getGenesisSpec().getConstants()))
-        .orElse(defaultValue);
+  public Spec getSpec() {
+    return spec;
   }
 
-  public Eth1Transaction randomEth1Transaction() {
-    return new Eth1Transaction(
-        randomUInt64(),
-        randomUInt256(),
-        randomUInt64(),
-        randomBytes20().getWrappedBytes(),
-        randomUInt256(),
-        randomBytes20().getWrappedBytes(),
-        randomUInt256(),
-        randomUInt256(),
-        randomUInt256());
+  public BeaconStateSchema<?, ?> getBeaconStateSchema() {
+    return spec.getGenesisSpec().getSchemaDefinitions().getBeaconStateSchema();
   }
 
-  public ExecutableData randomExecutableData() {
-    return new ExecutableData(
-        randomBytes32(),
-        randomBytes32(),
-        randomBytes20().getWrappedBytes(),
-        randomBytes32(),
-        randomUInt64(),
-        randomUInt64(),
-        randomBytes32(),
-        Bytes.random(256),
-        randomUInt64(),
-        Arrays.asList(randomEth1Transaction(), randomEth1Transaction(), randomEth1Transaction()));
+  private <T> T getConstant(final Function<SpecConfig, T> getter) {
+    return getter.apply(spec.getGenesisSpec().getConfig());
   }
 }

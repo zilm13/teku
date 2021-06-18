@@ -19,14 +19,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.netty.buffer.ByteBuf;
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.Test;
-import tech.pegasys.teku.datastructures.networking.libp2p.rpc.RpcErrorMessage;
 import tech.pegasys.teku.networking.eth2.rpc.core.encodings.RpcEncoding;
+import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.RpcErrorMessage;
 
 public class EncoderDecoderTest extends RpcDecoderTestBase {
   private static final Bytes ERROR_CODE = Bytes.of(1);
   private final RpcEncoder encoder = new RpcEncoder(RpcEncoding.SSZ_SNAPPY);
-  private final RpcResponseDecoder<RpcErrorMessage> decoder =
-      new RpcResponseDecoder<>(RpcErrorMessage.SSZ_SCHEMA, RpcEncoding.SSZ_SNAPPY);
+  private final RpcResponseDecoder<RpcErrorMessage, ?> decoder =
+      RpcResponseDecoder.createContextFreeDecoder(
+          RpcEncoding.SSZ_SNAPPY, RpcErrorMessage.SSZ_SCHEMA);
 
   @Test
   public void shouldEncodeErrorResponse() {

@@ -14,12 +14,11 @@
 package tech.pegasys.teku.services.beaconchain;
 
 import tech.pegasys.teku.beaconrestapi.BeaconRestApiConfig;
-import tech.pegasys.teku.exec.ExecutionConfig;
 import tech.pegasys.teku.infrastructure.logging.LoggingConfig;
 import tech.pegasys.teku.networking.eth2.P2PConfig;
 import tech.pegasys.teku.networks.Eth2NetworkConfiguration;
 import tech.pegasys.teku.services.powchain.PowchainConfiguration;
-import tech.pegasys.teku.spec.SpecProvider;
+import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.storage.store.StoreConfig;
 import tech.pegasys.teku.sync.SyncConfig;
 import tech.pegasys.teku.validator.api.InteropConfig;
@@ -37,8 +36,7 @@ public class BeaconChainConfiguration {
   private final LoggingConfig loggingConfig;
   private final StoreConfig storeConfig;
   private final PowchainConfiguration powchainConfiguration;
-  private final SpecProvider specProvider;
-  private final ExecutionConfig executionConfig;
+  private final Spec spec;
 
   public BeaconChainConfiguration(
       final Eth2NetworkConfiguration eth2NetworkConfiguration,
@@ -51,8 +49,7 @@ public class BeaconChainConfiguration {
       final PowchainConfiguration powchainConfiguration,
       final LoggingConfig loggingConfig,
       final StoreConfig storeConfig,
-      final SpecProvider specProvider,
-      final ExecutionConfig executionConfig) {
+      final Spec spec) {
     this.eth2NetworkConfiguration = eth2NetworkConfiguration;
     this.weakSubjectivityConfig = weakSubjectivityConfig;
     this.validatorConfig = validatorConfig;
@@ -63,12 +60,11 @@ public class BeaconChainConfiguration {
     this.powchainConfiguration = powchainConfiguration;
     this.loggingConfig = loggingConfig;
     this.storeConfig = storeConfig;
-    this.specProvider = specProvider;
-    this.executionConfig = executionConfig;
+    this.spec = spec;
   }
 
-  public SpecProvider getSpecProvider() {
-    return specProvider;
+  public Spec getSpec() {
+    return spec;
   }
 
   public Eth2NetworkConfiguration eth2NetworkConfig() {
@@ -109,9 +105,5 @@ public class BeaconChainConfiguration {
 
   public StoreConfig storeConfig() {
     return storeConfig;
-  }
-
-  public ExecutionConfig executionConfig() {
-    return executionConfig;
   }
 }

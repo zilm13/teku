@@ -22,38 +22,47 @@ import static tech.pegasys.teku.statetransition.attestation.AggregatorUtil.aggre
 import static tech.pegasys.teku.util.config.Constants.ATTESTATION_RETENTION_EPOCHS;
 import static tech.pegasys.teku.util.config.Constants.SLOTS_PER_EPOCH;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
-import tech.pegasys.teku.core.operationvalidators.AttestationDataStateTransitionValidator;
-import tech.pegasys.teku.core.operationvalidators.AttestationDataStateTransitionValidator.AttestationInvalidReason;
-import tech.pegasys.teku.datastructures.attestation.ValidateableAttestation;
-import tech.pegasys.teku.datastructures.operations.Attestation;
-import tech.pegasys.teku.datastructures.operations.AttestationData;
-import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.datastructures.attestation.ValidateableAttestation;
+import tech.pegasys.teku.spec.datastructures.operations.Attestation;
+import tech.pegasys.teku.spec.datastructures.operations.AttestationData;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
+import tech.pegasys.teku.spec.logic.common.operations.validation.AttestationDataStateTransitionValidator.AttestationInvalidReason;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
-import tech.pegasys.teku.ssz.backing.collections.SszBitlist;
+import tech.pegasys.teku.ssz.collections.SszBitlist;
 import tech.pegasys.teku.util.config.Constants;
 
 class AggregatingAttestationPoolTest {
 
   public static final UInt64 SLOT = UInt64.valueOf(1234);
-  private final DataStructureUtil dataStructureUtil = new DataStructureUtil();
-  private final AttestationDataStateTransitionValidator attestationDataValidator =
-      mock(AttestationDataStateTransitionValidator.class);
+
+  private final Spec spec = TestSpecFactory.createMinimalPhase0();
+  private final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
+  private final Spec mockSpec = mock(Spec.class);
 
   private final AggregatingAttestationPool aggregatingPool =
-      new AggregatingAttestationPool(attestationDataValidator, new NoOpMetricsSystem());
+      new AggregatingAttestationPool(mockSpec, new NoOpMetricsSystem());
 
   private final AttestationForkChecker forkChecker = mock(AttestationForkChecker.class);
 
   @BeforeEach
   public void setUp() {
     when(forkChecker.areAttestationsFromCorrectFork(any())).thenReturn(true);
+    when(mockSpec.getPreviousEpochAttestationCapacity(any())).thenReturn(Integer.MAX_VALUE);
+    // Fwd some calls to the real spec
+    when(mockSpec.computeEpochAtSlot(any()))
+        .thenAnswer(i -> spec.computeEpochAtSlot(i.getArgument(0)));
+    when(mockSpec.getCurrentEpoch(any())).thenAnswer(i -> spec.getCurrentEpoch(i.getArgument(0)));
   }
 
   @AfterEach
@@ -96,7 +105,7 @@ class AggregatingAttestationPoolTest {
 
   @Test
   public void getAttestationsForBlock_shouldReturnEmptyListWhenNoAttestationsAvailable() {
-    when(attestationDataValidator.validate(any(), any())).thenReturn(Optional.empty());
+    when(mockSpec.validateAttestation(any(), any())).thenReturn(Optional.empty());
     assertThat(
             aggregatingPool.getAttestationsForBlock(
                 dataStructureUtil.randomBeaconState(), forkChecker))
@@ -109,7 +118,7 @@ class AggregatingAttestationPoolTest {
     addAttestationFromValidators(dataStructureUtil.randomAttestationData(), 2);
     addAttestationFromValidators(dataStructureUtil.randomAttestationData(), 3);
 
-    when(attestationDataValidator.validate(any(), any()))
+    when(mockSpec.validateAttestation(any(), any()))
         .thenReturn(Optional.of(AttestationInvalidReason.SLOT_NOT_IN_EPOCH));
 
     assertThat(
@@ -128,12 +137,10 @@ class AggregatingAttestationPoolTest {
         addAttestationFromValidators(dataStructureUtil.randomAttestationData(), 3);
 
     final BeaconState state = dataStructureUtil.randomBeaconState();
-    when(attestationDataValidator.validate(state, attestation1.getData()))
+    when(mockSpec.validateAttestation(state, attestation1.getData()))
         .thenReturn(Optional.of(AttestationInvalidReason.SLOT_NOT_IN_EPOCH));
-    when(attestationDataValidator.validate(state, attestation2.getData()))
-        .thenReturn(Optional.empty());
-    when(attestationDataValidator.validate(state, attestation3.getData()))
-        .thenReturn(Optional.empty());
+    when(mockSpec.validateAttestation(state, attestation2.getData())).thenReturn(Optional.empty());
+    when(mockSpec.validateAttestation(state, attestation3.getData())).thenReturn(Optional.empty());
 
     assertThat(aggregatingPool.getAttestationsForBlock(state, forkChecker))
         .containsExactlyInAnyOrder(attestation2, attestation3);
@@ -195,6 +202,48 @@ class AggregatingAttestationPoolTest {
 
     assertThat(aggregatingPool.getAttestationsForBlock(state, forkChecker))
         .containsExactly(attestation1, attestation2);
+  }
+
+  @Test
+  void getAttestationsForBlock_shouldLimitPreviousEpochAttestations_capacityOf2() {
+    testPrevEpochLimits(2);
+  }
+
+  @Test
+  void getAttestationsForBlock_shouldLimitPreviousEpochAttestations_capacityOf1() {
+    testPrevEpochLimits(1);
+  }
+
+  @Test
+  void getAttestationsForBlock_shouldLimitPreviousEpochAttestations_capacityOf0() {
+    testPrevEpochLimits(0);
+  }
+
+  void testPrevEpochLimits(final int prevEpochCapacity) {
+    final UInt64 currentEpoch = UInt64.valueOf(5);
+    final UInt64 startSlotAtCurrentEpoch = spec.computeStartSlotAtEpoch(currentEpoch);
+    final BeaconState stateAtBlockSlot =
+        dataStructureUtil.stateBuilderPhase0(10, 20).slot(startSlotAtCurrentEpoch.plus(5)).build();
+    when(mockSpec.getPreviousEpochAttestationCapacity(stateAtBlockSlot))
+        .thenReturn(prevEpochCapacity);
+
+    final List<Attestation> expectedAttestations = new ArrayList<>();
+    // Current epoch Attestations
+    expectedAttestations.add(addAttestationFromValidators(startSlotAtCurrentEpoch.plus(2), 1));
+    expectedAttestations.add(addAttestationFromValidators(startSlotAtCurrentEpoch.plus(1), 2));
+    expectedAttestations.add(addAttestationFromValidators(startSlotAtCurrentEpoch, 3));
+
+    // Prev epoch attestations within capacity limit
+    for (int i = 0; i < prevEpochCapacity; i++) {
+      expectedAttestations.add(
+          addAttestationFromValidators(startSlotAtCurrentEpoch.minus(i + 1), 3 + i));
+    }
+    // Add a few extras
+    addAttestationFromValidators(startSlotAtCurrentEpoch.minus(3), 1);
+    addAttestationFromValidators(startSlotAtCurrentEpoch.minus(4), 2);
+
+    assertThat(aggregatingPool.getAttestationsForBlock(stateAtBlockSlot, forkChecker))
+        .containsExactlyElementsOf(expectedAttestations);
   }
 
   @Test
@@ -347,6 +396,10 @@ class AggregatingAttestationPoolTest {
             aggregatingPool.getAttestations(
                 Optional.of(attestationData1.getSlot()), Optional.empty()))
         .containsExactly(attestation1);
+  }
+
+  private Attestation addAttestationFromValidators(final UInt64 slot, final int... validators) {
+    return addAttestationFromValidators(dataStructureUtil.randomAttestationData(slot), validators);
   }
 
   private Attestation addAttestationFromValidators(

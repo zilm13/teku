@@ -21,15 +21,29 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.config.SpecConfig;
+import tech.pegasys.teku.spec.config.TestConfigLoader;
 import tech.pegasys.teku.util.config.Constants;
 
 class Eth1VotingPeriodTest {
 
+  final SpecConfig specConfig =
+      TestConfigLoader.loadConfig(
+          "minimal",
+          b ->
+              b.secondsPerEth1Block(UInt64.valueOf(3))
+                  .eth1FollowDistance(UInt64.valueOf(5))
+                  .epochsPerEth1VotingPeriod(1)
+                  .slotsPerEpoch(6)
+                  .secondsPerSlot(4));
+  private final Spec spec = TestSpecFactory.createPhase0(specConfig);
   private static final UInt64 GENESIS_TIME = UInt64.valueOf(1000);
   private static final UInt64 START_SLOT = UInt64.valueOf(100);
   private static final UInt64 NEXT_VOTING_PERIOD_SLOT = UInt64.valueOf(102);
 
-  private final Eth1VotingPeriod votingPeriod = new Eth1VotingPeriod();
+  private final Eth1VotingPeriod votingPeriod = new Eth1VotingPeriod(spec);
 
   // Voting Period Start Time
   // = genesisTime + ((slot - (slot % slots_per_eth1_voting_period)) * seconds_per_slot)

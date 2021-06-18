@@ -19,11 +19,6 @@ import java.util.Optional;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.bls.BLSConstants;
-import tech.pegasys.teku.core.StateTransition;
-import tech.pegasys.teku.core.StateTransitionException;
-import tech.pegasys.teku.core.exceptions.BlockProcessingException;
-import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.datastructures.util.BeaconStateUtil;
 import tech.pegasys.teku.fuzz.input.AttestationFuzzInput;
 import tech.pegasys.teku.fuzz.input.AttesterSlashingFuzzInput;
 import tech.pegasys.teku.fuzz.input.BlockFuzzInput;
@@ -32,11 +27,21 @@ import tech.pegasys.teku.fuzz.input.DepositFuzzInput;
 import tech.pegasys.teku.fuzz.input.ProposerSlashingFuzzInput;
 import tech.pegasys.teku.fuzz.input.VoluntaryExitFuzzInput;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.networks.SpecProviderFactory;
-import tech.pegasys.teku.spec.SpecProvider;
-import tech.pegasys.teku.ssz.SSZTypes.SSZList;
-import tech.pegasys.teku.ssz.backing.SszData;
-import tech.pegasys.teku.ssz.backing.schema.SszSchema;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBodySchema;
+import tech.pegasys.teku.spec.datastructures.operations.Attestation;
+import tech.pegasys.teku.spec.datastructures.operations.AttesterSlashing;
+import tech.pegasys.teku.spec.datastructures.operations.Deposit;
+import tech.pegasys.teku.spec.datastructures.operations.ProposerSlashing;
+import tech.pegasys.teku.spec.datastructures.operations.SignedVoluntaryExit;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
+import tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil;
+import tech.pegasys.teku.spec.logic.common.statetransition.exceptions.BlockProcessingException;
+import tech.pegasys.teku.spec.logic.common.statetransition.exceptions.StateTransitionException;
+import tech.pegasys.teku.ssz.SszData;
+import tech.pegasys.teku.ssz.SszList;
+import tech.pegasys.teku.ssz.schema.SszSchema;
 import tech.pegasys.teku.util.config.Constants;
 import tech.pegasys.teku.util.config.SpecDependent;
 
@@ -44,7 +49,8 @@ public class FuzzUtil {
   // NOTE: alternatively could also have these all in separate classes, which implement a
   // "FuzzHarness" interface
 
-  private final SpecProvider specProvider;
+  private final Spec spec;
+  private final BeaconBlockBodySchema<?> beaconBlockBodySchema;
 
   // Size of ValidatorIndex returned by shuffle
   private static final int OUTPUT_INDEX_BYTES = Long.BYTES;
@@ -53,11 +59,11 @@ public class FuzzUtil {
 
   // NOTE: this uses primitive values as parameters to more easily call via JNI
   public FuzzUtil(final boolean useMainnetConfig, final boolean disable_bls) {
-    specProvider =
+    spec =
         useMainnetConfig
-            ? SpecProviderFactory.createMainnet()
-            : SpecProviderFactory.createMinimal();
-
+            ? TestSpecFactory.createMainnetPhase0()
+            : TestSpecFactory.createMinimalPhase0();
+    beaconBlockBodySchema = spec.getGenesisSpec().getSchemaDefinitions().getBeaconBlockBodySchema();
     initialize(useMainnetConfig, disable_bls);
     this.disable_bls = disable_bls;
   }
@@ -78,17 +84,16 @@ public class FuzzUtil {
   }
 
   public Optional<byte[]> fuzzAttestation(final byte[] input) {
-    AttestationFuzzInput structuredInput = deserialize(input, AttestationFuzzInput.createSchema());
-
+    AttestationFuzzInput structuredInput =
+        deserialize(input, AttestationFuzzInput.createSchema(spec.getGenesisSpec()));
+    SszList<Attestation> attestations =
+        beaconBlockBodySchema.getAttestationsSchema().of(structuredInput.getAttestation());
     // process and return post state
     try {
       BeaconState postState =
           structuredInput
               .getState()
-              .updated(
-                  state ->
-                      specProvider.processAttestations(
-                          state, SSZList.singleton(structuredInput.getAttestation())));
+              .updated(state -> spec.processAttestations(state, attestations));
       Bytes output = postState.sszSerialize();
       return Optional.of(output.toArrayUnsafe());
     } catch (BlockProcessingException e) {
@@ -99,7 +104,11 @@ public class FuzzUtil {
 
   public Optional<byte[]> fuzzAttesterSlashing(final byte[] input) {
     AttesterSlashingFuzzInput structuredInput =
-        deserialize(input, AttesterSlashingFuzzInput.createType());
+        deserialize(input, AttesterSlashingFuzzInput.createType(spec.getGenesisSpec()));
+    SszList<AttesterSlashing> slashings =
+        beaconBlockBodySchema
+            .getAttesterSlashingsSchema()
+            .of(structuredInput.getAttester_slashing());
 
     // process and return post state
     try {
@@ -108,8 +117,7 @@ public class FuzzUtil {
               .getState()
               .updated(
                   state -> {
-                    specProvider.processAttesterSlashings(
-                        state, SSZList.singleton(structuredInput.getAttester_slashing()));
+                    spec.processAttesterSlashings(state, slashings);
                   });
       Bytes output = postState.sszSerialize();
       return Optional.of(output.toArrayUnsafe());
@@ -120,13 +128,13 @@ public class FuzzUtil {
   }
 
   public Optional<byte[]> fuzzBlock(final byte[] input) {
-    BlockFuzzInput structuredInput = deserialize(input, BlockFuzzInput.createSchema());
+    BlockFuzzInput structuredInput =
+        deserialize(input, BlockFuzzInput.createSchema(spec.getGenesisSpec()));
 
     boolean validate_root_and_sigs = !disable_bls;
     try {
-      StateTransition transition = new StateTransition();
       BeaconState postState =
-          transition.initiate(
+          spec.initiateStateTransition(
               structuredInput.getState(),
               structuredInput.getSigned_block(),
               validate_root_and_sigs);
@@ -139,7 +147,8 @@ public class FuzzUtil {
   }
 
   public Optional<byte[]> fuzzBlockHeader(final byte[] input) {
-    BlockHeaderFuzzInput structuredInput = deserialize(input, BlockHeaderFuzzInput.createType());
+    BlockHeaderFuzzInput structuredInput =
+        deserialize(input, BlockHeaderFuzzInput.createType(spec.getGenesisSpec()));
 
     try {
       BeaconState postState =
@@ -147,7 +156,7 @@ public class FuzzUtil {
               .getState()
               .updated(
                   state -> {
-                    specProvider.processBlockHeader(state, structuredInput.getBlock());
+                    spec.processBlockHeader(state, structuredInput.getBlock());
                   });
       Bytes output = postState.sszSerialize();
       return Optional.of(output.toArrayUnsafe());
@@ -158,7 +167,10 @@ public class FuzzUtil {
   }
 
   public Optional<byte[]> fuzzDeposit(final byte[] input) {
-    DepositFuzzInput structuredInput = deserialize(input, DepositFuzzInput.createSchema());
+    DepositFuzzInput structuredInput =
+        deserialize(input, DepositFuzzInput.createSchema(spec.getGenesisSpec()));
+    SszList<Deposit> deposits =
+        beaconBlockBodySchema.getDepositsSchema().of(structuredInput.getDeposit());
 
     try {
       BeaconState postState =
@@ -166,8 +178,7 @@ public class FuzzUtil {
               .getState()
               .updated(
                   state -> {
-                    specProvider.processDeposits(
-                        state, SSZList.singleton(structuredInput.getDeposit()));
+                    spec.processDeposits(state, deposits);
                   });
       Bytes output = postState.sszSerialize();
       return Optional.of(output.toArrayUnsafe());
@@ -179,7 +190,11 @@ public class FuzzUtil {
 
   public Optional<byte[]> fuzzProposerSlashing(final byte[] input) {
     ProposerSlashingFuzzInput structuredInput =
-        deserialize(input, ProposerSlashingFuzzInput.createType());
+        deserialize(input, ProposerSlashingFuzzInput.createType(spec.getGenesisSpec()));
+    SszList<ProposerSlashing> proposerSlashings =
+        beaconBlockBodySchema
+            .getProposerSlashingsSchema()
+            .of(structuredInput.getProposer_slashing());
 
     // process and return post state
     try {
@@ -188,8 +203,7 @@ public class FuzzUtil {
               .getState()
               .updated(
                   state -> {
-                    specProvider.processProposerSlashings(
-                        state, SSZList.singleton(structuredInput.getProposer_slashing()));
+                    spec.processProposerSlashings(state, proposerSlashings);
                   });
       Bytes output = postState.sszSerialize();
       return Optional.of(output.toArrayUnsafe());
@@ -222,14 +236,16 @@ public class FuzzUtil {
       // no risk of inconsistency for this particular fuzzing as we only count <= 100
       // inconsistencies would require a validator count > MAX_INT32
       result_bb.putLong(
-          specProvider.atSlot(UInt64.ZERO).getCommitteeUtil().computeShuffledIndex(i, count, seed));
+          spec.atSlot(UInt64.ZERO).miscHelpers().computeShuffledIndex(i, count, seed));
     }
     return Optional.of(result_bb.array());
   }
 
   public Optional<byte[]> fuzzVoluntaryExit(final byte[] input) {
     VoluntaryExitFuzzInput structuredInput =
-        deserialize(input, VoluntaryExitFuzzInput.createSchema());
+        deserialize(input, VoluntaryExitFuzzInput.createSchema(spec.getGenesisSpec()));
+    SszList<SignedVoluntaryExit> voluntaryExits =
+        beaconBlockBodySchema.getVoluntaryExitsSchema().of(structuredInput.getExit());
 
     try {
       BeaconState postState =
@@ -237,8 +253,7 @@ public class FuzzUtil {
               .getState()
               .updated(
                   state -> {
-                    specProvider.processVoluntaryExits(
-                        state, SSZList.singleton(structuredInput.getExit()));
+                    spec.processVoluntaryExits(state, voluntaryExits);
                   });
       Bytes output = postState.sszSerialize();
       return Optional.of(output.toArrayUnsafe());

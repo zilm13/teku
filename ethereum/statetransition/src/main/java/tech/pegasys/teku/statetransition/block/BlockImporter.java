@@ -13,11 +13,6 @@
 
 package tech.pegasys.teku.statetransition.block;
 
-import static tech.pegasys.teku.util.config.Constants.MAX_ATTESTATIONS;
-import static tech.pegasys.teku.util.config.Constants.MAX_ATTESTER_SLASHINGS;
-import static tech.pegasys.teku.util.config.Constants.MAX_PROPOSER_SLASHINGS;
-import static tech.pegasys.teku.util.config.Constants.MAX_VOLUNTARY_EXITS;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.eventbus.EventBus;
 import java.util.Objects;
@@ -26,20 +21,19 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.CheckReturnValue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import tech.pegasys.teku.core.results.BlockImportResult;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.SlotAndBlockRoot;
-import tech.pegasys.teku.datastructures.forkchoice.ReadOnlyForkChoiceStrategy;
-import tech.pegasys.teku.datastructures.operations.Attestation;
-import tech.pegasys.teku.datastructures.operations.AttesterSlashing;
-import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
-import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
-import tech.pegasys.teku.datastructures.state.CheckpointState;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
+import tech.pegasys.teku.infrastructure.logging.EventLogger;
 import tech.pegasys.teku.infrastructure.logging.LogFormatter;
 import tech.pegasys.teku.infrastructure.subscribers.Subscribers;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.SSZList;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.spec.datastructures.forkchoice.ReadOnlyForkChoiceStrategy;
+import tech.pegasys.teku.spec.datastructures.operations.Attestation;
+import tech.pegasys.teku.spec.datastructures.operations.AttesterSlashing;
+import tech.pegasys.teku.spec.datastructures.operations.ProposerSlashing;
+import tech.pegasys.teku.spec.datastructures.operations.SignedVoluntaryExit;
+import tech.pegasys.teku.spec.datastructures.state.CheckpointState;
+import tech.pegasys.teku.spec.logic.common.statetransition.results.BlockImportResult;
 import tech.pegasys.teku.statetransition.events.block.ImportedBlockEvent;
 import tech.pegasys.teku.statetransition.forkchoice.ForkChoice;
 import tech.pegasys.teku.storage.client.RecentChainData;
@@ -86,15 +80,12 @@ public class BlockImporter {
     }
 
     if (!weakSubjectivityValidator.isBlockValid(block, getForkChoiceStrategy())) {
+      EventLogger.EVENT_LOG.weakSubjectivityFailedEvent(block.getRoot(), block.getSlot());
       return SafeFuture.completedFuture(BlockImportResult.FAILED_WEAK_SUBJECTIVITY_CHECKS);
     }
 
     return validateWeakSubjectivityPeriod()
-        .thenCompose(
-            __ ->
-                recentChainData.retrieveStateAtSlot(
-                    new SlotAndBlockRoot(block.getSlot(), block.getParentRoot())))
-        .thenCompose(blockSlotState -> forkChoice.onBlock(block, blockSlotState))
+        .thenCompose(__ -> forkChoice.onBlock(block))
         .thenApply(
             result -> {
               if (!result.isSuccessful()) {
@@ -171,28 +162,16 @@ public class BlockImporter {
   private void notifyBlockOperationSubscribers(SignedBeaconBlock block) {
     attestationSubscribers.deliver(
         VerifiedBlockOperationsListener::onOperationsFromBlock,
-        SSZList.createMutable(
-            block.getMessage().getBody().getAttestations().stream(),
-            MAX_ATTESTATIONS,
-            tech.pegasys.teku.datastructures.operations.Attestation.class));
+        block.getMessage().getBody().getAttestations());
     attesterSlashingSubscribers.deliver(
         VerifiedBlockOperationsListener::onOperationsFromBlock,
-        SSZList.createMutable(
-            block.getMessage().getBody().getAttester_slashings().stream(),
-            MAX_ATTESTER_SLASHINGS,
-            tech.pegasys.teku.datastructures.operations.AttesterSlashing.class));
+        block.getMessage().getBody().getAttester_slashings());
     proposerSlashingSubscribers.deliver(
         VerifiedBlockOperationsListener::onOperationsFromBlock,
-        SSZList.createMutable(
-            block.getMessage().getBody().getProposer_slashings().stream(),
-            MAX_PROPOSER_SLASHINGS,
-            tech.pegasys.teku.datastructures.operations.ProposerSlashing.class));
+        block.getMessage().getBody().getProposer_slashings());
     voluntaryExitSubscribers.deliver(
         VerifiedBlockOperationsListener::onOperationsFromBlock,
-        SSZList.createMutable(
-            block.getMessage().getBody().getVoluntary_exits().stream(),
-            MAX_VOLUNTARY_EXITS,
-            tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit.class));
+        block.getMessage().getBody().getVoluntary_exits());
   }
 
   public void subscribeToVerifiedBlockAttestations(

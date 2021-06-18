@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static tech.pegasys.teku.infrastructure.async.SafeFutureAssert.assertThatSafeFuture;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ONE;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ZERO;
-import static tech.pegasys.teku.spec.constants.SpecConstants.GENESIS_SLOT;
+import static tech.pegasys.teku.spec.config.SpecConfig.GENESIS_SLOT;
 import static tech.pegasys.teku.storage.store.StoreAssertions.assertStoresMatch;
 
 import com.google.common.collect.Streams;
@@ -45,18 +45,17 @@ import tech.pegasys.teku.bls.BLSKeyPair;
 import tech.pegasys.teku.core.ChainBuilder;
 import tech.pegasys.teku.core.ChainBuilder.BlockOptions;
 import tech.pegasys.teku.core.ChainProperties;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.SignedBlockAndState;
-import tech.pegasys.teku.datastructures.blocks.SlotAndBlockRoot;
-import tech.pegasys.teku.datastructures.forkchoice.VoteTracker;
-import tech.pegasys.teku.datastructures.state.AnchorPoint;
-import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.datastructures.state.Checkpoint;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.networks.SpecProviderFactory;
 import tech.pegasys.teku.pow.event.MinGenesisTimeBlockEvent;
-import tech.pegasys.teku.spec.SpecProvider;
-import tech.pegasys.teku.spec.util.BeaconStateUtil;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBlockAndState;
+import tech.pegasys.teku.spec.datastructures.blocks.SlotAndBlockRoot;
+import tech.pegasys.teku.spec.datastructures.forkchoice.VoteTracker;
+import tech.pegasys.teku.spec.datastructures.state.AnchorPoint;
+import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.storage.client.RecentChainData;
 import tech.pegasys.teku.storage.events.WeakSubjectivityUpdate;
@@ -70,7 +69,7 @@ public abstract class AbstractDatabaseTest {
 
   protected static final List<BLSKeyPair> VALIDATOR_KEYS = BLSKeyGenerator.generateKeyPairs(3);
 
-  protected final SpecProvider specProvider = SpecProviderFactory.createMinimal();
+  protected final Spec spec = TestSpecFactory.createMinimalPhase0();
   protected final ChainBuilder chainBuilder = ChainBuilder.create(VALIDATOR_KEYS);
 
   protected UInt64 genesisTime = UInt64.valueOf(100);
@@ -100,7 +99,7 @@ public abstract class AbstractDatabaseTest {
 
     genesisBlockAndState = chainBuilder.generateGenesis(genesisTime, true);
     genesisCheckpoint = getCheckpointForBlock(genesisBlockAndState.getBlock());
-    genesisAnchor = AnchorPoint.fromGenesisState(genesisBlockAndState.getState());
+    genesisAnchor = AnchorPoint.fromGenesisState(spec, genesisBlockAndState.getState());
 
     // Initialize genesis store
     initGenesis();
@@ -115,7 +114,9 @@ public abstract class AbstractDatabaseTest {
 
   // This method shouldn't be called outside of createStorage
   protected abstract StorageSystem createStorageSystemInternal(
-      final StateStorageMode storageMode, final StoreConfig storeConfig);
+      final StateStorageMode storageMode,
+      final StoreConfig storeConfig,
+      final boolean storeNonCanonicalBlocks);
 
   protected void restartStorage() {
     final StorageSystem storage = storageSystem.restarted(storageMode);
@@ -123,13 +124,15 @@ public abstract class AbstractDatabaseTest {
   }
 
   protected StorageSystem createStorage(final StateStorageMode storageMode) {
-    return createStorage(storageMode, StoreConfig.createDefault());
+    return createStorage(storageMode, StoreConfig.createDefault(), false);
   }
 
   protected StorageSystem createStorage(
-      final StateStorageMode storageMode, final StoreConfig storeConfig) {
+      final StateStorageMode storageMode,
+      final StoreConfig storeConfig,
+      final boolean storeNonCanonicalBlocks) {
     this.storageMode = storageMode;
-    storageSystem = createStorageSystemInternal(storageMode, storeConfig);
+    storageSystem = createStorageSystemInternal(storageMode, storeConfig, storeNonCanonicalBlocks);
     setDefaultStorage(storageSystem);
 
     return storageSystem;
@@ -156,7 +159,7 @@ public abstract class AbstractDatabaseTest {
 
   @Test
   public void updateWeakSubjectivityState_setValue() {
-    final DataStructureUtil dataStructureUtil = new DataStructureUtil(specProvider);
+    final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
     final Checkpoint checkpoint = dataStructureUtil.randomCheckpoint();
     assertThat(database.getWeakSubjectivityState().getCheckpoint()).isEmpty();
 
@@ -169,7 +172,7 @@ public abstract class AbstractDatabaseTest {
 
   @Test
   public void updateWeakSubjectivityState_clearValue() {
-    final DataStructureUtil dataStructureUtil = new DataStructureUtil(specProvider);
+    final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
     final Checkpoint checkpoint = dataStructureUtil.randomCheckpoint();
 
     // Set an initial value
@@ -291,10 +294,8 @@ public abstract class AbstractDatabaseTest {
     add(List.of(blockB));
 
     // Then build on both chains, into the next epoch
-    final SignedBlockAndState blockA2 =
-        forkA.generateBlockAtSlot(specProvider.slotsPerEpoch(ZERO) * 2 + 2);
-    final SignedBlockAndState blockB2 =
-        forkB.generateBlockAtSlot(specProvider.slotsPerEpoch(ZERO) * 2 + 2);
+    final SignedBlockAndState blockA2 = forkA.generateBlockAtSlot(spec.slotsPerEpoch(ZERO) * 2 + 2);
+    final SignedBlockAndState blockB2 = forkB.generateBlockAtSlot(spec.slotsPerEpoch(ZERO) * 2 + 2);
 
     // Add blocks while finalizing blockA at the same time
     StoreTransaction tx = recentChainData.startStoreTransaction();
@@ -518,7 +519,7 @@ public abstract class AbstractDatabaseTest {
 
   @Test
   public void shouldRecordAndRetrieveGenesisInformation() {
-    final DataStructureUtil util = new DataStructureUtil(specProvider);
+    final DataStructureUtil util = new DataStructureUtil(spec);
     final MinGenesisTimeBlockEvent event =
         new MinGenesisTimeBlockEvent(
             util.randomUInt64(), util.randomUInt64(), util.randomBytes32());
@@ -537,7 +538,7 @@ public abstract class AbstractDatabaseTest {
     final int startSlot = genesisBlockAndState.getSlot().intValue();
     final int minFinalSlot = startSlot + StoreConfig.DEFAULT_STATE_CACHE_SIZE + 10;
     final UInt64 finalizedEpoch = ChainProperties.computeBestEpochFinalizableAtSlot(minFinalSlot);
-    final UInt64 finalizedSlot = specProvider.computeStartSlotAtEpoch(finalizedEpoch);
+    final UInt64 finalizedSlot = spec.computeStartSlotAtEpoch(finalizedEpoch);
 
     chainBuilder.generateBlocksUpToSlot(finalizedSlot);
     final Checkpoint finalizedCheckpoint =
@@ -564,7 +565,7 @@ public abstract class AbstractDatabaseTest {
                 blockAndState ->
                     blockAndState
                         .getSlot()
-                        .equals(specProvider.computeStartSlotAtEpoch(blockAndState.getSlot())))
+                        .equals(spec.computeStartSlotAtEpoch(blockAndState.getSlot())))
             .collect(Collectors.toMap(SignedBlockAndState::getRoot, SignedBlockAndState::getState));
     assertBlocksFinalized(expectedFinalizedBlocks);
     assertBlocksAvailable(expectedFinalizedBlocks);
@@ -588,7 +589,7 @@ public abstract class AbstractDatabaseTest {
 
   @Test
   public void slotAndBlock_shouldStoreAndRetrieve() {
-    final DataStructureUtil dataStructureUtil = new DataStructureUtil(specProvider);
+    final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
     final Bytes32 stateRoot = dataStructureUtil.randomBytes32();
     final SlotAndBlockRoot slotAndBlockRoot =
         new SlotAndBlockRoot(dataStructureUtil.randomUInt64(), dataStructureUtil.randomBytes32());
@@ -607,7 +608,7 @@ public abstract class AbstractDatabaseTest {
     // Set up database from an anchor point
     final UInt64 anchorEpoch = UInt64.valueOf(10);
     final SignedBlockAndState anchorBlockAndState =
-        chainBuilder.generateBlockAtSlot(specProvider.computeStartSlotAtEpoch(anchorEpoch));
+        chainBuilder.generateBlockAtSlot(spec.computeStartSlotAtEpoch(anchorEpoch));
     final AnchorPoint anchor =
         AnchorPoint.create(
             new Checkpoint(anchorEpoch, anchorBlockAndState.getRoot()), anchorBlockAndState);
@@ -634,7 +635,7 @@ public abstract class AbstractDatabaseTest {
 
   @Test
   public void slotAndBlock_shouldGetStateRootsBeforeSlot() {
-    final DataStructureUtil dataStructureUtil = new DataStructureUtil(specProvider);
+    final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
     final Bytes32 zeroStateRoot = insertRandomSlotAndBlock(0L, dataStructureUtil);
     final Bytes32 oneStateRoot = insertRandomSlotAndBlock(1L, dataStructureUtil);
     insertRandomSlotAndBlock(2L, dataStructureUtil);
@@ -646,7 +647,7 @@ public abstract class AbstractDatabaseTest {
 
   @Test
   public void slotAndBlock_shouldPurgeToSlot() {
-    final DataStructureUtil dataStructureUtil = new DataStructureUtil(specProvider);
+    final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
     insertRandomSlotAndBlock(0L, dataStructureUtil);
     insertRandomSlotAndBlock(1L, dataStructureUtil);
     final Bytes32 twoStateRoot = insertRandomSlotAndBlock(2L, dataStructureUtil);
@@ -667,13 +668,90 @@ public abstract class AbstractDatabaseTest {
     testStartupFromNonGenesisState(StateStorageMode.ARCHIVE);
   }
 
+  @Test
+  public void orphanedBlockStorageTest_withCanonicalBlocks() {
+    createStorage(storageMode, StoreConfig.createDefault(), true);
+    final CreateForkChainResult forkChainResult = createForkChain(false);
+    assertBlocksAvailable(
+        forkChainResult
+            .getForkChain()
+            .streamBlocksAndStates(4, forkChainResult.getFirstHotBlockSlot().longValue())
+            .map(SignedBlockAndState::getBlock)
+            .collect(Collectors.toList()));
+  }
+
+  @Test
+  public void orphanedBlockStorageTest_noCanonicalBlocks() {
+    createStorage(storageMode, StoreConfig.createDefault(), false);
+    final CreateForkChainResult forkChainResult = createForkChain(false);
+    assertBlocksUnavailable(
+        forkChainResult
+            .getForkChain()
+            .streamBlocksAndStates(4, forkChainResult.getFirstHotBlockSlot().longValue())
+            .map(SignedBlockAndState::getRoot)
+            .collect(Collectors.toList()));
+  }
+
+  public static class CreateForkChainResult {
+    private ChainBuilder forkChain;
+    private UInt64 firstHotBlockSlot;
+
+    public CreateForkChainResult(final ChainBuilder forkChain, final UInt64 firstHotBlockSlot) {
+      this.forkChain = forkChain;
+      this.firstHotBlockSlot = firstHotBlockSlot;
+    }
+
+    public ChainBuilder getForkChain() {
+      return forkChain;
+    }
+
+    public UInt64 getFirstHotBlockSlot() {
+      return firstHotBlockSlot;
+    }
+  }
+
+  protected CreateForkChainResult createForkChain(final boolean restartStorage) {
+    // Setup chains
+    // Both chains share block up to slot 3
+    final ChainBuilder primaryChain = ChainBuilder.create(VALIDATOR_KEYS);
+    primaryChain.generateGenesis(genesisTime, true);
+    primaryChain.generateBlocksUpToSlot(3);
+    final ChainBuilder forkChain = primaryChain.fork();
+    // Primary chain's next block is at 7
+    final SignedBlockAndState finalizedBlock = primaryChain.generateBlockAtSlot(7);
+    final Checkpoint finalizedCheckpoint = getCheckpointForBlock(primaryChain.getBlockAtSlot(7));
+    final UInt64 firstHotBlockSlot = finalizedCheckpoint.getEpochStartSlot().plus(UInt64.ONE);
+    primaryChain.generateBlockAtSlot(firstHotBlockSlot);
+    // Fork chain's next block is at 6
+    forkChain.generateBlockAtSlot(6);
+    forkChain.generateBlockAtSlot(firstHotBlockSlot);
+
+    // Setup database
+
+    initGenesis();
+
+    final Set<SignedBlockAndState> allBlocksAndStates =
+        Streams.concat(primaryChain.streamBlocksAndStates(), forkChain.streamBlocksAndStates())
+            .collect(Collectors.toSet());
+
+    // Finalize at block 7, making the fork blocks unavailable
+    add(allBlocksAndStates);
+    justifyAndFinalizeEpoch(finalizedCheckpoint.getEpoch(), finalizedBlock);
+
+    if (restartStorage) {
+      // Close database and rebuild from disk
+      restartStorage();
+    }
+    return new CreateForkChainResult(forkChain, firstHotBlockSlot);
+  }
+
   public void testStartupFromNonGenesisState(final StateStorageMode storageMode) {
     createStorage(storageMode);
 
     // Set up database from an anchor point
     final UInt64 anchorEpoch = UInt64.valueOf(10);
     final SignedBlockAndState anchorBlockAndState =
-        chainBuilder.generateBlockAtSlot(specProvider.computeStartSlotAtEpoch(anchorEpoch));
+        chainBuilder.generateBlockAtSlot(spec.computeStartSlotAtEpoch(anchorEpoch));
     final AnchorPoint anchor =
         AnchorPoint.create(
             new Checkpoint(anchorEpoch, anchorBlockAndState.getRoot()),
@@ -705,7 +783,7 @@ public abstract class AbstractDatabaseTest {
 
   @Test
   void shouldStoreAndRetrieveVotes() {
-    final DataStructureUtil dataStructureUtil = new DataStructureUtil(specProvider);
+    final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
     createStorage(StateStorageMode.PRUNE);
     assertThat(database.getVotes()).isEmpty();
 
@@ -736,7 +814,7 @@ public abstract class AbstractDatabaseTest {
     // Set up database from an anchor point
     final UInt64 anchorEpoch = UInt64.valueOf(10);
     final SignedBlockAndState anchorBlockAndState =
-        chainBuilder.generateBlockAtSlot(specProvider.computeStartSlotAtEpoch(anchorEpoch));
+        chainBuilder.generateBlockAtSlot(spec.computeStartSlotAtEpoch(anchorEpoch));
     final AnchorPoint anchor =
         AnchorPoint.create(
             new Checkpoint(anchorEpoch, anchorBlockAndState.getRoot()),
@@ -1081,9 +1159,8 @@ public abstract class AbstractDatabaseTest {
   }
 
   protected Checkpoint getCheckpointForBlock(final SignedBeaconBlock block) {
-    final BeaconStateUtil beaconStateUtil = specProvider.getBeaconStateUtil(block.getSlot());
-    final UInt64 blockEpoch = beaconStateUtil.computeEpochAtSlot(block.getSlot());
-    final UInt64 blockEpochBoundary = beaconStateUtil.computeStartSlotAtEpoch(blockEpoch);
+    final UInt64 blockEpoch = spec.computeEpochAtSlot(block.getSlot());
+    final UInt64 blockEpochBoundary = spec.computeStartSlotAtEpoch(blockEpoch);
     final UInt64 checkpointEpoch =
         equivalentLongs(block.getSlot(), blockEpochBoundary) ? blockEpoch : blockEpoch.plus(ONE);
     return new Checkpoint(checkpointEpoch, block.getMessage().hashTreeRoot());

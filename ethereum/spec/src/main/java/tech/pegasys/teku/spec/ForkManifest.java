@@ -14,18 +14,21 @@
 package tech.pegasys.teku.spec;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static tech.pegasys.teku.spec.constants.SpecConstants.GENESIS_EPOCH;
+import static tech.pegasys.teku.spec.config.SpecConfig.GENESIS_EPOCH;
 
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.TreeMap;
-import tech.pegasys.teku.datastructures.state.Fork;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.spec.constants.SpecConstants;
-import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
+import tech.pegasys.teku.spec.config.SpecConfig;
+import tech.pegasys.teku.spec.datastructures.state.Fork;
+import tech.pegasys.teku.ssz.type.Bytes4;
 
 public class ForkManifest {
   private final NavigableMap<UInt64, Fork> forkSchedule = new TreeMap<>();
@@ -61,8 +64,8 @@ public class ForkManifest {
             });
   }
 
-  public static ForkManifest create(final SpecConstants genesisConstants) {
-    final Bytes4 genesisForkVersion = genesisConstants.getGenesisForkVersion();
+  public static ForkManifest create(final SpecConfig genesisConfig) {
+    final Bytes4 genesisForkVersion = genesisConfig.getGenesisForkVersion();
     return new ForkManifest(
         List.of(new Fork(genesisForkVersion, genesisForkVersion, GENESIS_EPOCH)));
   }
@@ -75,11 +78,33 @@ public class ForkManifest {
     return forkSchedule.floorEntry(epoch).getValue();
   }
 
+  public Optional<Fork> getNext(final UInt64 epoch) {
+    if (epoch.equals(UInt64.MAX_VALUE)) {
+      // Epoch MAX_VALUE is the end of time, there shall be no more forks.
+      return Optional.empty();
+    }
+    return Optional.ofNullable(forkSchedule.ceilingEntry(epoch.increment()))
+        .map(Map.Entry::getValue);
+  }
+
   public Fork getGenesisFork() {
     return forkSchedule.firstEntry().getValue();
   }
 
-  public List<Fork> getForkSchedule() {
-    return new ArrayList<>(forkSchedule.values());
+  public Collection<Fork> getForkSchedule() {
+    return Collections.unmodifiableCollection(forkSchedule.values());
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    final ForkManifest that = (ForkManifest) o;
+    return Objects.equals(forkSchedule, that.forkSchedule);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(forkSchedule);
   }
 }

@@ -33,13 +33,12 @@ import org.openjdk.jmh.annotations.Warmup;
 import tech.pegasys.teku.benchmarks.gen.BlockIO;
 import tech.pegasys.teku.benchmarks.gen.BlsKeyPairIO;
 import tech.pegasys.teku.bls.BLSKeyPair;
-import tech.pegasys.teku.core.ForkChoiceAttestationValidator;
-import tech.pegasys.teku.core.ForkChoiceBlockTasks;
-import tech.pegasys.teku.core.StateTransition;
-import tech.pegasys.teku.core.results.BlockImportResult;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
-import tech.pegasys.teku.datastructures.util.BeaconStateUtil;
 import tech.pegasys.teku.infrastructure.async.eventthread.InlineEventThread;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.spec.logic.common.block.AbstractBlockProcessor;
+import tech.pegasys.teku.spec.logic.common.statetransition.results.BlockImportResult;
 import tech.pegasys.teku.statetransition.BeaconChainUtil;
 import tech.pegasys.teku.statetransition.block.BlockImporter;
 import tech.pegasys.teku.statetransition.forkchoice.ForkChoice;
@@ -54,6 +53,7 @@ import tech.pegasys.teku.weaksubjectivity.WeakSubjectivityValidator;
 @State(Scope.Thread)
 @Threads(1)
 public abstract class TransitionBenchmark {
+  Spec spec;
   WeakSubjectivityValidator wsValidator;
   RecentChainData recentChainData;
   BeaconChainUtil localChain;
@@ -68,7 +68,7 @@ public abstract class TransitionBenchmark {
   @Setup(Level.Trial)
   public void init() throws Exception {
     Constants.setConstants("mainnet");
-    BeaconStateUtil.BLS_VERIFY_DEPOSIT = false;
+    AbstractBlockProcessor.BLS_VERIFY_DEPOSIT = false;
 
     String blocksFile =
         "/blocks/blocks_epoch_"
@@ -83,20 +83,15 @@ public abstract class TransitionBenchmark {
         BlsKeyPairIO.createReaderForResource(keysFile).readAll(validatorsCount);
 
     EventBus localEventBus = mock(EventBus.class);
+    spec = TestSpecFactory.createMainnetPhase0();
     wsValidator = WeakSubjectivityFactory.lenientValidator();
-    recentChainData = MemoryOnlyRecentChainData.create(localEventBus);
-    localChain = BeaconChainUtil.create(recentChainData, validatorKeys, false);
+    recentChainData = MemoryOnlyRecentChainData.create(spec, localEventBus);
+    ForkChoice forkChoice = ForkChoice.create(spec, new InlineEventThread(), recentChainData);
+    localChain = BeaconChainUtil.create(spec, recentChainData, validatorKeys, false);
     localChain.initializeStorage();
 
-    ForkChoice forkChoice =
-        new ForkChoice(
-            new ForkChoiceAttestationValidator(),
-            new ForkChoiceBlockTasks(),
-            new InlineEventThread(),
-            recentChainData,
-            new StateTransition());
     blockImporter = new BlockImporter(recentChainData, forkChoice, wsValidator, localEventBus);
-    blockIterator = BlockIO.createResourceReader(blocksFile).iterator();
+    blockIterator = BlockIO.createResourceReader(spec, blocksFile).iterator();
     System.out.println("Importing blocks from " + blocksFile);
   }
 

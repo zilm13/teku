@@ -20,7 +20,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.compute_epoch_at_slot;
 import static tech.pegasys.teku.infrastructure.async.SafeFuture.completedFuture;
 import static tech.pegasys.teku.infrastructure.async.SafeFuture.failedFuture;
 
@@ -31,12 +30,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.bls.BLSSignature;
 import tech.pegasys.teku.core.signatures.Signer;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.SignedBeaconBlock;
-import tech.pegasys.teku.datastructures.state.ForkInfo;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.logging.ValidatorLogger;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.spec.datastructures.state.ForkInfo;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.validator.api.FileBackedGraffitiProvider;
 import tech.pegasys.teku.validator.api.SendSignedBlockResult;
@@ -46,8 +47,8 @@ import tech.pegasys.teku.validator.client.Validator;
 
 class BlockProductionDutyTest {
   private static final UInt64 SLOT = UInt64.valueOf(498294);
-
-  private final DataStructureUtil dataStructureUtil = new DataStructureUtil();
+  private final Spec spec = TestSpecFactory.createMinimalPhase0();
+  private final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
   private final ForkProvider forkProvider = mock(ForkProvider.class);
   private final ValidatorApiChannel validatorApiChannel = mock(ValidatorApiChannel.class);
   private final Signer signer = mock(Signer.class);
@@ -61,7 +62,7 @@ class BlockProductionDutyTest {
   private final ValidatorLogger validatorLogger = mock(ValidatorLogger.class);
 
   private final BlockProductionDuty duty =
-      new BlockProductionDuty(validator, SLOT, forkProvider, validatorApiChannel);
+      new BlockProductionDuty(validator, SLOT, forkProvider, validatorApiChannel, spec);
 
   @BeforeEach
   public void setUp() {
@@ -78,12 +79,13 @@ class BlockProductionDutyTest {
     final BLSSignature randaoReveal = dataStructureUtil.randomSignature();
     final BLSSignature blockSignature = dataStructureUtil.randomSignature();
     final BeaconBlock unsignedBlock = dataStructureUtil.randomBeaconBlock(SLOT.longValue());
-    when(signer.createRandaoReveal(compute_epoch_at_slot(SLOT), fork))
+    when(signer.createRandaoReveal(spec.computeEpochAtSlot(SLOT), fork))
         .thenReturn(completedFuture(randaoReveal));
     when(validatorApiChannel.createUnsignedBlock(SLOT, randaoReveal, Optional.of(graffiti)))
         .thenReturn(completedFuture(Optional.of(unsignedBlock)));
     when(signer.signBlock(unsignedBlock, fork)).thenReturn(completedFuture(blockSignature));
-    final SignedBeaconBlock signedBlock = new SignedBeaconBlock(unsignedBlock, blockSignature);
+    final SignedBeaconBlock signedBlock =
+        dataStructureUtil.signedBlock(unsignedBlock, blockSignature);
     when(validatorApiChannel.sendSignedBlock(signedBlock))
         .thenReturn(completedFuture(SendSignedBlockResult.success(signedBlock.getRoot())));
 
@@ -98,7 +100,7 @@ class BlockProductionDutyTest {
   @Test
   public void shouldFailWhenCreateRandaoFails() {
     final RuntimeException error = new RuntimeException("Sorry!");
-    when(signer.createRandaoReveal(compute_epoch_at_slot(SLOT), fork))
+    when(signer.createRandaoReveal(spec.computeEpochAtSlot(SLOT), fork))
         .thenReturn(failedFuture(error));
 
     assertDutyFails(error);
@@ -108,7 +110,7 @@ class BlockProductionDutyTest {
   public void shouldFailWhenCreateUnsignedBlockFails() {
     final RuntimeException error = new RuntimeException("Sorry!");
     final BLSSignature randaoReveal = dataStructureUtil.randomSignature();
-    when(signer.createRandaoReveal(compute_epoch_at_slot(SLOT), fork))
+    when(signer.createRandaoReveal(spec.computeEpochAtSlot(SLOT), fork))
         .thenReturn(completedFuture(randaoReveal));
     when(validatorApiChannel.createUnsignedBlock(SLOT, randaoReveal, Optional.of(graffiti)))
         .thenReturn(failedFuture(error));
@@ -119,7 +121,7 @@ class BlockProductionDutyTest {
   @Test
   public void shouldFailWhenCreateUnsignedBlockReturnsEmpty() {
     final BLSSignature randaoReveal = dataStructureUtil.randomSignature();
-    when(signer.createRandaoReveal(compute_epoch_at_slot(SLOT), fork))
+    when(signer.createRandaoReveal(spec.computeEpochAtSlot(SLOT), fork))
         .thenReturn(completedFuture(randaoReveal));
     when(validatorApiChannel.createUnsignedBlock(SLOT, randaoReveal, Optional.of(graffiti)))
         .thenReturn(completedFuture(Optional.empty()));
@@ -140,7 +142,7 @@ class BlockProductionDutyTest {
     final RuntimeException error = new RuntimeException("Sorry!");
     final BLSSignature randaoReveal = dataStructureUtil.randomSignature();
     final BeaconBlock unsignedBlock = dataStructureUtil.randomBeaconBlock(SLOT.longValue());
-    when(signer.createRandaoReveal(compute_epoch_at_slot(SLOT), fork))
+    when(signer.createRandaoReveal(spec.computeEpochAtSlot(SLOT), fork))
         .thenReturn(completedFuture(randaoReveal));
     when(validatorApiChannel.createUnsignedBlock(SLOT, randaoReveal, Optional.of(graffiti)))
         .thenReturn(completedFuture(Optional.of(unsignedBlock)));

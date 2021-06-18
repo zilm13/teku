@@ -14,44 +14,31 @@
 package tech.pegasys.teku.validator.coordinator;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static tech.pegasys.teku.core.ExecutableDataUtil.get_block_roots_for_evm;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_beacon_proposer_index;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_block_root_at_slot;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_current_epoch;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.get_randao_mix;
-import static tech.pegasys.teku.util.config.Constants.GENESIS_SLOT;
 
-import java.util.List;
 import java.util.Optional;
 import org.apache.tuweni.bytes.Bytes32;
-import org.apache.tuweni.crypto.Hash;
 import tech.pegasys.teku.bls.BLSSignature;
-import tech.pegasys.teku.core.BlockProposalUtil;
-import tech.pegasys.teku.core.ForkChoiceUtil;
-import tech.pegasys.teku.core.StateTransition;
-import tech.pegasys.teku.core.StateTransitionException;
-import tech.pegasys.teku.core.exceptions.EpochProcessingException;
-import tech.pegasys.teku.core.exceptions.SlotProcessingException;
-import tech.pegasys.teku.datastructures.blocks.BeaconBlock;
-import tech.pegasys.teku.datastructures.blocks.Eth1Data;
-import tech.pegasys.teku.datastructures.blocks.exec.ExecutableData;
-import tech.pegasys.teku.datastructures.operations.Attestation;
-import tech.pegasys.teku.datastructures.operations.AttesterSlashing;
-import tech.pegasys.teku.datastructures.operations.Deposit;
-import tech.pegasys.teku.datastructures.operations.ProposerSlashing;
-import tech.pegasys.teku.datastructures.operations.SignedVoluntaryExit;
-import tech.pegasys.teku.datastructures.state.BeaconState;
-import tech.pegasys.teku.exec.ExecutableDataService;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.SSZList;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.Eth1Data;
+import tech.pegasys.teku.spec.datastructures.execution.ExecutionPayload;
+import tech.pegasys.teku.spec.datastructures.operations.Attestation;
+import tech.pegasys.teku.spec.datastructures.operations.AttesterSlashing;
+import tech.pegasys.teku.spec.datastructures.operations.Deposit;
+import tech.pegasys.teku.spec.datastructures.operations.ProposerSlashing;
+import tech.pegasys.teku.spec.datastructures.operations.SignedVoluntaryExit;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.versions.rayonism.BeaconStateRayonism;
+import tech.pegasys.teku.spec.logic.common.statetransition.exceptions.EpochProcessingException;
+import tech.pegasys.teku.spec.logic.common.statetransition.exceptions.SlotProcessingException;
+import tech.pegasys.teku.spec.logic.common.statetransition.exceptions.StateTransitionException;
+import tech.pegasys.teku.ssz.SszList;
 import tech.pegasys.teku.statetransition.OperationPool;
 import tech.pegasys.teku.statetransition.attestation.AggregatingAttestationPool;
 import tech.pegasys.teku.statetransition.attestation.AttestationForkChecker;
-import tech.pegasys.teku.validator.coordinator.exceptions.Eth1BlockProductionException;
 
 public class BlockFactory {
-  private final BlockProposalUtil blockCreator;
-  private final StateTransition stateTransition;
   private final AggregatingAttestationPool attestationPool;
   private final OperationPool<AttesterSlashing> attesterSlashingPool;
   private final OperationPool<ProposerSlashing> proposerSlashingPool;
@@ -59,11 +46,9 @@ public class BlockFactory {
   private final DepositProvider depositProvider;
   private final Eth1DataCache eth1DataCache;
   private final Bytes32 graffiti;
-  private final ExecutableDataService executableDataService;
+  private final Spec spec;
 
   public BlockFactory(
-      final BlockProposalUtil blockCreator,
-      final StateTransition stateTransition,
       final AggregatingAttestationPool attestationPool,
       final OperationPool<AttesterSlashing> attesterSlashingPool,
       final OperationPool<ProposerSlashing> proposerSlashingPool,
@@ -71,9 +56,7 @@ public class BlockFactory {
       final DepositProvider depositProvider,
       final Eth1DataCache eth1DataCache,
       final Bytes32 graffiti,
-      final ExecutableDataService executableDataService) {
-    this.blockCreator = blockCreator;
-    this.stateTransition = stateTransition;
+      final Spec spec) {
     this.attestationPool = attestationPool;
     this.attesterSlashingPool = attesterSlashingPool;
     this.proposerSlashingPool = proposerSlashingPool;
@@ -81,18 +64,16 @@ public class BlockFactory {
     this.depositProvider = depositProvider;
     this.eth1DataCache = eth1DataCache;
     this.graffiti = graffiti;
-    this.executableDataService = executableDataService;
+    this.spec = spec;
   }
 
   public BeaconBlock createUnsignedBlock(
       final BeaconState previousState,
-      final BeaconBlock previousBlock,
       final Optional<BeaconState> maybeBlockSlotState,
       final UInt64 newSlot,
       final BLSSignature randaoReveal,
       final Optional<Bytes32> optionalGraffiti)
-      throws EpochProcessingException, SlotProcessingException, StateTransitionException,
-          Eth1BlockProductionException {
+      throws EpochProcessingException, SlotProcessingException, StateTransitionException {
     checkArgument(
         maybeBlockSlotState.isEmpty() || maybeBlockSlotState.get().getSlot().equals(newSlot),
         "Block slot state for slot %s but should be for slot %s",
@@ -105,7 +86,7 @@ public class BlockFactory {
     if (previousState.getSlot().equals(slotBeforeBlock)) {
       blockPreState = previousState;
     } else {
-      blockPreState = stateTransition.process_slots(previousState, slotBeforeBlock);
+      blockPreState = spec.processSlots(previousState, slotBeforeBlock);
     }
 
     // Collect attestations to include
@@ -113,66 +94,55 @@ public class BlockFactory {
     if (maybeBlockSlotState.isPresent()) {
       blockSlotState = maybeBlockSlotState.get();
     } else {
-      blockSlotState = stateTransition.process_slots(blockPreState, newSlot);
+      blockSlotState = spec.processSlots(blockPreState, newSlot);
     }
-    SSZList<Attestation> attestations =
+    SszList<Attestation> attestations =
         attestationPool.getAttestationsForBlock(
             blockSlotState, new AttestationForkChecker(blockSlotState));
 
     // Collect slashings to include
-    final SSZList<ProposerSlashing> proposerSlashings =
+    final SszList<ProposerSlashing> proposerSlashings =
         proposerSlashingPool.getItemsForBlock(blockSlotState);
-    final SSZList<AttesterSlashing> attesterSlashings =
+    final SszList<AttesterSlashing> attesterSlashings =
         attesterSlashingPool.getItemsForBlock(blockSlotState);
 
     // Collect exits to include
-    final SSZList<SignedVoluntaryExit> voluntaryExits =
+    final SszList<SignedVoluntaryExit> voluntaryExits =
         voluntaryExitPool.getItemsForBlock(blockSlotState);
 
     // Collect deposits
     Eth1Data eth1Data = eth1DataCache.getEth1Vote(blockPreState);
-    final SSZList<Deposit> deposits = depositProvider.getDeposits(blockPreState, eth1Data);
+    final SszList<Deposit> deposits = depositProvider.getDeposits(blockPreState, eth1Data);
 
-    final Bytes32 parentRoot = get_block_root_at_slot(blockSlotState, slotBeforeBlock);
-    final Bytes32 eth1ParentHash;
+    final Bytes32 parentRoot = spec.getBlockRootAtSlot(blockSlotState, slotBeforeBlock);
+    final Eth1Data eth1Vote = eth1DataCache.getEth1Vote(blockPreState);
 
-    if (GENESIS_SLOT == previousBlock.getSlot().longValue()) {
-      eth1ParentHash = previousState.getEth1_data().getBlock_hash();
-    } else {
-      eth1ParentHash = previousBlock.getBody().getExecutable_data().getBlock_hash();
-    }
+    return spec.createNewUnsignedBlock(
+            newSlot,
+            spec.getBeaconProposerIndex(blockSlotState, newSlot),
+            blockSlotState,
+            parentRoot,
+            bodyBuilder ->
+                bodyBuilder
+                    .randaoReveal(randaoReveal)
+                    .eth1Data(eth1Vote)
+                    .graffiti(optionalGraffiti.orElse(graffiti))
+                    .attestations(attestations)
+                    .proposerSlashings(proposerSlashings)
+                    .attesterSlashings(attesterSlashings)
+                    .deposits(deposits)
+                    .voluntaryExits(voluntaryExits)
+                    .executionPayload(() -> getExecutionPayload(blockSlotState)))
+        .getBlock();
+  }
 
-    // Executable data
-    UInt64 timestamp = ForkChoiceUtil.getSlotStartTime(newSlot, blockSlotState.getGenesis_time());
-    UInt64 epoch = get_current_epoch(blockSlotState);
-    // Pre-compute randao mix
-    Bytes32 randaoMix =
-        get_randao_mix(blockSlotState, epoch).xor(Hash.sha2_256(randaoReveal.toSSZBytes()));
-    List<Bytes32> recent_block_roots = get_block_roots_for_evm(blockSlotState);
+  private ExecutionPayload getExecutionPayload(BeaconState genericState) {
+    final BeaconStateRayonism state = BeaconStateRayonism.required(genericState);
+    final Bytes32 executionParentHash = state.getLatest_execution_payload_header().getBlock_hash();
+    final UInt64 timestamp = spec.computeTimeAtSlot(state, state.getSlot());
 
-    try {
-      ExecutableData executableData =
-          executableDataService.produce(
-              eth1ParentHash, randaoMix, newSlot, timestamp, recent_block_roots);
-
-      return blockCreator
-          .createNewUnsignedBlock(
-              newSlot,
-              get_beacon_proposer_index(blockSlotState, newSlot),
-              randaoReveal,
-              blockSlotState,
-              parentRoot,
-              eth1Data,
-              executableData,
-              optionalGraffiti.orElse(graffiti),
-              attestations,
-              proposerSlashings,
-              attesterSlashings,
-              deposits,
-              voluntaryExits)
-          .getBlock();
-    } catch (IllegalArgumentException | IllegalStateException e) {
-      throw new Eth1BlockProductionException(e);
-    }
+    return spec.atSlot(state.getSlot())
+        .getExecutionPayloadUtil()
+        .produceExecutionPayload(executionParentHash, timestamp);
   }
 }

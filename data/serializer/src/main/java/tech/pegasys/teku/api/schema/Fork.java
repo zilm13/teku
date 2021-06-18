@@ -22,7 +22,7 @@ import com.google.common.base.MoreObjects;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
+import tech.pegasys.teku.ssz.type.Bytes4;
 
 public class Fork {
   @Schema(type = "string", pattern = PATTERN_BYTES4, description = DESCRIPTION_BYTES4)
@@ -44,14 +44,14 @@ public class Fork {
     this.epoch = epoch;
   }
 
-  public Fork(final tech.pegasys.teku.datastructures.state.Fork fork) {
+  public Fork(final tech.pegasys.teku.spec.datastructures.state.Fork fork) {
     this.previous_version = fork.getPrevious_version();
     this.current_version = fork.getCurrent_version();
     this.epoch = fork.getEpoch();
   }
 
-  public tech.pegasys.teku.datastructures.state.Fork asInternalFork() {
-    return new tech.pegasys.teku.datastructures.state.Fork(
+  public tech.pegasys.teku.spec.datastructures.state.Fork asInternalFork() {
+    return new tech.pegasys.teku.spec.datastructures.state.Fork(
         previous_version, current_version, epoch);
   }
 

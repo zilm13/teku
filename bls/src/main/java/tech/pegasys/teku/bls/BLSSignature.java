@@ -16,18 +16,23 @@ package tech.pegasys.teku.bls;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.isNull;
 
-import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import java.util.Objects;
+import java.util.function.Supplier;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.ssz.SSZ;
+import tech.pegasys.teku.bls.impl.DeserializeException;
 import tech.pegasys.teku.bls.impl.Signature;
 
 public class BLSSignature {
 
-  // The number of SimpleSerialize basic types in this SSZ Container/POJO.
-  public static final int SSZ_FIELD_COUNT = 1;
   public static final int SSZ_BLS_SIGNATURE_SIZE = BLSConstants.BLS_SIGNATURE_SIZE;
+  private static final Bytes INFINITY_BYTES =
+      Bytes.fromHexString(
+          "0x"
+              + "c000000000000000000000000000000000000000000000000000000000000000"
+              + "0000000000000000000000000000000000000000000000000000000000000000"
+              + "0000000000000000000000000000000000000000000000000000000000000000");
 
   /**
    * Creates an empty signature (all zero bytes). Note that this is not a valid signature.
@@ -36,6 +41,10 @@ public class BLSSignature {
    */
   public static BLSSignature empty() {
     return BLSSignature.fromBytesCompressed(Bytes.wrap(new byte[SSZ_BLS_SIGNATURE_SIZE]));
+  }
+
+  public static BLSSignature infinity() {
+    return BLSSignature.fromBytesCompressed(INFINITY_BYTES);
   }
 
   public static BLSSignature fromBytesCompressed(Bytes bytes) {
@@ -100,6 +109,14 @@ public class BLSSignature {
 
   Signature getSignature() {
     return signature.get();
+  }
+
+  public boolean isInfinity() {
+    try {
+      return getSignature().isInfinity();
+    } catch (final DeserializeException e) {
+      return false;
+    }
   }
 
   @Override

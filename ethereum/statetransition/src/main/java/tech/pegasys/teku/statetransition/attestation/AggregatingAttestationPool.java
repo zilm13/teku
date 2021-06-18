@@ -31,16 +31,16 @@ import java.util.stream.Stream;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
-import tech.pegasys.teku.core.operationvalidators.AttestationDataStateTransitionValidator;
-import tech.pegasys.teku.datastructures.attestation.ValidateableAttestation;
-import tech.pegasys.teku.datastructures.operations.Attestation;
-import tech.pegasys.teku.datastructures.operations.AttestationData;
-import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.infrastructure.metrics.SettableGauge;
 import tech.pegasys.teku.infrastructure.metrics.TekuMetricCategory;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.SSZList;
-import tech.pegasys.teku.ssz.SSZTypes.SSZMutableList;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.datastructures.attestation.ValidateableAttestation;
+import tech.pegasys.teku.spec.datastructures.operations.Attestation;
+import tech.pegasys.teku.spec.datastructures.operations.AttestationData;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
+import tech.pegasys.teku.ssz.SszList;
+import tech.pegasys.teku.ssz.schema.SszListSchema;
 import tech.pegasys.teku.util.config.Constants;
 import tech.pegasys.teku.util.time.channels.SlotEventsChannel;
 
@@ -51,18 +51,19 @@ import tech.pegasys.teku.util.time.channels.SlotEventsChannel;
  * included.
  */
 public class AggregatingAttestationPool implements SlotEventsChannel {
+  private static final SszListSchema<Attestation, ?> ATTESTATIONS_SCHEMA =
+      SszListSchema.create(Attestation.SSZ_SCHEMA, Constants.MAX_ATTESTATIONS);
 
   private final Map<Bytes, MatchingDataAttestationGroup> attestationGroupByDataHash =
       new HashMap<>();
   private final NavigableMap<UInt64, Set<Bytes>> dataHashBySlot = new TreeMap<>();
-  private final AttestationDataStateTransitionValidator attestationDataValidator;
+
+  private final Spec spec;
   private final AtomicInteger size = new AtomicInteger(0);
   private final SettableGauge sizeGauge;
 
-  public AggregatingAttestationPool(
-      final AttestationDataStateTransitionValidator attestationDataValidator,
-      final MetricsSystem metricsSystem) {
-    this.attestationDataValidator = attestationDataValidator;
+  public AggregatingAttestationPool(final Spec spec, final MetricsSystem metricsSystem) {
+    this.spec = spec;
     this.sizeGauge =
         SettableGauge.create(
             metricsSystem,
@@ -117,7 +118,7 @@ public class AggregatingAttestationPool implements SlotEventsChannel {
     dataHashesToRemove.clear();
   }
 
-  public void removeAll(SSZList<Attestation> attestations) {
+  public void removeAll(Iterable<Attestation> attestations) {
     attestations.forEach(this::remove);
   }
 
@@ -155,22 +156,30 @@ public class AggregatingAttestationPool implements SlotEventsChannel {
     return size.get();
   }
 
-  public synchronized SSZList<Attestation> getAttestationsForBlock(
+  public synchronized SszList<Attestation> getAttestationsForBlock(
       final BeaconState stateAtBlockSlot, final AttestationForkChecker forkChecker) {
-    final SSZMutableList<Attestation> attestations =
-        SSZList.createMutable(Attestation.class, Constants.MAX_ATTESTATIONS);
+    final UInt64 currentEpoch = spec.getCurrentEpoch(stateAtBlockSlot);
+    final int previousEpochLimit = spec.getPreviousEpochAttestationCapacity(stateAtBlockSlot);
 
-    dataHashBySlot.descendingMap().values().stream()
+    final AtomicInteger prevEpochCount = new AtomicInteger(0);
+    return dataHashBySlot.descendingMap().values().stream()
         .flatMap(Collection::stream)
         .map(attestationGroupByDataHash::get)
         .filter(Objects::nonNull)
         .filter(group -> isValid(stateAtBlockSlot, group.getAttestationData()))
         .filter(forkChecker::areAttestationsFromCorrectFork)
         .flatMap(MatchingDataAttestationGroup::stream)
-        .limit(attestations.getMaxSize())
+        .limit(ATTESTATIONS_SCHEMA.getMaxLength())
         .map(ValidateableAttestation::getAttestation)
-        .forEach(attestations::add);
-    return attestations;
+        .filter(
+            att -> {
+              if (spec.computeEpochAtSlot(att.getData().getSlot()).isLessThan(currentEpoch)) {
+                final int currentCount = prevEpochCount.getAndIncrement();
+                return currentCount < previousEpochLimit;
+              }
+              return true;
+            })
+        .collect(ATTESTATIONS_SCHEMA.collector());
   }
 
   public Stream<Attestation> getAttestations(
@@ -197,7 +206,7 @@ public class AggregatingAttestationPool implements SlotEventsChannel {
 
   private boolean isValid(
       final BeaconState stateAtBlockSlot, final AttestationData attestationData) {
-    return attestationDataValidator.validate(stateAtBlockSlot, attestationData).isEmpty();
+    return spec.validateAttestation(stateAtBlockSlot, attestationData).isEmpty();
   }
 
   public synchronized Optional<ValidateableAttestation> createAggregateFor(

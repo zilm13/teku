@@ -20,22 +20,26 @@ import org.apache.logging.log4j.Logger;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.dataproviders.generators.CachingTaskQueue.CacheableTask;
 import tech.pegasys.teku.dataproviders.lookup.BlockProvider;
-import tech.pegasys.teku.datastructures.blocks.StateAndBlockSummary;
-import tech.pegasys.teku.datastructures.hashtree.HashTree;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.datastructures.blocks.StateAndBlockSummary;
+import tech.pegasys.teku.spec.datastructures.hashtree.HashTree;
 
 public class StateGenerationTask implements CacheableTask<Bytes32, StateAndBlockSummary> {
   private static final Logger LOG = LogManager.getLogger();
+  private final Spec spec;
   private final HashTree tree;
   private final BlockProvider blockProvider;
   private final Bytes32 blockRoot;
   private final StateRegenerationBaseSelector baseSelector;
 
   public StateGenerationTask(
+      final Spec spec,
       final Bytes32 blockRoot,
       final HashTree tree,
       final BlockProvider blockProvider,
       final StateRegenerationBaseSelector baseSelector) {
+    this.spec = spec;
     this.tree = tree;
     this.blockProvider = blockProvider;
     this.blockRoot = blockRoot;
@@ -71,6 +75,7 @@ public class StateGenerationTask implements CacheableTask<Bytes32, StateAndBlock
       return this;
     }
     return new StateGenerationTask(
+        spec,
         blockRoot,
         tree,
         blockProvider,
@@ -89,7 +94,7 @@ public class StateGenerationTask implements CacheableTask<Bytes32, StateAndBlock
     }
     final StateAndBlockSummary base = maybeBase.get();
     return StateGenerator.create(
-            tree.withRoot(base.getRoot()).block(base).build(), base, blockProvider)
+            spec, tree.withRoot(base.getRoot()).block(base).build(), base, blockProvider)
         .regenerateStateForBlock(blockRoot)
         .thenApply(Optional::of);
   }

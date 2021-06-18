@@ -14,49 +14,70 @@
 package tech.pegasys.teku.reference.phase0.genesis;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static tech.pegasys.teku.datastructures.util.BeaconStateUtil.initialize_beacon_state_from_eth1;
-import static tech.pegasys.teku.reference.phase0.TestDataUtils.loadBytes32FromSsz;
-import static tech.pegasys.teku.reference.phase0.TestDataUtils.loadSsz;
-import static tech.pegasys.teku.reference.phase0.TestDataUtils.loadStateFromSsz;
-import static tech.pegasys.teku.reference.phase0.TestDataUtils.loadUInt64FromYaml;
-import static tech.pegasys.teku.reference.phase0.TestDataUtils.loadYaml;
+import static tech.pegasys.teku.reference.TestDataUtils.loadSsz;
+import static tech.pegasys.teku.reference.TestDataUtils.loadStateFromSsz;
+import static tech.pegasys.teku.reference.TestDataUtils.loadYaml;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.tuweni.bytes.Bytes32;
-import tech.pegasys.teku.datastructures.operations.Deposit;
-import tech.pegasys.teku.datastructures.state.BeaconState;
 import tech.pegasys.teku.ethtests.finder.TestDefinition;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.reference.phase0.TestExecutor;
+import tech.pegasys.teku.reference.TestExecutor;
+import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.datastructures.operations.Deposit;
+import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
 
 public class GenesisInitializationTestExecutor implements TestExecutor {
 
   @Override
   public void runTest(final TestDefinition testDefinition) throws Exception {
-    final BeaconState expectedGenesisState = loadStateFromSsz(testDefinition, "state.ssz");
-    final UInt64 eth1Timestamp = loadUInt64FromYaml(testDefinition, "eth1_timestamp.yaml");
-    final Bytes32 eth1BlockHash = loadBytes32FromSsz(testDefinition, "eth1_block_hash.ssz");
+    final Spec spec = testDefinition.getSpec();
+    final BeaconState expectedGenesisState = loadStateFromSsz(testDefinition, "state.ssz_snappy");
+    final Eth1MetaData eth1MetaData = loadYaml(testDefinition, "eth1.yaml", Eth1MetaData.class);
     final GenesisMetaData metaData = loadYaml(testDefinition, "meta.yaml", GenesisMetaData.class);
     final List<Deposit> deposits =
         IntStream.range(0, metaData.getDepositsCount())
             .mapToObj(
-                index -> loadSsz(testDefinition, "deposits_" + index + ".ssz", Deposit.SSZ_SCHEMA))
+                index ->
+                    loadSsz(
+                        testDefinition, "deposits_" + index + ".ssz_snappy", Deposit.SSZ_SCHEMA))
             .collect(Collectors.toList());
 
     final BeaconState result =
-        initialize_beacon_state_from_eth1(eth1BlockHash, eth1Timestamp, deposits);
+        spec.initializeBeaconStateFromEth1(
+            eth1MetaData.getEth1BlockHash(), eth1MetaData.getEth1Timestamp(), deposits);
     assertThat(result).isEqualTo(expectedGenesisState);
   }
 
   private static class GenesisMetaData {
+    @SuppressWarnings("unused")
+    @JsonProperty(value = "description", required = false)
+    private String description;
+
     @JsonProperty(value = "deposits_count", required = true)
     private int depositsCount;
 
     public int getDepositsCount() {
       return depositsCount;
+    }
+  }
+
+  private static class Eth1MetaData {
+    @JsonProperty(value = "eth1_block_hash", required = true)
+    private String eth1BlockHash;
+
+    @JsonProperty(value = "eth1_timestamp", required = true)
+    private long eth1Timestamp;
+
+    public Bytes32 getEth1BlockHash() {
+      return Bytes32.fromHexString(eth1BlockHash);
+    }
+
+    public UInt64 getEth1Timestamp() {
+      return UInt64.fromLongBits(eth1Timestamp);
     }
   }
 }

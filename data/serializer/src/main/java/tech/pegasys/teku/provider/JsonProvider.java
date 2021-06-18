@@ -22,9 +22,10 @@ import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.api.schema.BLSPubKey;
 import tech.pegasys.teku.api.schema.BLSSignature;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
-import tech.pegasys.teku.ssz.SSZTypes.Bytes4;
-import tech.pegasys.teku.ssz.backing.collections.SszBitlist;
-import tech.pegasys.teku.ssz.backing.collections.SszBitvector;
+import tech.pegasys.teku.ssz.collections.SszBitlist;
+import tech.pegasys.teku.ssz.collections.SszBitvector;
+import tech.pegasys.teku.ssz.type.Bytes20;
+import tech.pegasys.teku.ssz.type.Bytes4;
 
 public class JsonProvider {
   private void addTekuMappers() {
@@ -41,6 +42,8 @@ public class JsonProvider {
     module.addSerializer(BLSSignature.class, new BLSSignatureSerializer());
 
     module.addDeserializer(Bytes32.class, new Bytes32Deserializer());
+    module.addDeserializer(Bytes20.class, new Bytes20Deserializer());
+    module.addSerializer(Bytes20.class, new Bytes20Serializer());
     module.addDeserializer(Bytes4.class, new Bytes4Deserializer());
     module.addSerializer(Bytes4.class, new Bytes4Serializer());
     module.addDeserializer(Bytes.class, new BytesDeserializer());

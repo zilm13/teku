@@ -57,11 +57,12 @@ public class StorageService extends Service {
                   config.getDataStorageCreateDbVersion(),
                   config.getDataStorageFrequency(),
                   config.getEth1DepositContract(),
-                  config.getSpecProvider());
+                  config.isStoreNonCanonicalBlocksEnabled(),
+                  config.getSpec());
           database = dbFactory.createDatabase();
 
           chainStorage =
-              ChainStorage.create(serviceConfig.getEventBus(), database, config.getSpecProvider());
+              ChainStorage.create(serviceConfig.getEventBus(), database, config.getSpec());
           final DepositStorage depositStorage =
               DepositStorage.create(
                   serviceConfig.getEventChannels().getPublisher(Eth1EventsChannel.class), database);
