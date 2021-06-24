@@ -15,6 +15,7 @@ package tech.pegasys.teku.spec.logic.common.util;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import java.util.List;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.datastructures.execution.ExecutionPayload;
@@ -39,9 +40,12 @@ public class ExecutionPayloadUtil {
             executionPayload));
   }
 
-  public ExecutionPayload produceExecutionPayload(Bytes32 parentHash, UInt64 timestamp) {
+  public ExecutionPayload produceExecutionPayload(
+      Bytes32 parentHash, UInt64 timestamp, UInt64 slot, List<Bytes32> recentBeaconBlockRoots) {
     checkNotNull(executionEngineService);
-    return executionEngineService.assembleBlock(parentHash, timestamp).asInternalExecutionPayload();
+    return executionEngineService
+        .assembleBlock(parentHash, timestamp, slot, recentBeaconBlockRoots)
+        .asInternalExecutionPayload();
   }
 
   public void setExecutionEngineService(ExecutionEngineService executionEngineService) {

@@ -14,6 +14,7 @@
 package tech.pegasys.teku.spec.executionengine.client.schema;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import java.util.List;
 import java.util.Objects;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
@@ -27,30 +28,47 @@ public class AssembleBlockRequest {
   @JsonSerialize(using = UInt64AsHexSerializer.class)
   public final UInt64 timestamp;
 
-  public AssembleBlockRequest(Bytes32 parentHash, UInt64 timestamp) {
+  @JsonSerialize(using = UInt64AsHexSerializer.class)
+  public final UInt64 slot;
+
+  @JsonSerialize(contentUsing = BytesSerializer.class)
+  public final List<Bytes32> recentBeaconBlockRoots;
+
+  public AssembleBlockRequest(
+      Bytes32 parentHash, UInt64 timestamp, UInt64 slot, List<Bytes32> recentBeaconBlockRoots) {
     this.parentHash = parentHash;
     this.timestamp = timestamp;
+    this.slot = slot;
+    this.recentBeaconBlockRoots = recentBeaconBlockRoots;
   }
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
     AssembleBlockRequest that = (AssembleBlockRequest) o;
-    return Objects.equals(parentHash, that.parentHash) && Objects.equals(timestamp, that.timestamp);
+    return parentHash.equals(that.parentHash)
+        && timestamp.equals(that.timestamp)
+        && slot.equals(that.slot)
+        && recentBeaconBlockRoots.equals(that.recentBeaconBlockRoots);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(parentHash, timestamp);
+    return Objects.hash(parentHash, timestamp, slot, recentBeaconBlockRoots);
   }
 
   @Override
   public String toString() {
-    return "ProduceBlockRequest{" + "parent_hash=" + parentHash + ", timestamp=" + timestamp + '}';
+    return "AssembleBlockRequest{"
+        + "parentHash="
+        + parentHash
+        + ", timestamp="
+        + timestamp
+        + ", slot="
+        + slot
+        + ", recentBeaconBlockRoots="
+        + recentBeaconBlockRoots
+        + '}';
   }
 }

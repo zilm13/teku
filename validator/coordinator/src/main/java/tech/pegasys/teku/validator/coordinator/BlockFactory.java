@@ -14,6 +14,7 @@
 package tech.pegasys.teku.validator.coordinator;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static tech.pegasys.teku.spec.datastructures.util.BeaconStateUtil.getRecentBlockRoots;
 
 import java.util.Optional;
 import org.apache.tuweni.bytes.Bytes32;
@@ -47,6 +48,7 @@ public class BlockFactory {
   private final Eth1DataCache eth1DataCache;
   private final Bytes32 graffiti;
   private final Spec spec;
+  private final int BLOCK_ROOTS_FOR_EVM_SIZE = 256; // TODO: to config
 
   public BlockFactory(
       final AggregatingAttestationPool attestationPool,
@@ -143,6 +145,10 @@ public class BlockFactory {
 
     return spec.atSlot(state.getSlot())
         .getExecutionPayloadUtil()
-        .produceExecutionPayload(executionParentHash, timestamp);
+        .produceExecutionPayload(
+            executionParentHash,
+            timestamp,
+            state.getSlot(),
+            getRecentBlockRoots(state, BLOCK_ROOTS_FOR_EVM_SIZE));
   }
 }

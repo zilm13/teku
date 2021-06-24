@@ -16,6 +16,7 @@ package tech.pegasys.teku.spec.executionengine;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -58,9 +59,11 @@ public class ExecutionEngineService {
    * @param timestamp the timestamp of the beginning of the slot
    * @return a response with execution payload
    */
-  public ExecutionPayload assembleBlock(Bytes32 parentHash, UInt64 timestamp) {
+  public ExecutionPayload assembleBlock(
+      Bytes32 parentHash, UInt64 timestamp, UInt64 slot, List<Bytes32> recentBeaconBlockRoots) {
 
-    AssembleBlockRequest request = new AssembleBlockRequest(parentHash, timestamp);
+    AssembleBlockRequest request =
+        new AssembleBlockRequest(parentHash, timestamp, slot, recentBeaconBlockRoots);
 
     try {
       Response<ExecutionPayload> response =

@@ -14,6 +14,7 @@
 package tech.pegasys.teku.spec.datastructures.util;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static tech.pegasys.teku.spec.config.SpecConfig.GENESIS_SLOT;
 import static tech.pegasys.teku.spec.datastructures.util.CommitteeUtil.compute_proposer_index;
 import static tech.pegasys.teku.spec.datastructures.util.ValidatorsUtil.decrease_balance;
 import static tech.pegasys.teku.spec.datastructures.util.ValidatorsUtil.get_active_validator_indices;
@@ -43,6 +44,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.crypto.Hash;
@@ -705,6 +707,28 @@ public class BeaconStateUtil {
         state.getSlot());
     int latestBlockRootIndex = slot.mod(SLOTS_PER_HISTORICAL_ROOT).intValue();
     return state.getBlock_roots().getElement(latestBlockRootIndex);
+  }
+
+  public static List<Bytes32> getRecentBlockRoots(BeaconState state, long quantity) {
+    if (quantity > SLOTS_PER_HISTORICAL_ROOT) {
+      quantity = SLOTS_PER_HISTORICAL_ROOT;
+    }
+    UInt64 current_slot = state.getSlot();
+    List<Bytes32> result =
+        LongStream.rangeClosed(1, quantity)
+            .mapToObj(
+                idx -> {
+                  if (current_slot.minus(GENESIS_SLOT).isLessThan(UInt64.valueOf(idx))) {
+                    return Bytes32.ZERO;
+                  } else {
+                    return get_block_root_at_slot(state, current_slot.minus(idx));
+                  }
+                })
+            .collect(Collectors.toList());
+
+    // reverting to ascending order
+    Collections.reverse(result);
+    return result;
   }
 
   @Deprecated
