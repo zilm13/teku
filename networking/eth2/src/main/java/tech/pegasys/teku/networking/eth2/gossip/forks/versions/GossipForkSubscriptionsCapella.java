@@ -81,9 +81,7 @@ public class GossipForkSubscriptionsCapella extends GossipForkSubscriptionsBella
         signedBlsToExecutionChangeOperationProcessor;
   }
 
-  @Override
-  protected void addGossipManagers(final ForkInfo forkInfo) {
-    super.addGossipManagers(forkInfo);
+  void addSignedBlsToExecutionChangeGossipManager(final ForkInfo forkInfo) {
     final SchemaDefinitionsCapella schemaDefinitions =
         SchemaDefinitionsCapella.required(
             spec.atEpoch(getActivationEpoch()).getSchemaDefinitions());
@@ -98,6 +96,19 @@ public class GossipForkSubscriptionsCapella extends GossipForkSubscriptionsBella
             signedBlsToExecutionChangeOperationProcessor,
             getMessageMaxSize());
     addGossipManager(signedBlsToExecutionChangeGossipManager);
+  }
+
+  @Override
+  protected void addGossipManagers(final ForkInfo forkInfo) {
+    addAttestationGossipManager(forkInfo);
+    addBlockGossipManager(forkInfo);
+    addAggregateGossipManager(forkInfo);
+    addVoluntaryExitGossipManager(forkInfo);
+    addProposerSlashingGossipManager(forkInfo);
+    addAttesterSlashingGossipManager(forkInfo);
+    addSignedContributionAndProofGossipManager(forkInfo);
+    addSyncCommitteeMessageGossipManager(forkInfo);
+    addSignedBlsToExecutionChangeGossipManager(forkInfo);
   }
 
   @Override

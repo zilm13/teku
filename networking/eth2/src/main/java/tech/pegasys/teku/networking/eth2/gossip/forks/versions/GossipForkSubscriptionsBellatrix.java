@@ -29,6 +29,7 @@ import tech.pegasys.teku.spec.datastructures.operations.SignedVoluntaryExit;
 import tech.pegasys.teku.spec.datastructures.operations.versions.altair.SignedContributionAndProof;
 import tech.pegasys.teku.spec.datastructures.operations.versions.altair.ValidateableSyncCommitteeMessage;
 import tech.pegasys.teku.spec.datastructures.state.Fork;
+import tech.pegasys.teku.spec.datastructures.state.ForkInfo;
 import tech.pegasys.teku.storage.client.RecentChainData;
 
 public class GossipForkSubscriptionsBellatrix extends GossipForkSubscriptionsAltair {
@@ -65,6 +66,18 @@ public class GossipForkSubscriptionsBellatrix extends GossipForkSubscriptionsAlt
         voluntaryExitProcessor,
         signedContributionAndProofOperationProcessor,
         syncCommitteeMessageOperationProcessor);
+  }
+
+  @Override
+  protected void addGossipManagers(final ForkInfo forkInfo) {
+    addAttestationGossipManager(forkInfo);
+    addBlockGossipManager(forkInfo);
+    addAggregateGossipManager(forkInfo);
+    addVoluntaryExitGossipManager(forkInfo);
+    addProposerSlashingGossipManager(forkInfo);
+    addAttesterSlashingGossipManager(forkInfo);
+    addSignedContributionAndProofGossipManager(forkInfo);
+    addSyncCommitteeMessageGossipManager(forkInfo);
   }
 
   @Override
