@@ -47,6 +47,7 @@ public interface Eth2Peer extends Peer, SyncSource {
       final PeerChainValidator peerChainValidator,
       final RateTracker blockRequestTracker,
       final RateTracker blobsSidecarsRequestTracker,
+      final RateTracker blobSidecarsRequestTracker,
       final RateTracker requestTracker) {
     return new DefaultEth2Peer(
         spec,
@@ -57,6 +58,7 @@ public interface Eth2Peer extends Peer, SyncSource {
         peerChainValidator,
         blockRequestTracker,
         blobsSidecarsRequestTracker,
+        blobSidecarsRequestTracker,
         requestTracker);
   }
 
