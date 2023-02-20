@@ -489,8 +489,8 @@ public class CombinedChainDataClient {
   }
 
   @SuppressWarnings("unused")
-  public SafeFuture<Optional<BlobSidecar>> getBlobSidecarBySlotAndBlockRoot(
-      final UInt64 slot, final Bytes32 blockRoot) {
+  public SafeFuture<Optional<BlobSidecar>> getBlobSidecarBySlotIndexAndBlockRoot(
+      final UInt64 slot, UInt64 index, final Bytes32 blockRoot) {
     return SafeFuture.failedFuture(new UnsupportedOperationException("Not yet implemented"));
   }
 
