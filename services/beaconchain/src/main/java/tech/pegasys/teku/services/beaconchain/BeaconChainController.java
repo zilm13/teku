@@ -259,6 +259,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
   protected volatile StorageQueryChannel storageQueryChannel;
   protected volatile StorageUpdateChannel storageUpdateChannel;
   protected volatile StableSubnetSubscriber stableSubnetSubscriber;
+  protected volatile ExecutionLayerBlockProductionManager executionLayerBlockProductionManager;
 
   protected UInt64 genesisTimeTracker = ZERO;
   protected BlockManager blockManager;
@@ -410,6 +411,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
   public void initAll() {
     initKeyValueStore();
     initExecutionLayer();
+    initExecutionLayerBlockProductionManager();
     initGossipValidationHelper();
     initBlockPoolsAndCaches();
     initBlobSidecarPool();
@@ -616,6 +618,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
             .spec(spec)
             .recentChainData(recentChainData)
             .combinedChainDataClient(combinedChainDataClient)
+            .executionLayerBlockProductionManager(executionLayerBlockProductionManager)
             .p2pNetwork(p2pNetwork)
             .syncService(syncService)
             .validatorApiChannel(
@@ -760,10 +763,14 @@ public class BeaconChainController extends Service implements BeaconChainControl
     eventChannels.subscribe(SlotEventsChannel.class, stableSubnetSubscriber);
   }
 
+  public void initExecutionLayerBlockProductionManager() {
+    LOG.debug("BeaconChainController.initExecutionLayerBlockProductionManager()");
+    executionLayerBlockProductionManager =
+        ExecutionLayerBlockManagerFactory.create(executionLayer, eventChannels);
+  }
+
   public void initValidatorApiHandler() {
     LOG.debug("BeaconChainController.initValidatorApiHandler()");
-    final ExecutionLayerBlockProductionManager executionLayerInitiator =
-        ExecutionLayerBlockManagerFactory.create(executionLayer, eventChannels);
     final BlockOperationSelectorFactory operationSelector =
         new BlockOperationSelectorFactory(
             spec,
@@ -777,7 +784,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
             eth1DataCache,
             VersionProvider.getDefaultGraffiti(),
             forkChoiceNotifier,
-            executionLayerInitiator);
+            executionLayerBlockProductionManager);
     final BlockFactory blockFactory =
         new MilestoneBasedBlockFactory(
             spec, operationSelector, beaconConfig.validatorConfig().isBlindedBeaconBlocksEnabled());
