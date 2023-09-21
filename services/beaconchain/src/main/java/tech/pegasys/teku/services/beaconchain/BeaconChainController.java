@@ -681,6 +681,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
             new TickProcessor(spec, recentChainData),
             new MergeTransitionBlockValidator(spec, recentChainData, executionLayer),
             beaconConfig.eth2NetworkConfig().isForkChoiceUpdateHeadOnBlockImportEnabled(),
+            beaconConfig.eth2NetworkConfig().isForkChoiceProposerBoostUniquenessEnabled(),
             metricsSystem);
     forkChoiceTrigger = new ForkChoiceTrigger(forkChoice);
   }
@@ -1216,9 +1217,18 @@ public class BeaconChainController extends Service implements BeaconChainControl
   }
 
   protected void setupInitialState(final RecentChainData client) {
-    final Optional<AnchorPoint> initialAnchor =
-        wsInitializer.loadInitialAnchorPoint(
-            spec, beaconConfig.eth2NetworkConfig().getInitialState());
+    Optional<AnchorPoint> initialAnchor = Optional.empty();
+    try {
+      initialAnchor = attemptToLoadAnchorPoint(beaconConfig.eth2NetworkConfig().getInitialState());
+    } catch (InvalidConfigurationException e) {
+      if (beaconConfig.eth2NetworkConfig().isUsingCustomInitialState()) {
+        throw e;
+      }
+      STATUS_LOG.warnFailedToLoadInitialState(e.getMessage());
+    }
+    if (initialAnchor.isEmpty()) {
+      initialAnchor = attemptToLoadAnchorPoint(beaconConfig.eth2NetworkConfig().getGenesisState());
+    }
     // Validate
     initialAnchor.ifPresent(
         anchor -> {
@@ -1242,6 +1252,10 @@ public class BeaconChainController extends Service implements BeaconChainControl
           "ETH1 is disabled but initial state is unknown. Enable ETH1 or specify an initial state"
               + ".");
     }
+  }
+
+  protected Optional<AnchorPoint> attemptToLoadAnchorPoint(final Optional<String> initialState) {
+    return wsInitializer.loadInitialAnchorPoint(spec, initialState);
   }
 
   protected void setupInteropState() {
