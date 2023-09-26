@@ -159,6 +159,7 @@ public class RestApiConstants {
   public static final String HEADER_EXECUTION_PAYLOAD_BLINDED = "Eth-Execution-Payload-Blinded";
   public static final String HEADER_EXECUTION_PAYLOAD_VALUE = "Eth-Execution-Payload-Value";
   public static final String HEADER_CONTENT_DISPOSITION = "Content-Disposition";
+  public static final String HEADER_CONTENT_ENCODING = "Content-Encoding";
 
   public static final String CACHE_NONE = "max-age=0";
 
