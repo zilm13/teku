@@ -311,7 +311,9 @@ public class ExecutionLayerChannelStub implements ExecutionLayerChannel {
 
   @Override
   public SafeFuture<HeaderWithFallbackData> builderGetHeader(
-      final ExecutionPayloadContext executionPayloadContext, final BeaconState state) {
+      final ExecutionPayloadContext executionPayloadContext,
+      final BeaconState state,
+      final SafeFuture<UInt256> localPayloadValueResult) {
     final UInt64 slot = state.getSlot();
     LOG.info(
         "getPayloadHeader: payloadId: {} slot: {} ... delegating to getPayload ...",
@@ -323,6 +325,7 @@ public class ExecutionLayerChannelStub implements ExecutionLayerChannel {
     return engineGetPayload(executionPayloadContext, slot)
         .thenApply(
             getPayloadResponse -> {
+              localPayloadValueResult.complete(getPayloadResponse.getExecutionPayloadValue());
               final ExecutionPayload executionPayload = getPayloadResponse.getExecutionPayload();
               LOG.info(
                   "getPayloadHeader: payloadId: {} slot: {} -> executionPayload blockHash: {}",
@@ -351,7 +354,8 @@ public class ExecutionLayerChannelStub implements ExecutionLayerChannel {
                                 .createFromExecutionBlobsBundle(blobsBundle);
                           });
               return HeaderWithFallbackData.create(payloadHeader, blindedBlobsBundle);
-            });
+            })
+        .whenException(localPayloadValueResult::completeExceptionally);
   }
 
   @Override

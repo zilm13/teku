@@ -123,10 +123,18 @@ public class ExecutionBuilderModule {
   }
 
   public SafeFuture<HeaderWithFallbackData> builderGetHeader(
-      final ExecutionPayloadContext executionPayloadContext, final BeaconState state) {
+      final ExecutionPayloadContext executionPayloadContext,
+      final BeaconState state,
+      final SafeFuture<UInt256> localPayloadValueResult) {
 
     final SafeFuture<GetPayloadResponse> localGetPayloadResponse =
         executionLayerManager.engineGetPayloadForFallback(executionPayloadContext, state.getSlot());
+    localGetPayloadResponse
+        .thenApply(
+            getPayloadResponse ->
+                localPayloadValueResult.complete(getPayloadResponse.getExecutionPayloadValue()))
+        .exceptionally(localPayloadValueResult::completeExceptionally);
+
     final Optional<SafeFuture<HeaderWithFallbackData>> validationResult =
         validateBuilderGetHeader(executionPayloadContext, state, localGetPayloadResponse);
     if (validationResult.isPresent()) {
