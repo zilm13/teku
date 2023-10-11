@@ -21,6 +21,7 @@ import static tech.pegasys.teku.spec.logic.common.helpers.MathHelpers.uintTo4Byt
 
 import com.google.common.primitives.UnsignedBytes;
 import it.unimi.dsi.fastutil.ints.IntList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.IntStream;
@@ -344,10 +345,19 @@ public class MiscHelpers {
   }
 
   /**
-   * Performs data availability check (just KZG validation) assuming blobSidecar content (slot,
-   * parent root, commitments) have been previously matched against the block
+   * Performs data availability check for blobSidecars against block, assumes {@link
+   * #verifyKzgProofBlobsBatch(List)} and {@link #validateBlobSidecarsAgainstBlock(List,
+   * BeaconBlock, List)} were already performed
    */
-  public boolean isDataAvailable(final List<BlobSidecar> blobSidecars) {
+  public boolean isDataAvailable(
+      final BeaconBlock block, final Collection<BlobSidecar> verifiedBlobSidecars) {
+    return false;
+  }
+  /**
+   * Performs KZG validation assuming blobSidecar content (slot, parent root, commitments) have been
+   * previously matched against the block
+   */
+  public boolean verifyKzgProofBlobsBatch(final List<BlobSidecar> blobSidecars) {
     return false;
   }
 

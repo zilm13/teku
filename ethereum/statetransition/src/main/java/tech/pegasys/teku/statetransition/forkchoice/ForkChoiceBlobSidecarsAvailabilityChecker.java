@@ -19,7 +19,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Suppliers;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Collection;
 import java.util.List;
 import java.util.NavigableMap;
 import java.util.Optional;
@@ -136,7 +136,7 @@ public class ForkChoiceBlobSidecarsAvailabilityChecker implements BlobSidecarsAv
       miscHelpers.validateBlobSidecarsAgainstBlock(
           blobSidecars, block, kzgCommitmentsFromBlockSupplier.get());
 
-      if (!miscHelpers.isDataAvailable(blobSidecars)) {
+      if (!miscHelpers.verifyKzgProofBlobsBatch(blobSidecars)) {
         return BlobSidecarsAndValidationResult.invalidResult(blobSidecars);
       }
     } catch (final Exception ex) {
@@ -196,7 +196,11 @@ public class ForkChoiceBlobSidecarsAvailabilityChecker implements BlobSidecarsAv
     }
 
     if (performCompleteValidation) {
-      return Optional.of(result);
+      if (result.isValid()) {
+        return Optional.of(completeValidation());
+      } else {
+        return Optional.of(result);
+      }
     }
 
     // cache partially validated blobs
@@ -308,19 +312,25 @@ public class ForkChoiceBlobSidecarsAvailabilityChecker implements BlobSidecarsAv
         .getBlobSidecars()
         .forEach(blobSidecar -> validatedBlobSidecars.put(blobSidecar.getIndex(), blobSidecar));
 
-    // let's create the final list of validated BlobSidecars making sure that indices and
-    // final order are consistent
-    final List<BlobSidecar> completeValidatedBlobSidecars = new ArrayList<>();
-    validatedBlobSidecars.forEach(
-        (index, blobSidecar) -> {
-          checkState(
-              index.equals(blobSidecar.getIndex())
-                  && index.equals(UInt64.valueOf(completeValidatedBlobSidecars.size())),
-              "Inconsistency detected during blob sidecar validation");
-          completeValidatedBlobSidecars.add(blobSidecar);
-        });
+    return completeValidation();
+  }
 
-    if (completeValidatedBlobSidecars.size() < kzgCommitmentsFromBlockSupplier.get().size()) {
+  private BlobSidecarsAndValidationResult completeValidation() {
+    final BeaconBlock block = blockBlobSidecarsTracker.getBlock().orElseThrow();
+    final MiscHelpers miscHelpers = spec.atSlot(block.getSlot()).miscHelpers();
+    final Collection<BlobSidecar> maybeVerifiedBlobSidecars =
+        validatedBlobSidecars
+            .subMap(
+                UInt64.ZERO,
+                UInt64.valueOf(
+                    BeaconBlockBodyDeneb.required(
+                            blockBlobSidecarsTracker.getBlock().orElseThrow().getBody())
+                        .getBlobKzgCommitments()
+                        .size()))
+            .values();
+    final boolean isDataAvailable = miscHelpers.isDataAvailable(block, maybeVerifiedBlobSidecars);
+
+    if (!isDataAvailable) {
       // we haven't verified enough blobs to match the commitments present in the block
       // this should never happen in practice. If it does, is likely a bug and should be fixed.
       checkState(
@@ -332,8 +342,7 @@ public class ForkChoiceBlobSidecarsAvailabilityChecker implements BlobSidecarsAv
       return BlobSidecarsAndValidationResult.NOT_REQUIRED;
     }
 
-    return BlobSidecarsAndValidationResult.validResult(
-        Collections.unmodifiableList(completeValidatedBlobSidecars));
+    return BlobSidecarsAndValidationResult.validResult(maybeVerifiedBlobSidecars.stream().toList());
   }
 
   private boolean isBlockOutsideDataAvailabilityWindow() {

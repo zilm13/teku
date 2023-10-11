@@ -57,6 +57,6 @@ public interface BlobSidecarsAvailabilityChecker {
 
   SafeFuture<BlobSidecarsAndValidationResult> getAvailabilityCheckResult();
 
-  /** Only perform the {@link MiscHelpersDeneb#isDataAvailable} check */
+  /** Only perform the {@link MiscHelpersDeneb#verifyKzgProofBlobsBatch(List)} check */
   BlobSidecarsAndValidationResult validateImmediately(List<BlobSidecar> blobSidecars);
 }

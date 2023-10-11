@@ -17,8 +17,12 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static tech.pegasys.teku.spec.config.SpecConfigDeneb.VERSIONED_HASH_VERSION_KZG;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.apache.tuweni.bytes.Bytes;
 import tech.pegasys.teku.infrastructure.crypto.Hash;
 import tech.pegasys.teku.infrastructure.ssz.SszList;
@@ -34,6 +38,7 @@ import tech.pegasys.teku.spec.datastructures.blobs.versions.deneb.BlobSidecar;
 import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.versions.deneb.BeaconBlockBodyDeneb;
+import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.BlobIdentifier;
 import tech.pegasys.teku.spec.logic.versions.capella.helpers.MiscHelpersCapella;
 import tech.pegasys.teku.spec.logic.versions.deneb.types.VersionedHash;
 
@@ -58,15 +63,25 @@ public class MiscHelpersDeneb extends MiscHelpersCapella {
     return kzg;
   }
 
-  /**
-   * <a
-   * href="https://github.com/ethereum/consensus-specs/blob/dev/specs/deneb/fork-choice.md#is_data_available">is_data_available</a>
-   *
-   * <p>In Deneb we don't need to retrieve data, everything is already available via blob sidecars.
-   */
   @Override
-  public boolean isDataAvailable(final List<BlobSidecar> blobSidecars) {
+  public boolean isDataAvailable(
+      final BeaconBlock block, final Collection<BlobSidecar> verifiedBlobSidecars) {
+    final Set<BlobIdentifier> verifiedBlobIdentifiers =
+        verifiedBlobSidecars.stream()
+            .map(
+                blobSidecar ->
+                    new BlobIdentifier(blobSidecar.getBlockRoot(), blobSidecar.getIndex()))
+            .collect(Collectors.toSet());
+    return IntStream.range(
+            0, BeaconBlockBodyDeneb.required(block.getBody()).getBlobKzgCommitments().size())
+        .mapToObj(index -> new BlobIdentifier(block.getRoot(), UInt64.valueOf(index)))
+        .filter(blobIdentifier -> !verifiedBlobIdentifiers.contains(blobIdentifier))
+        .findFirst()
+        .isEmpty();
+  }
 
+  @Override
+  public boolean verifyKzgProofBlobsBatch(final List<BlobSidecar> blobSidecars) {
     final List<Bytes> blobs = new ArrayList<>();
     final List<KZGProof> proofs = new ArrayList<>();
     final List<KZGCommitment> kzgCommitments = new ArrayList<>();
@@ -93,7 +108,9 @@ public class MiscHelpersDeneb extends MiscHelpersCapella {
 
   /**
    * The validation assumes that blockRoot and Slot are already matching. This is guaranteed by
-   * BlobSidecarPool and BlockBlobSidecarsTracker
+   * BlobSidecarPool and BlockBlobSidecarsTracker.
+   *
+   * <p>Doesn't require all blobs to be provided, verifies only provided blobs
    *
    * @param blobSidecars blob sidecars to validate
    * @param block block to validate blob sidecar against
