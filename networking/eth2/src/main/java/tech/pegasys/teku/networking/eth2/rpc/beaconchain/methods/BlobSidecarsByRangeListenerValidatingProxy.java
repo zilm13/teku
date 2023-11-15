@@ -84,46 +84,39 @@ public class BlobSidecarsByRangeListenerValidatingProxy extends AbstractBlobSide
   }
 
   private void verifyBlobSidecarIsAfterLast(final BlobSidecarSummary blobSidecarSummary) {
-    maybeLastBlobSidecarSummary.ifPresentOrElse(
-        lastBlobSidecarSummary -> {
-          // we have a previous blobSidecar, let's check current against it
+    if (maybeLastBlobSidecarSummary.isEmpty()) {
+      if (!blobSidecarSummary.index().equals(UInt64.ZERO)) {
+        throw new BlobSidecarsResponseInvalidResponseException(peer, BLOB_SIDECAR_UNEXPECTED_INDEX);
+      }
+      return;
+    }
 
-          if (blobSidecarSummary.inTheSameBlock(lastBlobSidecarSummary)) {
-            if (!blobSidecarSummary.index.equals(lastBlobSidecarSummary.index.increment())) {
-              throw new BlobSidecarsResponseInvalidResponseException(
-                  peer, BLOB_SIDECAR_UNEXPECTED_INDEX);
-            }
-          } else {
-            // not in the same block
+    final BlobSidecarSummary lastBlobSidecarSummary = maybeLastBlobSidecarSummary.get();
 
-            if (!blobSidecarSummary.index.isZero()) {
-              throw new BlobSidecarsResponseInvalidResponseException(
-                  peer, BLOB_SIDECAR_UNEXPECTED_INDEX);
-            }
+    if (blobSidecarSummary.inTheSameBlock(lastBlobSidecarSummary)) {
+      if (!blobSidecarSummary.index().equals(lastBlobSidecarSummary.index.increment())) {
+        throw new BlobSidecarsResponseInvalidResponseException(peer, BLOB_SIDECAR_UNEXPECTED_INDEX);
+      }
+      return;
+    }
 
-            if (blobSidecarSummary.slot.isGreaterThan(lastBlobSidecarSummary.slot.increment())) {
-              // a slot has been skipped, we can't check the parent
-              return;
-            }
+    // not in the same block
+    if (!blobSidecarSummary.index.isZero()) {
+      throw new BlobSidecarsResponseInvalidResponseException(peer, BLOB_SIDECAR_UNEXPECTED_INDEX);
+    }
 
-            if (blobSidecarSummary.slot.isLessThanOrEqualTo(lastBlobSidecarSummary.slot)) {
-              throw new BlobSidecarsResponseInvalidResponseException(
-                  peer, BLOB_SIDECAR_UNEXPECTED_SLOT);
-            }
+    if (blobSidecarSummary.slot.isGreaterThan(lastBlobSidecarSummary.slot.increment())) {
+      // a slot has been skipped, we can't check the parent
+      return;
+    }
 
-            if (!blobSidecarSummary.blockParentRoot.equals(lastBlobSidecarSummary.blockRoot)) {
-              throw new BlobSidecarsResponseInvalidResponseException(
-                  peer, BLOB_SIDECAR_UNKNOWN_PARENT);
-            }
-          }
-        },
-        () -> {
-          // first blobSidecar
-          if (!blobSidecarSummary.index.isZero()) {
-            throw new BlobSidecarsResponseInvalidResponseException(
-                peer, BLOB_SIDECAR_UNEXPECTED_INDEX);
-          }
-        });
+    if (blobSidecarSummary.slot.isLessThanOrEqualTo(lastBlobSidecarSummary.slot)) {
+      throw new BlobSidecarsResponseInvalidResponseException(peer, BLOB_SIDECAR_UNEXPECTED_SLOT);
+    }
+
+    if (!blobSidecarSummary.blockParentRoot.equals(lastBlobSidecarSummary.blockRoot)) {
+      throw new BlobSidecarsResponseInvalidResponseException(peer, BLOB_SIDECAR_UNKNOWN_PARENT);
+    }
   }
 
   record BlobSidecarSummary(Bytes32 blockRoot, UInt64 index, UInt64 slot, Bytes32 blockParentRoot) {
