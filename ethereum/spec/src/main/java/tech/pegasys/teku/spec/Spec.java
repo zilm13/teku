@@ -698,12 +698,11 @@ public class Spec {
       final int proposerIndex,
       final BeaconState blockSlotState,
       final Bytes32 parentBlockSigningRoot,
-      final Consumer<BeaconBlockBodyBuilder> bodyBuilder,
-      final Optional<Boolean> blinded) {
+      final Consumer<BeaconBlockBodyBuilder> bodyBuilder) {
     return atSlot(newSlot)
         .getBlockProposalUtil()
         .createNewUnsignedBlock(
-            newSlot, proposerIndex, blockSlotState, parentBlockSigningRoot, bodyBuilder, blinded);
+            newSlot, proposerIndex, blockSlotState, parentBlockSigningRoot, bodyBuilder);
   }
 
   // Blind Block Utils

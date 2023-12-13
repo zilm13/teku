@@ -131,8 +131,7 @@ public class BlockProposalTestUtil {
                     SafeFuture.completedFuture(
                         kzgCommitments.orElseGet(dataStructureUtil::emptyBlobKzgCommitments)));
               }
-            },
-            Optional.of(false))
+            })
         .thenApply(
             newBlockAndState -> {
               // Sign block and set block signature
