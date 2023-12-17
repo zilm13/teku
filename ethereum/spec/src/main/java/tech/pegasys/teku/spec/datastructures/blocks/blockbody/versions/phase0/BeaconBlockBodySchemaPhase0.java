@@ -105,9 +105,9 @@ public class BeaconBlockBodySchemaPhase0
   @Override
   public SafeFuture<BeaconBlockBody> createBlockBody(
       final Consumer<BeaconBlockBodyBuilder> builderConsumer) {
-    final BeaconBlockBodyBuilderPhase0 builder = new BeaconBlockBodyBuilderPhase0(this);
+    final BeaconBlockBodyBuilderPhase0 builder = new BeaconBlockBodyBuilderPhase0();
     builderConsumer.accept(builder);
-    return builder.build();
+    return builder.build(__ -> this);
   }
 
   @Override

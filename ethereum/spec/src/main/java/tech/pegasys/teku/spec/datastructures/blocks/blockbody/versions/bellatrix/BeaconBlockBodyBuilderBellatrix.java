@@ -13,35 +13,26 @@
 
 package tech.pegasys.teku.spec.datastructures.blocks.blockbody.versions.bellatrix;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
+import java.util.function.Function;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.ssz.primitive.SszBytes32;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBody;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBodyBuilder;
+import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBodySchema;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.versions.altair.BeaconBlockBodyBuilderAltair;
 import tech.pegasys.teku.spec.datastructures.execution.ExecutionPayload;
 import tech.pegasys.teku.spec.datastructures.execution.ExecutionPayloadHeader;
 import tech.pegasys.teku.spec.datastructures.type.SszSignature;
 
 public class BeaconBlockBodyBuilderBellatrix extends BeaconBlockBodyBuilderAltair {
-  private final BeaconBlockBodySchemaBellatrixImpl schema;
-  private final BlindedBeaconBlockBodySchemaBellatrixImpl blindedSchema;
   protected SafeFuture<ExecutionPayload> executionPayload;
   protected SafeFuture<ExecutionPayloadHeader> executionPayloadHeader;
 
-  public BeaconBlockBodyBuilderBellatrix() {
-    this.schema = null;
-    this.blindedSchema = null;
-  }
-
-  public BeaconBlockBodyBuilderBellatrix(
-      final BeaconBlockBodySchemaBellatrixImpl schema,
-      final BlindedBeaconBlockBodySchemaBellatrixImpl blindedSchema) {
-    this.schema = schema;
-    this.blindedSchema = blindedSchema;
-  }
+  public BeaconBlockBodyBuilderBellatrix() {}
 
   @Override
   public Boolean supportsExecutionPayload() {
@@ -62,12 +53,16 @@ public class BeaconBlockBodyBuilderBellatrix extends BeaconBlockBodyBuilderAltai
   }
 
   @Override
-  protected void validateSchema() {
-    if (isBlinded()) {
-      checkNotNull(blindedSchema, "blindedSchema must be set when blinded body has been requested");
-    } else {
-      checkNotNull(schema, "schema must be set when non blinded body has been requested");
-    }
+  @SuppressWarnings("unchecked")
+  protected <T> T getAndValidateSchema(
+      final Function<Boolean, BeaconBlockBodySchema<?>> blindedToSchemaResolver,
+      final Class<? extends T> schemaType) {
+    final BeaconBlockBodySchema<?> schema = blindedToSchemaResolver.apply(isBlinded());
+    checkNotNull(schema, "schema must be specified");
+    checkArgument(
+        schemaType.isInstance(schema),
+        String.format("Schema should be: %s", schemaType.getSimpleName()));
+    return (T) schema;
   }
 
   @Override
@@ -83,13 +78,17 @@ public class BeaconBlockBodyBuilderBellatrix extends BeaconBlockBodyBuilderAltai
   }
 
   @Override
-  public SafeFuture<BeaconBlockBody> build() {
+  public SafeFuture<BeaconBlockBody> build(
+      final Function<Boolean, BeaconBlockBodySchema<?>> blindedToSchemaResolver) {
     validate();
     if (isBlinded()) {
+      final BlindedBeaconBlockBodySchemaBellatrixImpl schema =
+          getAndValidateSchema(
+              blindedToSchemaResolver, BlindedBeaconBlockBodySchemaBellatrixImpl.class);
       return executionPayloadHeader.thenApply(
           header ->
               new BlindedBeaconBlockBodyBellatrixImpl(
-                  blindedSchema,
+                  schema,
                   new SszSignature(randaoReveal),
                   eth1Data,
                   SszBytes32.of(graffiti),
@@ -101,6 +100,9 @@ public class BeaconBlockBodyBuilderBellatrix extends BeaconBlockBodyBuilderAltai
                   syncAggregate,
                   header.toVersionBellatrix().orElseThrow()));
     }
+
+    final BeaconBlockBodySchemaBellatrixImpl schema =
+        getAndValidateSchema(blindedToSchemaResolver, BeaconBlockBodySchemaBellatrixImpl.class);
     return executionPayload.thenApply(
         payload ->
             new BeaconBlockBodyBellatrixImpl(

@@ -145,7 +145,7 @@ public class SchemaDefinitionsBellatrix extends SchemaDefinitionsAltair {
 
   @Override
   public BeaconBlockBodyBuilder createBeaconBlockBodyBuilder() {
-    return new BeaconBlockBodyBuilderBellatrix(beaconBlockBodySchema, blindedBeaconBlockBodySchema);
+    return new BeaconBlockBodyBuilderBellatrix();
   }
 
   public ExecutionPayloadSchema<?> getExecutionPayloadSchema() {

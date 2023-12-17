@@ -15,11 +15,13 @@ package tech.pegasys.teku.spec.datastructures.blocks.blockbody.versions.capella;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import java.util.function.Function;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.ssz.SszList;
 import tech.pegasys.teku.infrastructure.ssz.primitive.SszBytes32;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBody;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBodyBuilder;
+import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBodySchema;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.versions.bellatrix.BeaconBlockBodyBuilderBellatrix;
 import tech.pegasys.teku.spec.datastructures.execution.versions.capella.ExecutionPayloadCapellaImpl;
 import tech.pegasys.teku.spec.datastructures.execution.versions.capella.ExecutionPayloadHeaderCapellaImpl;
@@ -28,21 +30,9 @@ import tech.pegasys.teku.spec.datastructures.type.SszSignature;
 
 public class BeaconBlockBodyBuilderCapella extends BeaconBlockBodyBuilderBellatrix {
 
-  private final BeaconBlockBodySchemaCapellaImpl schema;
-  private final BlindedBeaconBlockBodySchemaCapellaImpl blindedSchema;
   private SszList<SignedBlsToExecutionChange> blsToExecutionChanges;
 
-  public BeaconBlockBodyBuilderCapella() {
-    this.schema = null;
-    this.blindedSchema = null;
-  }
-
-  public BeaconBlockBodyBuilderCapella(
-      final BeaconBlockBodySchemaCapellaImpl schema,
-      final BlindedBeaconBlockBodySchemaCapellaImpl blindedSchema) {
-    this.schema = schema;
-    this.blindedSchema = blindedSchema;
-  }
+  public BeaconBlockBodyBuilderCapella() {}
 
   protected SszList<SignedBlsToExecutionChange> getBlsToExecutionChanges() {
     return blsToExecutionChanges;
@@ -61,28 +51,23 @@ public class BeaconBlockBodyBuilderCapella extends BeaconBlockBodyBuilderBellatr
   }
 
   @Override
-  protected void validateSchema() {
-    if (isBlinded()) {
-      checkNotNull(blindedSchema, "blindedSchema must be set when blinded body has been requested");
-    } else {
-      checkNotNull(schema, "schema must be set when non blinded body has been requested");
-    }
-  }
-
-  @Override
   protected void validate() {
     super.validate();
     checkNotNull(blsToExecutionChanges, "blsToExecutionChanges must be specified");
   }
 
   @Override
-  public SafeFuture<BeaconBlockBody> build() {
+  public SafeFuture<BeaconBlockBody> build(
+      final Function<Boolean, BeaconBlockBodySchema<?>> blindedToSchemaResolver) {
     validate();
     if (isBlinded()) {
+      final BlindedBeaconBlockBodySchemaCapellaImpl schema =
+          getAndValidateSchema(
+              blindedToSchemaResolver, BlindedBeaconBlockBodySchemaCapellaImpl.class);
       return executionPayloadHeader.thenApply(
           header ->
               new BlindedBeaconBlockBodyCapellaImpl(
-                  blindedSchema,
+                  schema,
                   new SszSignature(randaoReveal),
                   eth1Data,
                   SszBytes32.of(graffiti),
@@ -95,6 +80,9 @@ public class BeaconBlockBodyBuilderCapella extends BeaconBlockBodyBuilderBellatr
                   (ExecutionPayloadHeaderCapellaImpl) header.toVersionCapella().orElseThrow(),
                   blsToExecutionChanges));
     }
+
+    final BeaconBlockBodySchemaCapellaImpl schema =
+        getAndValidateSchema(blindedToSchemaResolver, BeaconBlockBodySchemaCapellaImpl.class);
     return executionPayload.thenApply(
         payload ->
             new BeaconBlockBodyCapellaImpl(

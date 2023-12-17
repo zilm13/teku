@@ -101,11 +101,10 @@ class BeaconBlockBodyBellatrixTest extends AbstractBeaconBlockBodyTest<BeaconBlo
   @SuppressWarnings("unchecked")
   void builderShouldFailWhenOverridingBlindedSchemaWithANullSchema() {
     BeaconBlockBodyBuilderBellatrix beaconBlockBodyBuilderBellatrix =
-        new BeaconBlockBodyBuilderBellatrix(
-            null, mock(BlindedBeaconBlockBodySchemaBellatrixImpl.class));
+        new BeaconBlockBodyBuilderBellatrix();
     Exception exception =
         assertThrows(
-            NullPointerException.class,
+            IllegalArgumentException.class,
             () ->
                 beaconBlockBodyBuilderBellatrix
                     .randaoReveal(mock(BLSSignature.class))
@@ -117,19 +116,19 @@ class BeaconBlockBodyBellatrixTest extends AbstractBeaconBlockBodyTest<BeaconBlo
                     .deposits(mock(SszList.class))
                     .voluntaryExits(mock(SszList.class))
                     .executionPayload(mock(SafeFuture.class))
-                    .build());
-    assertEquals(
-        exception.getMessage(), "schema must be set when non blinded body has been requested");
+                    .syncAggregate(mock(SyncAggregate.class))
+                    .build(__ -> blindedBlockBodySchema));
+    assertEquals(exception.getMessage(), "Schema should be: BeaconBlockBodySchemaBellatrixImpl");
   }
 
   @Test
   @SuppressWarnings("unchecked")
   void builderShouldFailWhenOverridingSchemaWithANullBlindedSchema() {
     BeaconBlockBodyBuilderBellatrix beaconBlockBodyBuilderBellatrix =
-        new BeaconBlockBodyBuilderBellatrix(mock(BeaconBlockBodySchemaBellatrixImpl.class), null);
+        new BeaconBlockBodyBuilderBellatrix();
     Exception exception =
         assertThrows(
-            NullPointerException.class,
+            IllegalArgumentException.class,
             () ->
                 beaconBlockBodyBuilderBellatrix
                     .randaoReveal(mock(BLSSignature.class))
@@ -141,9 +140,10 @@ class BeaconBlockBodyBellatrixTest extends AbstractBeaconBlockBodyTest<BeaconBlo
                     .deposits(mock(SszList.class))
                     .voluntaryExits(mock(SszList.class))
                     .executionPayloadHeader(mock(SafeFuture.class))
-                    .build());
+                    .syncAggregate(mock(SyncAggregate.class))
+                    .build(__ -> blockBodySchema));
     assertEquals(
-        exception.getMessage(), "blindedSchema must be set when blinded body has been requested");
+        exception.getMessage(), "Schema should be: BlindedBeaconBlockBodySchemaBellatrixImpl");
   }
 
   @Override
@@ -151,7 +151,9 @@ class BeaconBlockBodyBellatrixTest extends AbstractBeaconBlockBodyTest<BeaconBlo
       final Consumer<BeaconBlockBodyBuilder> contentProvider) {
     final BeaconBlockBodyBuilder bodyBuilder = createBeaconBlockBodyBuilder();
     contentProvider.accept(bodyBuilder);
-    return bodyBuilder.build().thenApply(body -> body.toVersionBellatrix().orElseThrow());
+    return bodyBuilder
+        .build(__ -> spec.getGenesisSchemaDefinitions().getBeaconBlockBodySchema())
+        .thenApply(body -> body.toVersionBellatrix().orElseThrow());
   }
 
   @Override
@@ -159,7 +161,9 @@ class BeaconBlockBodyBellatrixTest extends AbstractBeaconBlockBodyTest<BeaconBlo
       Consumer<BeaconBlockBodyBuilder> contentProvider) {
     final BeaconBlockBodyBuilder bodyBuilder = createBeaconBlockBodyBuilder();
     contentProvider.accept(bodyBuilder);
-    return bodyBuilder.build().thenApply(body -> body.toBlindedVersionBellatrix().orElseThrow());
+    return bodyBuilder
+        .build(__ -> spec.getGenesisSchemaDefinitions().getBlindedBeaconBlockBodySchema())
+        .thenApply(body -> body.toBlindedVersionBellatrix().orElseThrow());
   }
 
   @Override

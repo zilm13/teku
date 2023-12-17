@@ -15,25 +15,21 @@ package tech.pegasys.teku.spec.datastructures.blocks.blockbody.versions.altair;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import java.util.function.Function;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.ssz.primitive.SszBytes32;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBody;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBodyBuilder;
+import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBodySchema;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.versions.phase0.BeaconBlockBodyBuilderPhase0;
 import tech.pegasys.teku.spec.datastructures.type.SszSignature;
 
 public class BeaconBlockBodyBuilderAltair extends BeaconBlockBodyBuilderPhase0 {
 
-  private final BeaconBlockBodySchemaAltairImpl schema;
+  //  private final BeaconBlockBodySchemaAltairImpl schema;
   protected SyncAggregate syncAggregate;
 
-  public BeaconBlockBodyBuilderAltair() {
-    this.schema = null;
-  }
-
-  public BeaconBlockBodyBuilderAltair(final BeaconBlockBodySchemaAltairImpl schema) {
-    this.schema = schema;
-  }
+  public BeaconBlockBodyBuilderAltair() {}
 
   @Override
   public Boolean supportsSyncAggregate() {
@@ -47,19 +43,17 @@ public class BeaconBlockBodyBuilderAltair extends BeaconBlockBodyBuilderPhase0 {
   }
 
   @Override
-  protected void validateSchema() {
-    checkNotNull(schema, "schema must be specified");
-  }
-
-  @Override
   protected void validate() {
     super.validate();
     checkNotNull(syncAggregate, "syncAggregate must be specified");
   }
 
   @Override
-  public SafeFuture<BeaconBlockBody> build() {
+  public SafeFuture<BeaconBlockBody> build(
+      final Function<Boolean, BeaconBlockBodySchema<?>> blindedToSchemaResolver) {
     validate();
+    final BeaconBlockBodySchemaAltairImpl schema =
+        getAndValidateSchema(blindedToSchemaResolver, BeaconBlockBodySchemaAltairImpl.class);
 
     return SafeFuture.completedFuture(
         new BeaconBlockBodyAltairImpl(

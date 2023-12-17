@@ -120,9 +120,9 @@ public class BlindedBeaconBlockBodySchemaBellatrixImpl
   @Override
   public SafeFuture<BeaconBlockBody> createBlockBody(
       final Consumer<BeaconBlockBodyBuilder> builderConsumer) {
-    final BeaconBlockBodyBuilderBellatrix builder = new BeaconBlockBodyBuilderBellatrix(null, this);
+    final BeaconBlockBodyBuilderBellatrix builder = new BeaconBlockBodyBuilderBellatrix();
     builderConsumer.accept(builder);
-    return builder.build();
+    return builder.build(__ -> this);
   }
 
   @Override

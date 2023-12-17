@@ -13,6 +13,7 @@
 
 package tech.pegasys.teku.spec.datastructures.blocks.blockbody;
 
+import java.util.function.Function;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.bls.BLSSignature;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
@@ -76,5 +77,6 @@ public interface BeaconBlockBodyBuilder {
   BeaconBlockBodyBuilder blobKzgCommitments(
       SafeFuture<SszList<SszKZGCommitment>> blobKzgCommitments);
 
-  SafeFuture<? extends BeaconBlockBody> build();
+  SafeFuture<? extends BeaconBlockBody> build(
+      Function<Boolean, BeaconBlockBodySchema<?>> blindedToSchemaResolver);
 }

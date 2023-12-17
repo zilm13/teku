@@ -182,7 +182,7 @@ public class SchemaDefinitionsCapella extends SchemaDefinitionsBellatrix {
 
   @Override
   public BeaconBlockBodyBuilder createBeaconBlockBodyBuilder() {
-    return new BeaconBlockBodyBuilderCapella(beaconBlockBodySchema, blindedBeaconBlockBodySchema);
+    return new BeaconBlockBodyBuilderCapella();
   }
 
   public WithdrawalSchema getWithdrawalSchema() {

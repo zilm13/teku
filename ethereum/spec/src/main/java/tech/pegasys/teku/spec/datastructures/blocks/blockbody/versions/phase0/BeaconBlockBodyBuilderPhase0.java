@@ -13,8 +13,10 @@
 
 package tech.pegasys.teku.spec.datastructures.blocks.blockbody.versions.phase0;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import java.util.function.Function;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.bls.BLSSignature;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
@@ -23,6 +25,7 @@ import tech.pegasys.teku.infrastructure.ssz.primitive.SszBytes32;
 import tech.pegasys.teku.spec.datastructures.blocks.Eth1Data;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBody;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBodyBuilder;
+import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBodySchema;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.versions.altair.SyncAggregate;
 import tech.pegasys.teku.spec.datastructures.execution.ExecutionPayload;
 import tech.pegasys.teku.spec.datastructures.execution.ExecutionPayloadHeader;
@@ -36,7 +39,6 @@ import tech.pegasys.teku.spec.datastructures.type.SszKZGCommitment;
 import tech.pegasys.teku.spec.datastructures.type.SszSignature;
 
 public class BeaconBlockBodyBuilderPhase0 implements BeaconBlockBodyBuilder {
-  private final BeaconBlockBodySchemaPhase0 schema;
   protected BLSSignature randaoReveal;
   protected Eth1Data eth1Data;
   protected Bytes32 graffiti;
@@ -46,13 +48,7 @@ public class BeaconBlockBodyBuilderPhase0 implements BeaconBlockBodyBuilder {
   protected SszList<Deposit> deposits;
   protected SszList<SignedVoluntaryExit> voluntaryExits;
 
-  public BeaconBlockBodyBuilderPhase0() {
-    this.schema = null;
-  }
-
-  public BeaconBlockBodyBuilderPhase0(final BeaconBlockBodySchemaPhase0 schema) {
-    this.schema = schema;
-  }
+  public BeaconBlockBodyBuilderPhase0() {}
 
   @Override
   public BeaconBlockBodyBuilder randaoReveal(final BLSSignature randaoReveal) {
@@ -137,10 +133,6 @@ public class BeaconBlockBodyBuilderPhase0 implements BeaconBlockBodyBuilder {
     return this;
   }
 
-  protected void validateSchema() {
-    checkNotNull(schema, "schema must be specified");
-  }
-
   protected void validate() {
     checkNotNull(randaoReveal, "randaoReveal must be specified");
     checkNotNull(eth1Data, "eth1Data must be specified");
@@ -150,12 +142,24 @@ public class BeaconBlockBodyBuilderPhase0 implements BeaconBlockBodyBuilder {
     checkNotNull(attesterSlashings, "attesterSlashings must be specified");
     checkNotNull(deposits, "deposits must be specified");
     checkNotNull(voluntaryExits, "voluntaryExits must be specified");
-    validateSchema();
+  }
+
+  @SuppressWarnings("unchecked")
+  protected <T> T getAndValidateSchema(
+      final Function<Boolean, BeaconBlockBodySchema<?>> blindedToSchemaResolver,
+      final Class<? extends T> schemaType) {
+    final BeaconBlockBodySchema<?> schema = blindedToSchemaResolver.apply(false);
+    checkNotNull(schema, "schema must be specified");
+    checkArgument(schemaType.isInstance(schema), String.format("Schema should be: %s", schemaType));
+    return (T) schema;
   }
 
   @Override
-  public SafeFuture<BeaconBlockBody> build() {
+  public SafeFuture<BeaconBlockBody> build(
+      final Function<Boolean, BeaconBlockBodySchema<?>> blindedToSchemaResolver) {
     validate();
+    final BeaconBlockBodySchemaPhase0 schema =
+        getAndValidateSchema(blindedToSchemaResolver, BeaconBlockBodySchemaPhase0.class);
     return SafeFuture.completedFuture(
         new BeaconBlockBodyPhase0(
             schema,

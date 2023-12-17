@@ -63,7 +63,9 @@ class BeaconBlockBodyCapellaTest extends AbstractBeaconBlockBodyTest<BeaconBlock
       final Consumer<BeaconBlockBodyBuilder> contentProvider) {
     final BeaconBlockBodyBuilder bodyBuilder = createBeaconBlockBodyBuilder();
     contentProvider.accept(bodyBuilder);
-    return bodyBuilder.build().thenApply(body -> body.toVersionCapella().orElseThrow());
+    return bodyBuilder
+        .build(__ -> spec.getGenesisSchemaDefinitions().getBeaconBlockBodySchema())
+        .thenApply(body -> body.toVersionCapella().orElseThrow());
   }
 
   @Override
@@ -71,7 +73,9 @@ class BeaconBlockBodyCapellaTest extends AbstractBeaconBlockBodyTest<BeaconBlock
       Consumer<BeaconBlockBodyBuilder> contentProvider) {
     final BeaconBlockBodyBuilder bodyBuilder = createBeaconBlockBodyBuilder();
     contentProvider.accept(bodyBuilder);
-    return bodyBuilder.build().thenApply(body -> body.toBlindedVersionCapella().orElseThrow());
+    return bodyBuilder
+        .build(__ -> spec.getGenesisSchemaDefinitions().getBlindedBeaconBlockBodySchema())
+        .thenApply(body -> body.toBlindedVersionCapella().orElseThrow());
   }
 
   @Override

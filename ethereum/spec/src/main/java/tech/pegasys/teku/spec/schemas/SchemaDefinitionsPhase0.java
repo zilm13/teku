@@ -105,7 +105,7 @@ public class SchemaDefinitionsPhase0 extends AbstractSchemaDefinitions {
 
   @Override
   public BeaconBlockBodyBuilder createBeaconBlockBodyBuilder() {
-    return new BeaconBlockBodyBuilderPhase0(beaconBlockBodySchema);
+    return new BeaconBlockBodyBuilderPhase0();
   }
 
   @Override
