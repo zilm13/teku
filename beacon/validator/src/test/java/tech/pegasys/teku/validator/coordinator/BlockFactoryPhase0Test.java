@@ -34,6 +34,7 @@ import tech.pegasys.teku.spec.datastructures.execution.ExecutionPayloadHeader;
 import tech.pegasys.teku.spec.datastructures.operations.SignedBlsToExecutionChange;
 import tech.pegasys.teku.spec.logic.common.statetransition.exceptions.StateTransitionException;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
+import tech.pegasys.teku.validator.coordinator.bodybuilder.BlockOperationSelectorFactory;
 
 class BlockFactoryPhase0Test extends AbstractBlockFactoryTest {
 

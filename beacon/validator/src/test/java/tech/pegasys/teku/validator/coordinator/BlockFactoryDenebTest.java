@@ -35,6 +35,7 @@ import tech.pegasys.teku.spec.datastructures.execution.BlobsBundle;
 import tech.pegasys.teku.spec.datastructures.type.SszKZGCommitment;
 import tech.pegasys.teku.spec.datastructures.type.SszKZGProof;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
+import tech.pegasys.teku.validator.coordinator.bodybuilder.BlockOperationSelectorFactory;
 
 public class BlockFactoryDenebTest extends AbstractBlockFactoryTest {
 

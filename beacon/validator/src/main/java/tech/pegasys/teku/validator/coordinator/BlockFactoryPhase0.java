@@ -30,6 +30,7 @@ import tech.pegasys.teku.spec.datastructures.blocks.BlockContainer;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBlockContainer;
 import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
+import tech.pegasys.teku.validator.coordinator.bodybuilder.BlockOperationSelectorFactory;
 
 public class BlockFactoryPhase0 implements BlockFactory {
 

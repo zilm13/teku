@@ -30,6 +30,7 @@ import tech.pegasys.teku.spec.datastructures.blocks.versions.deneb.BlockContents
 import tech.pegasys.teku.spec.datastructures.execution.BlobsBundle;
 import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
 import tech.pegasys.teku.spec.schemas.SchemaDefinitionsDeneb;
+import tech.pegasys.teku.validator.coordinator.bodybuilder.BlockOperationSelectorFactory;
 
 public class BlockFactoryDeneb extends BlockFactoryPhase0 {
 

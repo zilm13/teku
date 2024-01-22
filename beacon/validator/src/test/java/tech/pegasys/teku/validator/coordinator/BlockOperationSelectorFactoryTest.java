@@ -86,6 +86,7 @@ import tech.pegasys.teku.statetransition.forkchoice.ForkChoiceNotifier;
 import tech.pegasys.teku.statetransition.synccommittee.SignedContributionAndProofValidator;
 import tech.pegasys.teku.statetransition.synccommittee.SyncCommitteeContributionPool;
 import tech.pegasys.teku.statetransition.validation.OperationValidator;
+import tech.pegasys.teku.validator.coordinator.bodybuilder.BlockOperationSelectorFactory;
 
 class BlockOperationSelectorFactoryTest {
   private final Spec spec = TestSpecFactory.createMinimalDeneb();
