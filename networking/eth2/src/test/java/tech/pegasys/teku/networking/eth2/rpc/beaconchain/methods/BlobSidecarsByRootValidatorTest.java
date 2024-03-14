@@ -56,6 +56,40 @@ public class BlobSidecarsByRootValidatorTest {
   }
 
   @Test
+  void blobSidecarsResponseIsCorrect() {
+    final SignedBeaconBlock block = dataStructureUtil.randomSignedBeaconBlockWithCommitments(3);
+    final BlobIdentifier blobIdentifier_0 = new BlobIdentifier(block.getRoot(), UInt64.ZERO);
+    final BlobIdentifier blobIdentifier_1 = new BlobIdentifier(block.getRoot(), UInt64.ONE);
+    final BlobIdentifier blobIdentifier_2 = new BlobIdentifier(block.getRoot(), UInt64.valueOf(2));
+    final BlobSidecar blobSidecar_0 = dataStructureUtil.randomBlobSidecarForBlock(block, 0);
+    final BlobSidecar blobSidecar_1 = dataStructureUtil.randomBlobSidecarForBlock(block, 1);
+    final BlobSidecar blobSidecar_2 = dataStructureUtil.randomBlobSidecarForBlock(block, 2);
+
+    validator =
+        new BlobSidecarsByRootValidator(
+            peer, spec, kzg, List.of(blobIdentifier_0, blobIdentifier_1, blobIdentifier_2));
+    assertDoesNotThrow(() -> validator.validate(blobSidecar_0));
+    assertDoesNotThrow(() -> validator.validate(blobSidecar_1));
+    assertDoesNotThrow(() -> validator.validate(blobSidecar_2));
+  }
+
+  @Test
+  void blobSidecarResponseWithSkippedSidecar() {
+    final SignedBeaconBlock block = dataStructureUtil.randomSignedBeaconBlockWithCommitments(3);
+    final BlobIdentifier blobIdentifier_0 = new BlobIdentifier(block.getRoot(), UInt64.ZERO);
+    final BlobIdentifier blobIdentifier_1 = new BlobIdentifier(block.getRoot(), UInt64.ONE);
+    final BlobIdentifier blobIdentifier_2 = new BlobIdentifier(block.getRoot(), UInt64.valueOf(2));
+    final BlobSidecar blobSidecar_0 = dataStructureUtil.randomBlobSidecarForBlock(block, 0);
+    final BlobSidecar blobSidecar_2 = dataStructureUtil.randomBlobSidecarForBlock(block, 2);
+
+    validator =
+        new BlobSidecarsByRootValidator(
+            peer, spec, kzg, List.of(blobIdentifier_0, blobIdentifier_1, blobIdentifier_2));
+    assertDoesNotThrow(() -> validator.validate(blobSidecar_0));
+    assertDoesNotThrow(() -> validator.validate(blobSidecar_2));
+  }
+
+  @Test
   void blobSidecarIdentifierNotRequested() {
     final SignedBeaconBlock block1 = dataStructureUtil.randomSignedBeaconBlock(UInt64.ONE);
     final BlobIdentifier blobIdentifier2_0 =

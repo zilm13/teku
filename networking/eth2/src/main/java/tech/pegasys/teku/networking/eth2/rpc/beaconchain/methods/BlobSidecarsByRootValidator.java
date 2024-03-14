@@ -14,8 +14,9 @@
 package tech.pegasys.teku.networking.eth2.rpc.beaconchain.methods;
 
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Optional;
+import java.util.Queue;
+import java.util.concurrent.LinkedBlockingQueue;
 import tech.pegasys.teku.kzg.KZG;
 import tech.pegasys.teku.networking.eth2.rpc.beaconchain.methods.BlobSidecarsResponseInvalidResponseException.InvalidResponseType;
 import tech.pegasys.teku.networking.p2p.peer.Peer;
@@ -25,7 +26,7 @@ import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.BlobIdentifie
 
 public class BlobSidecarsByRootValidator extends AbstractBlobSidecarsValidator {
 
-  private final Set<BlobIdentifier> expectedBlobIdentifiers;
+  private final Queue<BlobIdentifier> expectedBlobIdentifiers;
 
   public BlobSidecarsByRootValidator(
       final Peer peer,
@@ -33,14 +34,22 @@ public class BlobSidecarsByRootValidator extends AbstractBlobSidecarsValidator {
       final KZG kzg,
       final List<BlobIdentifier> expectedBlobIdentifiers) {
     super(peer, spec, kzg);
-    this.expectedBlobIdentifiers = ConcurrentHashMap.newKeySet();
-    this.expectedBlobIdentifiers.addAll(expectedBlobIdentifiers);
+    this.expectedBlobIdentifiers = new LinkedBlockingQueue<>(expectedBlobIdentifiers);
   }
 
   public void validate(final BlobSidecar blobSidecar) {
     final BlobIdentifier blobIdentifier =
         new BlobIdentifier(blobSidecar.getBlockRoot(), blobSidecar.getIndex());
-    if (!expectedBlobIdentifiers.remove(blobIdentifier)) {
+    Optional<BlobIdentifier> maybeNextIdentifier =
+        Optional.ofNullable(expectedBlobIdentifiers.poll());
+    for (;
+        maybeNextIdentifier.isPresent();
+        maybeNextIdentifier = Optional.ofNullable(expectedBlobIdentifiers.poll())) {
+      if (maybeNextIdentifier.get().equals(blobIdentifier)) {
+        break;
+      }
+    }
+    if (maybeNextIdentifier.isEmpty()) {
       throw new BlobSidecarsResponseInvalidResponseException(
           peer, InvalidResponseType.BLOB_SIDECAR_UNEXPECTED_IDENTIFIER);
     }
