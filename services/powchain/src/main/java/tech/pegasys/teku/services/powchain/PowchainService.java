@@ -188,7 +188,6 @@ public class PowchainService extends Service {
             eth1DepositStorageChannel,
             depositSnapshotFileLoader,
             depositSnapshotStorageLoader,
-            depositTreeSnapshotConfiguration.isBundledDepositSnapshotEnabled(),
             depositTreeSnapshotConfiguration.getCustomDepositSnapshotPath().isPresent(),
             depositProcessingController,
             new MinimumGenesisTimeBlockFinder(config, eth1Provider, eth1DepositContractDeployBlock),
@@ -204,7 +203,7 @@ public class PowchainService extends Service {
     if (depositTreeSnapshotConfiguration.getCustomDepositSnapshotPath().isPresent()) {
       depositSnapshotFileLoaderBuilder.addRequiredResource(
           depositTreeSnapshotConfiguration.getCustomDepositSnapshotPath().get());
-    } else {
+    } else if (depositTreeSnapshotConfiguration.isBundledDepositSnapshotEnabled()) {
       depositTreeSnapshotConfiguration
           .getCheckpointSyncDepositSnapshotUrl()
           .ifPresent(depositSnapshotFileLoaderBuilder::addOptionalResource);
