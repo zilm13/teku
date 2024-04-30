@@ -28,16 +28,16 @@ import tech.pegasys.teku.spec.config.SpecConfigEip7594Impl;
 
 public class Eip7594Builder implements ForkConfigBuilder<SpecConfigDeneb, SpecConfigEip7594> {
 
-  private Bytes4 eip7594ForkVersion;
+  private Bytes4 eip7594ForkVersion = Bytes4.fromHexString("0x06000001");
   private UInt64 eip7594ForkEpoch;
   // division by 0 defaults protection
   private UInt64 fieldElementsPerCell = UInt64.ONE;
   private UInt64 fieldElementsPerExtBlob;
   private UInt64 kzgCommitmentsInclusionProofDepth;
-  private Integer dataColumnSidecarSubnetCount;
+  private Integer dataColumnSidecarSubnetCount = 32;
   private Integer custodyRequirement;
   private Integer minEpochsForDataColumnSidecarsRequests;
-  private Integer maxRequestDataColumnSidecars;
+  private Integer maxRequestDataColumnSidecars = 16384;
 
   Eip7594Builder() {}
 
