@@ -91,11 +91,13 @@ public class StorageSystem implements AutoCloseable {
       final StoreConfig storeConfig,
       final TimeProvider timeProvider,
       final Spec spec,
-      final ChainBuilder chainBuilder) {
+      final ChainBuilder chainBuilder,
+      final int stateRebuildTimeoutSeconds) {
     final StubMetricsSystem metricsSystem = new StubMetricsSystem();
 
     // Create and start storage server
-    final ChainStorage chainStorageServer = ChainStorage.create(database, spec, storageMode);
+    final ChainStorage chainStorageServer =
+        ChainStorage.create(database, spec, storageMode, stateRebuildTimeoutSeconds);
 
     // Create recent chain data
     final FinalizedCheckpointChannel finalizedCheckpointChannel =
@@ -109,6 +111,7 @@ public class StorageSystem implements AutoCloseable {
             timeProvider,
             SingleBlockProvider.NOOP,
             SingleBlobSidecarProvider.NOOP,
+            chainStorageServer,
             chainStorageServer,
             chainStorageServer,
             chainStorageServer,

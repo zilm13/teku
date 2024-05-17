@@ -17,6 +17,7 @@ import static com.google.common.base.Preconditions.checkState;
 import static tech.pegasys.teku.infrastructure.time.TimeUtilities.millisToSeconds;
 import static tech.pegasys.teku.infrastructure.time.TimeUtilities.secondsToMillis;
 import static tech.pegasys.teku.spec.SpecMilestone.DENEB;
+import static tech.pegasys.teku.spec.SpecMilestone.EIP7594;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Preconditions;
@@ -46,13 +47,16 @@ import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.cache.IndexedAttestationCache;
 import tech.pegasys.teku.spec.config.NetworkingSpecConfig;
 import tech.pegasys.teku.spec.config.NetworkingSpecConfigDeneb;
+import tech.pegasys.teku.spec.config.NetworkingSpecConfigEip7594;
 import tech.pegasys.teku.spec.config.SpecConfig;
 import tech.pegasys.teku.spec.config.SpecConfigAltair;
 import tech.pegasys.teku.spec.config.SpecConfigDeneb;
+import tech.pegasys.teku.spec.config.SpecConfigEip7594;
 import tech.pegasys.teku.spec.constants.Domain;
 import tech.pegasys.teku.spec.datastructures.attestation.ValidatableAttestation;
 import tech.pegasys.teku.spec.datastructures.blobs.versions.deneb.Blob;
 import tech.pegasys.teku.spec.datastructures.blobs.versions.deneb.BlobSidecar;
+import tech.pegasys.teku.spec.datastructures.blobs.versions.eip7594.DataColumnSidecar;
 import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlockAndState;
 import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlockHeader;
@@ -215,6 +219,16 @@ public class Spec {
         .map(specConfig -> (NetworkingSpecConfigDeneb) specConfig.getNetworkingConfig());
   }
 
+  /**
+   * Networking config with EIP7594 constants. Use {@link SpecConfigEip7594#required(SpecConfig)}
+   * when you are sure that EIP7594 is available, otherwise use this method
+   */
+  public Optional<NetworkingSpecConfigEip7594> getNetworkingConfigEip7594() {
+    return Optional.ofNullable(forMilestone(EIP7594))
+        .map(SpecVersion::getConfig)
+        .map(specConfig -> (NetworkingSpecConfigEip7594) specConfig.getNetworkingConfig());
+  }
+
   public SchemaDefinitions getGenesisSchemaDefinitions() {
     return getGenesisSpec().getSchemaDefinitions();
   }
@@ -292,10 +306,10 @@ public class Spec {
 
   // Genesis
   public BeaconState initializeBeaconStateFromEth1(
-      Bytes32 eth1BlockHash,
-      UInt64 eth1Timestamp,
-      List<? extends Deposit> deposits,
-      Optional<ExecutionPayloadHeader> payloadHeader) {
+      final Bytes32 eth1BlockHash,
+      final UInt64 eth1Timestamp,
+      final List<? extends Deposit> deposits,
+      final Optional<ExecutionPayloadHeader> payloadHeader) {
     final GenesisGenerator genesisGenerator = createGenesisGenerator();
     genesisGenerator.updateCandidateState(eth1BlockHash, eth1Timestamp, deposits);
     payloadHeader.ifPresent(genesisGenerator::updateExecutionPayloadHeader);
@@ -406,6 +420,17 @@ public class Spec {
         .jsonDeserialize(objectMapper.createParser(jsonFile));
   }
 
+  public DataColumnSidecar deserializeSidecar(final Bytes serializedSidecar, final UInt64 slot) {
+    return atSlot(slot)
+        .getSchemaDefinitions()
+        .toVersionEip7594()
+        .orElseThrow(
+            () ->
+                new RuntimeException("EIP7594 milestone is required to deserialize column sidecar"))
+        .getDataColumnSidecarSchema()
+        .sszDeserialize(serializedSidecar);
+  }
+
   // BeaconState
   public UInt64 getCurrentEpoch(final BeaconState state) {
     return atState(state).beaconStateAccessors().getCurrentEpoch(state);
@@ -415,7 +440,7 @@ public class Spec {
     return atState(state).beaconStateAccessors().getPreviousEpoch(state);
   }
 
-  public Bytes32 getSeed(BeaconState state, UInt64 epoch, Bytes4 domainType)
+  public Bytes32 getSeed(final BeaconState state, final UInt64 epoch, final Bytes4 domainType)
       throws IllegalArgumentException {
     return atState(state).beaconStateAccessors().getSeed(state, epoch, domainType);
   }
@@ -428,35 +453,36 @@ public class Spec {
     return atSlot(slot).miscHelpers().computeEpochAtSlot(slot);
   }
 
-  public UInt64 computeTimeAtSlot(BeaconState state, UInt64 slot) {
+  public UInt64 computeTimeAtSlot(final BeaconState state, final UInt64 slot) {
     return atSlot(slot).miscHelpers().computeTimeAtSlot(state.getGenesisTime(), slot);
   }
 
-  public Bytes computeSigningRoot(BeaconBlock block, Bytes32 domain) {
+  public Bytes computeSigningRoot(final BeaconBlock block, final Bytes32 domain) {
     return atBlock(block).miscHelpers().computeSigningRoot(block, domain);
   }
 
-  public Bytes computeSigningRoot(BeaconBlockHeader blockHeader, Bytes32 domain) {
+  public Bytes computeSigningRoot(final BeaconBlockHeader blockHeader, final Bytes32 domain) {
     return atSlot(blockHeader.getSlot()).miscHelpers().computeSigningRoot(blockHeader, domain);
   }
 
-  public Bytes computeSigningRoot(AggregateAndProof proof, Bytes32 domain) {
+  public Bytes computeSigningRoot(final AggregateAndProof proof, final Bytes32 domain) {
     return atSlot(proof.getAggregate().getData().getSlot())
         .miscHelpers()
         .computeSigningRoot(proof, domain);
   }
 
-  public Bytes computeSigningRoot(UInt64 slot, Bytes32 domain) {
+  public Bytes computeSigningRoot(final UInt64 slot, final Bytes32 domain) {
     return atSlot(slot).miscHelpers().computeSigningRoot(slot, domain);
   }
 
-  public Bytes computeBuilderApplicationSigningRoot(UInt64 slot, Merkleizable object) {
+  public Bytes computeBuilderApplicationSigningRoot(final UInt64 slot, final Merkleizable object) {
     final MiscHelpers miscHelpers = atSlot(slot).miscHelpers();
     return miscHelpers.computeSigningRoot(
         object, miscHelpers.computeDomain(Domain.APPLICATION_BUILDER));
   }
 
-  public Bytes4 computeForkDigest(Bytes4 currentVersion, Bytes32 genesisValidatorsRoot) {
+  public Bytes4 computeForkDigest(
+      final Bytes4 currentVersion, final Bytes32 genesisValidatorsRoot) {
     return atForkVersion(currentVersion)
         .miscHelpers()
         .computeForkDigest(currentVersion, genesisValidatorsRoot);
@@ -560,7 +586,7 @@ public class Spec {
         .getCurrentSlotForMillis(currentTimeMillis, genesisTimeMillis);
   }
 
-  public UInt64 getCurrentSlot(ReadOnlyStore store) {
+  public UInt64 getCurrentSlot(final ReadOnlyStore store) {
     return atTime(store.getGenesisTime(), store.getTimeSeconds())
         .getForkChoiceUtil()
         .getCurrentSlot(store);
@@ -570,36 +596,38 @@ public class Spec {
     return computeEpochAtSlot(getCurrentSlot(store));
   }
 
-  public UInt64 getSlotStartTime(UInt64 slotNumber, UInt64 genesisTime) {
+  public UInt64 getSlotStartTime(final UInt64 slotNumber, final UInt64 genesisTime) {
     return atSlot(slotNumber).getForkChoiceUtil().getSlotStartTime(slotNumber, genesisTime);
   }
 
-  public UInt64 getSlotStartTimeMillis(UInt64 slotNumber, UInt64 genesisTimeMillis) {
+  public UInt64 getSlotStartTimeMillis(final UInt64 slotNumber, final UInt64 genesisTimeMillis) {
     return atSlot(slotNumber)
         .getForkChoiceUtil()
         .getSlotStartTimeMillis(slotNumber, genesisTimeMillis);
   }
 
   public Optional<Bytes32> getAncestor(
-      ReadOnlyForkChoiceStrategy forkChoiceStrategy, Bytes32 root, UInt64 slot) {
+      final ReadOnlyForkChoiceStrategy forkChoiceStrategy, final Bytes32 root, final UInt64 slot) {
     return forGetAncestor(forkChoiceStrategy, root, slot)
         .getForkChoiceUtil()
         .getAncestor(forkChoiceStrategy, root, slot);
   }
 
   public NavigableMap<UInt64, Bytes32> getAncestors(
-      ReadOnlyForkChoiceStrategy forkChoiceStrategy,
-      Bytes32 root,
-      UInt64 startSlot,
-      UInt64 step,
-      UInt64 count) {
+      final ReadOnlyForkChoiceStrategy forkChoiceStrategy,
+      final Bytes32 root,
+      final UInt64 startSlot,
+      final UInt64 step,
+      final UInt64 count) {
     return forGetAncestor(forkChoiceStrategy, root, startSlot)
         .getForkChoiceUtil()
         .getAncestors(forkChoiceStrategy, root, startSlot, step, count);
   }
 
   public NavigableMap<UInt64, Bytes32> getAncestorsOnFork(
-      ReadOnlyForkChoiceStrategy forkChoiceStrategy, Bytes32 root, UInt64 startSlot) {
+      final ReadOnlyForkChoiceStrategy forkChoiceStrategy,
+      final Bytes32 root,
+      final UInt64 startSlot) {
     return forGetAncestor(forkChoiceStrategy, root, startSlot)
         .getForkChoiceUtil()
         .getAncestorsOnFork(forkChoiceStrategy, root, startSlot);
@@ -904,14 +932,14 @@ public class Spec {
 
   public boolean isAvailabilityOfBlobSidecarsRequiredAtEpoch(
       final ReadOnlyStore store, final UInt64 epoch) {
-    if (!forkSchedule.getSpecMilestoneAtEpoch(epoch).isGreaterThanOrEqualTo(DENEB)) {
-      return false;
-    }
-    final SpecConfig config = atEpoch(epoch).getConfig();
-    final SpecConfigDeneb specConfigDeneb = SpecConfigDeneb.required(config);
-    return getCurrentEpoch(store)
-        .minusMinZero(epoch)
-        .isLessThanOrEqualTo(specConfigDeneb.getMinEpochsForBlobSidecarsRequests());
+    return atEpoch(epoch)
+        .miscHelpers()
+        .toVersionDeneb()
+        .map(
+            denebMiscHelpers ->
+                denebMiscHelpers.isAvailabilityOfBlobSidecarsRequiredAtEpoch(
+                    getCurrentEpoch(store), epoch))
+        .orElse(false);
   }
 
   public Optional<Integer> getMaxBlobsPerBlock() {
@@ -928,15 +956,32 @@ public class Spec {
     return blobSidecar.getIndex().mod(specConfigDeneb.getBlobSidecarSubnetCount());
   }
 
+  public Optional<Integer> getNumberOfDataColumns() {
+    return getSpecConfigEip7594().map(SpecConfigEip7594::getNumberOfColumns);
+  }
+
+  public boolean isAvailabilityOfDataColumnSidecarsRequiredAtEpoch(
+      final ReadOnlyStore store, final UInt64 epoch) {
+    if (!forkSchedule.getSpecMilestoneAtEpoch(epoch).isGreaterThanOrEqualTo(EIP7594)) {
+      return false;
+    }
+    final SpecConfig config = atEpoch(epoch).getConfig();
+    final SpecConfigEip7594 specConfigEip7594 = SpecConfigEip7594.required(config);
+    return getCurrentEpoch(store)
+        .minusMinZero(epoch)
+        .isLessThanOrEqualTo(specConfigEip7594.getMinEpochsForDataColumnSidecarsRequests());
+  }
+
+  public UInt64 computeSubnetForDataColumnSidecar(final DataColumnSidecar dataColumnSidecar) {
+    final SpecConfig config = atSlot(dataColumnSidecar.getSlot()).getConfig();
+    final SpecConfigEip7594 specConfigEip7594 = SpecConfigEip7594.required(config);
+    return dataColumnSidecar.getIndex().mod(specConfigEip7594.getDataColumnSidecarSubnetCount());
+  }
+
   public Optional<UInt64> computeFirstSlotWithBlobSupport() {
     return getSpecConfigDeneb()
         .map(SpecConfigDeneb::getDenebForkEpoch)
         .map(this::computeStartSlotAtEpoch);
-  }
-
-  // Electra Utils
-  public boolean isFormerDepositMechanismDisabled(BeaconState state) {
-    return atState(state).miscHelpers().isFormerDepositMechanismDisabled(state);
   }
 
   // Deneb private helpers
@@ -950,6 +995,15 @@ public class Spec {
 
   private Optional<SpecConfigDeneb> getSpecConfigDeneb(final UInt64 slot) {
     return atSlot(slot).getConfig().toVersionDeneb();
+  }
+
+  // EIP7594 private helpers
+  private Optional<SpecConfigEip7594> getSpecConfigEip7594() {
+    final SpecMilestone highestSupportedMilestone =
+        getForkSchedule().getHighestSupportedMilestone();
+    return Optional.ofNullable(forMilestone(highestSupportedMilestone))
+        .map(SpecVersion::getConfig)
+        .flatMap(SpecConfig::toVersionEip7594);
   }
 
   // Private helpers

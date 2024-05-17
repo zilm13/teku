@@ -13,7 +13,10 @@
 
 package tech.pegasys.teku.kzg;
 
+import static ethereum.ckzg4844.CKZG4844JNI.CELLS_PER_EXT_BLOB;
+
 import java.util.List;
+import java.util.stream.Stream;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes48;
 
@@ -40,7 +43,7 @@ public interface KZG {
         public boolean verifyBlobKzgProof(
             final Bytes blob, final KZGCommitment kzgCommitment, final KZGProof kzgProof)
             throws KZGException {
-          return true;
+          return false;
         }
 
         @Override
@@ -49,7 +52,7 @@ public interface KZG {
             final List<KZGCommitment> kzgCommitments,
             final List<KZGProof> kzgProofs)
             throws KZGException {
-          return true;
+          return false;
         }
 
         @Override
@@ -61,6 +64,43 @@ public interface KZG {
         public KZGProof computeBlobKzgProof(final Bytes blob, final KZGCommitment kzgCommitment)
             throws KZGException {
           return KZGProof.fromBytesCompressed(Bytes48.ZERO);
+        }
+
+        @Override
+        public List<KZGCell> computeCells(Bytes blob) {
+          List<KZGCell> blobCells = KZGCell.splitBytes(blob);
+          return Stream.concat(
+                  blobCells.stream(), Stream.generate(() -> KZGCell.ZERO).limit(blobCells.size()))
+              .toList();
+        }
+
+        @Override
+        public List<KZGCellAndProof> computeCellsAndProofs(Bytes blob) {
+          return computeCells(blob).stream()
+              .map(cell -> new KZGCellAndProof(cell, KZGProof.fromBytesCompressed(Bytes48.ZERO)))
+              .toList();
+        }
+
+        @Override
+        public boolean verifyCellProof(
+            KZGCommitment commitment, KZGCellWithColumnId cellWithID, KZGProof proof) {
+          return false;
+        }
+
+        @Override
+        public boolean verifyCellProofBatch(
+            List<KZGCommitment> commitments,
+            List<KZGCellWithIds> cellWithIDs,
+            List<KZGProof> proofs) {
+          return false;
+        }
+
+        @Override
+        public List<KZGCell> recoverCells(List<KZGCellWithColumnId> cells) {
+          if (cells.size() < CELLS_PER_EXT_BLOB) {
+            throw new IllegalArgumentException("Can't recover from " + cells.size() + " cells");
+          }
+          return cells.stream().map(KZGCellWithColumnId::cell).limit(CELLS_PER_EXT_BLOB).toList();
         }
       };
 
@@ -78,4 +118,18 @@ public interface KZG {
   KZGCommitment blobToKzgCommitment(Bytes blob) throws KZGException;
 
   KZGProof computeBlobKzgProof(Bytes blob, KZGCommitment kzgCommitment) throws KZGException;
+
+  // EIP-7594 methods
+
+  List<KZGCell> computeCells(Bytes blob);
+
+  List<KZGCellAndProof> computeCellsAndProofs(Bytes blob);
+
+  boolean verifyCellProof(KZGCommitment commitment, KZGCellWithColumnId cellWithID, KZGProof proof);
+
+  boolean verifyCellProofBatch(
+      List<KZGCommitment> commitments, List<KZGCellWithIds> cellWithIDs, List<KZGProof> proofs);
+
+  /** Check {@link KzgRecoverAllCellsTestExecutor} for implementation requirements */
+  List<KZGCell> recoverCells(List<KZGCellWithColumnId> cells);
 }

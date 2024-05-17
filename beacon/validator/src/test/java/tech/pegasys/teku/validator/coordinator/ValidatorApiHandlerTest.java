@@ -66,8 +66,8 @@ import tech.pegasys.teku.ethereum.json.types.validator.AttesterDuty;
 import tech.pegasys.teku.ethereum.json.types.validator.ProposerDuties;
 import tech.pegasys.teku.ethereum.json.types.validator.ProposerDuty;
 import tech.pegasys.teku.ethereum.json.types.validator.SyncCommitteeDuties;
+import tech.pegasys.teku.ethereum.performance.trackers.BlockProductionAndPublishingPerformanceFactory;
 import tech.pegasys.teku.ethereum.performance.trackers.BlockProductionPerformance;
-import tech.pegasys.teku.ethereum.performance.trackers.BlockProductionPerformanceFactory;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.metrics.StubMetricsSystem;
 import tech.pegasys.teku.infrastructure.metrics.Validator.ValidatorDutyMetricUtils;
@@ -79,6 +79,7 @@ import tech.pegasys.teku.kzg.KZGCommitment;
 import tech.pegasys.teku.kzg.KZGProof;
 import tech.pegasys.teku.networking.eth2.gossip.BlobSidecarGossipChannel;
 import tech.pegasys.teku.networking.eth2.gossip.BlockGossipChannel;
+import tech.pegasys.teku.networking.eth2.gossip.DataColumnSidecarGossipChannel;
 import tech.pegasys.teku.networking.eth2.gossip.subnets.AttestationTopicSubscriber;
 import tech.pegasys.teku.networking.eth2.gossip.subnets.SyncCommitteeSubscriptionManager;
 import tech.pegasys.teku.spec.Spec;
@@ -150,6 +151,8 @@ class ValidatorApiHandlerTest {
       mock(BlockBlobSidecarsTrackersPool.class);
   private final BlobSidecarGossipChannel blobSidecarGossipChannel =
       mock(BlobSidecarGossipChannel.class);
+  private final DataColumnSidecarGossipChannel dataColumnSidecarGossipChannel =
+      mock(DataColumnSidecarGossipChannel.class);
   private final DefaultPerformanceTracker performanceTracker =
       mock(DefaultPerformanceTracker.class);
   private final ChainDataProvider chainDataProvider = mock(ChainDataProvider.class);
@@ -172,8 +175,9 @@ class ValidatorApiHandlerTest {
   private final ArgumentCaptor<List<BlobSidecar>> blobSidecarsCaptor2 =
       ArgumentCaptor.forClass(List.class);
 
-  private final BlockProductionPerformanceFactory blockProductionPerformanceFactory =
-      new BlockProductionPerformanceFactory(StubTimeProvider.withTimeInMillis(0), false, 0);
+  private final BlockProductionAndPublishingPerformanceFactory blockProductionPerformanceFactory =
+      new BlockProductionAndPublishingPerformanceFactory(
+          StubTimeProvider.withTimeInMillis(0), __ -> ZERO, false, 0, 0);
 
   private Spec spec;
   private UInt64 epochStartSlot;
@@ -201,6 +205,7 @@ class ValidatorApiHandlerTest {
             blockGossipChannel,
             blockBlobSidecarsTrackersPool,
             blobSidecarGossipChannel,
+            dataColumnSidecarGossipChannel,
             attestationPool,
             attestationManager,
             attestationTopicSubscriptions,
@@ -220,7 +225,7 @@ class ValidatorApiHandlerTest {
     when(chainDataClient.isOptimisticBlock(any())).thenReturn(false);
     doAnswer(invocation -> SafeFuture.completedFuture(invocation.getArgument(0)))
         .when(blockFactory)
-        .unblindSignedBlockIfBlinded(any());
+        .unblindSignedBlockIfBlinded(any(), any());
     when(proposersDataManager.updateValidatorRegistrations(any(), any()))
         .thenReturn(SafeFuture.COMPLETE);
   }
@@ -455,6 +460,7 @@ class ValidatorApiHandlerTest {
             blockGossipChannel,
             blockBlobSidecarsTrackersPool,
             blobSidecarGossipChannel,
+            dataColumnSidecarGossipChannel,
             attestationPool,
             attestationManager,
             attestationTopicSubscriptions,
@@ -1301,6 +1307,7 @@ class ValidatorApiHandlerTest {
             blockGossipChannel,
             blockBlobSidecarsTrackersPool,
             blobSidecarGossipChannel,
+            dataColumnSidecarGossipChannel,
             attestationPool,
             attestationManager,
             attestationTopicSubscriptions,
@@ -1337,7 +1344,7 @@ class ValidatorApiHandlerTest {
                   .toList();
             })
         .when(blockFactory)
-        .createBlobSidecars(any());
+        .createBlobSidecars(any(), any());
   }
 
   private SafeFuture<BlockImportAndBroadcastValidationResults> prepareBlockImportResult(

@@ -16,6 +16,7 @@ package tech.pegasys.teku.networking.eth2.peers;
 import java.util.List;
 import java.util.Optional;
 import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.units.bigints.UInt256;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.ssz.SszData;
 import tech.pegasys.teku.infrastructure.ssz.collections.SszBitvector;
@@ -31,8 +32,10 @@ import tech.pegasys.teku.networking.p2p.peer.Peer;
 import tech.pegasys.teku.networking.p2p.rpc.RpcResponseListener;
 import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.spec.datastructures.blobs.versions.deneb.BlobSidecar;
+import tech.pegasys.teku.spec.datastructures.blobs.versions.eip7594.DataColumnSidecar;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.BlobIdentifier;
+import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.DataColumnIdentifier;
 import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.RpcRequest;
 import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.metadata.MetadataMessage;
 import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
@@ -41,23 +44,27 @@ public interface Eth2Peer extends Peer, SyncSource {
   static Eth2Peer create(
       final Spec spec,
       final Peer peer,
+      final UInt256 discoveryNodeId,
       final BeaconChainMethods rpcMethods,
       final StatusMessageFactory statusMessageFactory,
       final MetadataMessagesFactory metadataMessagesFactory,
       final PeerChainValidator peerChainValidator,
       final RateTracker blockRequestTracker,
       final RateTracker blobSidecarsRequestTracker,
+      final RateTracker dataColumnSidecarsRequestTracker,
       final RateTracker requestTracker,
       final KZG kzg) {
     return new DefaultEth2Peer(
         spec,
         peer,
+        discoveryNodeId,
         rpcMethods,
         statusMessageFactory,
         metadataMessagesFactory,
         peerChainValidator,
         blockRequestTracker,
         blobSidecarsRequestTracker,
+        dataColumnSidecarsRequestTracker,
         requestTracker,
         kzg);
   }
@@ -93,6 +100,10 @@ public interface Eth2Peer extends Peer, SyncSource {
   SafeFuture<Void> requestBlobSidecarsByRoot(
       List<BlobIdentifier> blobIdentifiers, RpcResponseListener<BlobSidecar> listener);
 
+  SafeFuture<Void> requestDataColumnSidecarsByRoot(
+      List<DataColumnIdentifier> dataColumnIdentifiers,
+      RpcResponseListener<DataColumnSidecar> listener);
+
   SafeFuture<Optional<SignedBeaconBlock>> requestBlockBySlot(UInt64 slot);
 
   SafeFuture<Optional<SignedBeaconBlock>> requestBlockByRoot(Bytes32 blockRoot);
@@ -115,11 +126,21 @@ public interface Eth2Peer extends Peer, SyncSource {
   void adjustBlobSidecarsRequest(
       RequestApproval blobSidecarsRequest, long returnedBlobSidecarsCount);
 
+  long getAvailableDataColumnSidecarsRequestCount();
+
+  Optional<RequestApproval> approveDataColumnSidecarsRequest(
+      ResponseCallback<DataColumnSidecar> callback, long dataColumnSidecarsCount);
+
+  void adjustDataColumnSidecarsRequest(
+      RequestApproval dataColumnSidecarsRequest, long returnedDataColumnSidecarsCount);
+
   boolean approveRequest();
 
   SafeFuture<UInt64> sendPing();
 
   int getUnansweredPingCount();
+
+  UInt256 getDiscoveryNodeId();
 
   interface PeerStatusSubscriber {
     void onPeerStatus(final PeerStatus initialStatus);

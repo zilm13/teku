@@ -336,9 +336,11 @@ class Eth2PeerSelectionStrategyTest {
   private static DiscoveryPeer createDiscoveryPeer(final Bytes peerId, final int... attnets) {
     return new DiscoveryPeer(
         peerId,
+        peerId,
         new InetSocketAddress(InetAddress.getLoopbackAddress(), peerId.trimLeadingZeros().toInt()),
         ENR_FORK_ID,
         SCHEMA_DEFINITIONS.getAttnetsENRFieldSchema().ofBits(attnets),
-        SCHEMA_DEFINITIONS.getSyncnetsENRFieldSchema().getDefault());
+        SCHEMA_DEFINITIONS.getSyncnetsENRFieldSchema().getDefault(),
+        Optional.empty());
   }
 }

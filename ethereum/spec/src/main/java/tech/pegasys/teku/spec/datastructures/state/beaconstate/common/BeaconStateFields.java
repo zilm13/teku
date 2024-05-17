@@ -68,9 +68,7 @@ public enum BeaconStateFields implements SszFieldName {
   // Capella fields
   NEXT_WITHDRAWAL_INDEX,
   NEXT_WITHDRAWAL_VALIDATOR_INDEX,
-  HISTORICAL_SUMMARIES,
-  // Electra fields
-  DEPOSIT_RECEIPTS_START_INDEX;
+  HISTORICAL_SUMMARIES;
 
   private final String sszFieldName;
 

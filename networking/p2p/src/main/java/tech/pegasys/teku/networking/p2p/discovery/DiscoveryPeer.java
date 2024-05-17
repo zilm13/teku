@@ -23,26 +23,36 @@ import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.EnrForkId;
 
 public class DiscoveryPeer {
   private final Bytes publicKey;
+  private final Bytes nodeId;
   private final InetSocketAddress nodeAddress;
   private final Optional<EnrForkId> enrForkId;
   private final SszBitvector persistentAttestationSubnets;
   private final SszBitvector syncCommitteeSubnets;
+  private final Optional<Integer> dasCustodySubnetCount;
 
   public DiscoveryPeer(
       final Bytes publicKey,
+      final Bytes nodeId,
       final InetSocketAddress nodeAddress,
       final Optional<EnrForkId> enrForkId,
       final SszBitvector persistentAttestationSubnets,
-      final SszBitvector syncCommitteeSubnets) {
+      final SszBitvector syncCommitteeSubnets,
+      final Optional<Integer> dasCustodySubnetCount) {
     this.publicKey = publicKey;
+    this.nodeId = nodeId;
     this.nodeAddress = nodeAddress;
     this.enrForkId = enrForkId;
     this.persistentAttestationSubnets = persistentAttestationSubnets;
     this.syncCommitteeSubnets = syncCommitteeSubnets;
+    this.dasCustodySubnetCount = dasCustodySubnetCount;
   }
 
   public Bytes getPublicKey() {
     return publicKey;
+  }
+
+  public Bytes getNodeId() {
+    return nodeId;
   }
 
   public InetSocketAddress getNodeAddress() {
@@ -59,6 +69,10 @@ public class DiscoveryPeer {
 
   public SszBitvector getSyncCommitteeSubnets() {
     return syncCommitteeSubnets;
+  }
+
+  public Optional<Integer> getDasCustodySubnetCount() {
+    return dasCustodySubnetCount;
   }
 
   @Override

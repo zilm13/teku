@@ -213,10 +213,12 @@ public class DiscV5Service extends Service implements DiscoveryService {
     final DiscoveryPeer discoveryPeer =
         new DiscoveryPeer(
             (Bytes) nodeRecord.get(EnrField.PKEY_SECP256K1),
+            nodeRecord.getNodeId(),
             nodeRecord.getUdpAddress().get(),
             Optional.empty(),
             currentSchemaDefinitionsSupplier.getAttnetsENRFieldSchema().getDefault(),
-            currentSchemaDefinitionsSupplier.getSyncnetsENRFieldSchema().getDefault());
+            currentSchemaDefinitionsSupplier.getSyncnetsENRFieldSchema().getDefault(),
+            Optional.empty());
 
     return Optional.of(MultiaddrUtil.fromDiscoveryPeerAsUdp(discoveryPeer).toString());
   }

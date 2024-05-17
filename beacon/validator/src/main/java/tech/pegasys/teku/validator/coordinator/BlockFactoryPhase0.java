@@ -22,10 +22,13 @@ import java.util.Optional;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.bls.BLSSignature;
 import tech.pegasys.teku.ethereum.performance.trackers.BlockProductionPerformance;
+import tech.pegasys.teku.ethereum.performance.trackers.BlockPublishingPerformance;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.datastructures.blobs.versions.deneb.Blob;
 import tech.pegasys.teku.spec.datastructures.blobs.versions.deneb.BlobSidecar;
+import tech.pegasys.teku.spec.datastructures.blobs.versions.eip7594.DataColumnSidecar;
 import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlockAndState;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBlockContainer;
@@ -94,16 +97,26 @@ public class BlockFactoryPhase0 implements BlockFactory {
 
   @Override
   public SafeFuture<SignedBeaconBlock> unblindSignedBlockIfBlinded(
-      final SignedBeaconBlock maybeBlindedBlock) {
+      final SignedBeaconBlock maybeBlindedBlock,
+      final BlockPublishingPerformance blockPublishingPerformance) {
     if (maybeBlindedBlock.isBlinded()) {
       return spec.unblindSignedBeaconBlock(
-          maybeBlindedBlock.getSignedBlock(), operationSelector.createBlockUnblinderSelector());
+          maybeBlindedBlock.getSignedBlock(),
+          operationSelector.createBlockUnblinderSelector(blockPublishingPerformance));
     }
     return SafeFuture.completedFuture(maybeBlindedBlock);
   }
 
   @Override
-  public List<BlobSidecar> createBlobSidecars(final SignedBlockContainer blockContainer) {
+  public List<BlobSidecar> createBlobSidecars(
+      final SignedBlockContainer blockContainer,
+      final BlockPublishingPerformance blockPublishingPerformance) {
+    return Collections.emptyList();
+  }
+
+  @Override
+  public List<DataColumnSidecar> createDataColumnSidecars(
+      final SignedBlockContainer blockContainer, List<Blob> blobs) {
     return Collections.emptyList();
   }
 }

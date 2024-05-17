@@ -17,6 +17,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
+import io.libp2p.core.crypto.PubKey;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -24,6 +25,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.units.bigints.UInt256;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.infrastructure.events.EventChannels;
@@ -38,14 +40,17 @@ import tech.pegasys.teku.networking.eth2.gossip.forks.versions.GossipForkSubscri
 import tech.pegasys.teku.networking.eth2.gossip.forks.versions.GossipForkSubscriptionsBellatrix;
 import tech.pegasys.teku.networking.eth2.gossip.forks.versions.GossipForkSubscriptionsCapella;
 import tech.pegasys.teku.networking.eth2.gossip.forks.versions.GossipForkSubscriptionsDeneb;
-import tech.pegasys.teku.networking.eth2.gossip.forks.versions.GossipForkSubscriptionsElectra;
+import tech.pegasys.teku.networking.eth2.gossip.forks.versions.GossipForkSubscriptionsEip7594;
 import tech.pegasys.teku.networking.eth2.gossip.forks.versions.GossipForkSubscriptionsPhase0;
 import tech.pegasys.teku.networking.eth2.gossip.subnets.AttestationSubnetTopicProvider;
+import tech.pegasys.teku.networking.eth2.gossip.subnets.DataColumnSidecarSubnetTopicProvider;
+import tech.pegasys.teku.networking.eth2.gossip.subnets.NodeIdToDataColumnSidecarSubnetsCalculator;
 import tech.pegasys.teku.networking.eth2.gossip.subnets.PeerSubnetSubscriptions;
 import tech.pegasys.teku.networking.eth2.gossip.subnets.SyncCommitteeSubnetTopicProvider;
 import tech.pegasys.teku.networking.eth2.gossip.topics.Eth2GossipTopicFilter;
 import tech.pegasys.teku.networking.eth2.gossip.topics.OperationProcessor;
 import tech.pegasys.teku.networking.eth2.gossip.topics.ProcessedAttestationSubscriptionProvider;
+import tech.pegasys.teku.networking.eth2.peers.DiscoveryNodeIdExtractor;
 import tech.pegasys.teku.networking.eth2.peers.Eth2PeerManager;
 import tech.pegasys.teku.networking.eth2.peers.Eth2PeerSelectionStrategy;
 import tech.pegasys.teku.networking.eth2.rpc.beaconchain.methods.StatusMessageFactory;
@@ -55,8 +60,10 @@ import tech.pegasys.teku.networking.p2p.connection.TargetPeerRange;
 import tech.pegasys.teku.networking.p2p.discovery.DiscoveryConfig;
 import tech.pegasys.teku.networking.p2p.discovery.DiscoveryNetwork;
 import tech.pegasys.teku.networking.p2p.discovery.DiscoveryNetworkBuilder;
+import tech.pegasys.teku.networking.p2p.discovery.discv5.DiscV5Service;
 import tech.pegasys.teku.networking.p2p.gossip.PreparedGossipMessageFactory;
 import tech.pegasys.teku.networking.p2p.libp2p.LibP2PNetworkBuilder;
+import tech.pegasys.teku.networking.p2p.libp2p.LibP2PPeer;
 import tech.pegasys.teku.networking.p2p.libp2p.LibP2PPrivateKeyLoader;
 import tech.pegasys.teku.networking.p2p.libp2p.gossip.GossipTopicFilter;
 import tech.pegasys.teku.networking.p2p.network.P2PNetwork;
@@ -67,9 +74,11 @@ import tech.pegasys.teku.networking.p2p.reputation.DefaultReputationManager;
 import tech.pegasys.teku.networking.p2p.reputation.ReputationManager;
 import tech.pegasys.teku.networking.p2p.rpc.RpcMethod;
 import tech.pegasys.teku.spec.Spec;
+import tech.pegasys.teku.spec.SpecMilestone;
 import tech.pegasys.teku.spec.config.Constants;
 import tech.pegasys.teku.spec.datastructures.attestation.ValidatableAttestation;
 import tech.pegasys.teku.spec.datastructures.blobs.versions.deneb.BlobSidecar;
+import tech.pegasys.teku.spec.datastructures.blobs.versions.eip7594.DataColumnSidecar;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.spec.datastructures.operations.AttesterSlashing;
 import tech.pegasys.teku.spec.datastructures.operations.ProposerSlashing;
@@ -80,6 +89,7 @@ import tech.pegasys.teku.spec.datastructures.operations.versions.altair.Validata
 import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
 import tech.pegasys.teku.spec.datastructures.util.ForkAndSpecMilestone;
 import tech.pegasys.teku.spec.schemas.SchemaDefinitionsSupplier;
+import tech.pegasys.teku.statetransition.datacolumns.DataColumnSidecarCustody;
 import tech.pegasys.teku.storage.client.CombinedChainDataClient;
 import tech.pegasys.teku.storage.store.KeyValueStore;
 
@@ -96,6 +106,7 @@ public class Eth2P2PNetworkBuilder {
   protected P2PConfig config;
   protected EventChannels eventChannels;
   protected CombinedChainDataClient combinedChainDataClient;
+  protected DataColumnSidecarCustody dataColumnSidecarCustody;
   protected OperationProcessor<SignedBeaconBlock> gossipedBlockProcessor;
   protected OperationProcessor<BlobSidecar> gossipedBlobSidecarProcessor;
   protected OperationProcessor<ValidatableAttestation> gossipedAttestationConsumer;
@@ -121,6 +132,7 @@ public class Eth2P2PNetworkBuilder {
       gossipedSignedContributionAndProofProcessor;
   protected OperationProcessor<ValidatableSyncCommitteeMessage>
       gossipedSyncCommitteeMessageProcessor;
+  protected OperationProcessor<DataColumnSidecar> dataColumnSidecarOperationProcessor;
   protected StatusMessageFactory statusMessageFactory;
   protected KZG kzg;
   protected boolean recordMessageArrival;
@@ -137,6 +149,20 @@ public class Eth2P2PNetworkBuilder {
     // Setup eth2 handlers
     final SubnetSubscriptionService attestationSubnetService = new SubnetSubscriptionService();
     final SubnetSubscriptionService syncCommitteeSubnetService = new SubnetSubscriptionService();
+    final SubnetSubscriptionService dataColumnSidecarSubnetService =
+        new SubnetSubscriptionService();
+
+    // TODO a bit hacky solution, subject to be refactored
+    DiscoveryNodeIdExtractor discoveryNodeIdExtractor =
+        peer -> {
+          LibP2PPeer libP2PPeer = (LibP2PPeer) peer;
+          PubKey libP2PPubKey = libP2PPeer.getPubKey();
+          Bytes discoveryNodeIdBytes =
+              DiscV5Service.DEFAULT_NODE_RECORD_CONVERTER.convertPublicKeyToNodeId(
+                  Bytes.wrap(libP2PPubKey.raw()));
+          return UInt256.fromBytes(discoveryNodeIdBytes);
+        };
+
     final RpcEncoding rpcEncoding =
         RpcEncoding.createSszSnappyEncoding(spec.getNetworkingConfig().getMaxChunkSize());
     if (statusMessageFactory == null) {
@@ -146,6 +172,7 @@ public class Eth2P2PNetworkBuilder {
         Eth2PeerManager.create(
             asyncRunner,
             combinedChainDataClient,
+            dataColumnSidecarCustody,
             metricsSystem,
             attestationSubnetService,
             syncCommitteeSubnetService,
@@ -159,7 +186,8 @@ public class Eth2P2PNetworkBuilder {
             config.getPeerRateLimit(),
             config.getPeerRequestLimit(),
             spec,
-            kzg);
+            kzg,
+            discoveryNodeIdExtractor);
     final Collection<RpcMethod<?, ?, ?>> eth2RpcMethods =
         eth2PeerManager.getBeaconChainMethods().all();
     rpcMethods.addAll(eth2RpcMethods);
@@ -167,9 +195,13 @@ public class Eth2P2PNetworkBuilder {
 
     final GossipEncoding gossipEncoding = config.getGossipEncoding();
     // Build core network and inject eth2 handlers
-    final DiscoveryNetwork<?> network = buildNetwork(gossipEncoding, syncCommitteeSubnetService);
+    final DiscoveryNetwork<?> network =
+        buildNetwork(gossipEncoding, syncCommitteeSubnetService, dataColumnSidecarSubnetService);
 
     final GossipForkManager gossipForkManager = buildGossipForkManager(gossipEncoding, network);
+
+    int dasTotalCustodySubnetCount =
+        config.getTotalCustodySubnetCount(spec.forMilestone(SpecMilestone.EIP7594));
 
     return new ActiveEth2P2PNetwork(
         config.getSpec(),
@@ -181,9 +213,11 @@ public class Eth2P2PNetworkBuilder {
         combinedChainDataClient.getRecentChainData(),
         attestationSubnetService,
         syncCommitteeSubnetService,
+        dataColumnSidecarSubnetService,
         gossipEncoding,
         config.getGossipConfigurator(),
         processedAttestationSubscriptionProvider,
+        dasTotalCustodySubnetCount,
         config.isAllTopicsFilterEnabled());
   }
 
@@ -287,7 +321,7 @@ public class Eth2P2PNetworkBuilder {
           gossipedSignedContributionAndProofProcessor,
           gossipedSyncCommitteeMessageProcessor,
           gossipedSignedBlsToExecutionChangeProcessor);
-      case ELECTRA -> new GossipForkSubscriptionsElectra(
+      case EIP7594 -> new GossipForkSubscriptionsEip7594(
           forkAndSpecMilestone.getFork(),
           spec,
           asyncRunner,
@@ -304,13 +338,15 @@ public class Eth2P2PNetworkBuilder {
           gossipedVoluntaryExitConsumer,
           gossipedSignedContributionAndProofProcessor,
           gossipedSyncCommitteeMessageProcessor,
-          gossipedSignedBlsToExecutionChangeProcessor);
+          gossipedSignedBlsToExecutionChangeProcessor,
+          dataColumnSidecarOperationProcessor);
     };
   }
 
   protected DiscoveryNetwork<?> buildNetwork(
       final GossipEncoding gossipEncoding,
-      final SubnetSubscriptionService syncCommitteeSubnetService) {
+      final SubnetSubscriptionService syncCommitteeSubnetService,
+      final SubnetSubscriptionService dataColumnSidecarSubnetService) {
     final PeerPools peerPools = new PeerPools();
     final ReputationManager reputationManager =
         new DefaultReputationManager(
@@ -347,6 +383,9 @@ public class Eth2P2PNetworkBuilder {
     final SyncCommitteeSubnetTopicProvider syncCommitteeSubnetTopicProvider =
         new SyncCommitteeSubnetTopicProvider(
             combinedChainDataClient.getRecentChainData(), gossipEncoding);
+    final DataColumnSidecarSubnetTopicProvider dataColumnSidecarSubnetTopicProvider =
+        new DataColumnSidecarSubnetTopicProvider(
+            combinedChainDataClient.getRecentChainData(), gossipEncoding);
 
     final TargetPeerRange targetPeerRange =
         new TargetPeerRange(
@@ -355,6 +394,11 @@ public class Eth2P2PNetworkBuilder {
             discoConfig.getMinRandomlySelectedPeers());
     final SchemaDefinitionsSupplier currentSchemaDefinitions =
         () -> combinedChainDataClient.getRecentChainData().getCurrentSpec().getSchemaDefinitions();
+
+    final NodeIdToDataColumnSidecarSubnetsCalculator nodeIdToDataColumnSidecarSubnetsCalculator =
+        NodeIdToDataColumnSidecarSubnetsCalculator.create(
+            spec, () -> combinedChainDataClient.getRecentChainData().getCurrentSlot());
+
     final SettableLabelledGauge subnetPeerCountGauge =
         SettableLabelledGauge.create(
             metricsSystem,
@@ -373,11 +417,14 @@ public class Eth2P2PNetworkBuilder {
                 targetPeerRange,
                 network ->
                     PeerSubnetSubscriptions.create(
-                        currentSchemaDefinitions,
+                        combinedChainDataClient.getRecentChainData().getCurrentSpec(),
+                        nodeIdToDataColumnSidecarSubnetsCalculator,
                         network,
                         attestationSubnetTopicProvider,
                         syncCommitteeSubnetTopicProvider,
                         syncCommitteeSubnetService,
+                        dataColumnSidecarSubnetTopicProvider,
+                        dataColumnSidecarSubnetService,
                         config.getTargetSubnetSubscriberCount(),
                         subnetPeerCountGauge),
                 reputationManager,
@@ -402,6 +449,7 @@ public class Eth2P2PNetworkBuilder {
     assertNotNull("eventChannels", eventChannels);
     assertNotNull("metricsSystem", metricsSystem);
     assertNotNull("combinedChainDataClient", combinedChainDataClient);
+    assertNotNull("dataColumnSidecarCustody", dataColumnSidecarCustody);
     assertNotNull("keyValueStore", keyValueStore);
     assertNotNull("timeProvider", timeProvider);
     assertNotNull("gossipedBlockProcessor", gossipedBlockProcessor);
@@ -438,6 +486,13 @@ public class Eth2P2PNetworkBuilder {
       final CombinedChainDataClient combinedChainDataClient) {
     checkNotNull(combinedChainDataClient);
     this.combinedChainDataClient = combinedChainDataClient;
+    return this;
+  }
+
+  public Eth2P2PNetworkBuilder dataColumnSidecarCustody(
+      DataColumnSidecarCustody dataColumnSidecarCustody) {
+    checkNotNull(dataColumnSidecarCustody);
+    this.dataColumnSidecarCustody = dataColumnSidecarCustody;
     return this;
   }
 
@@ -524,6 +579,13 @@ public class Eth2P2PNetworkBuilder {
           gossipedSignedBlsToExecutionChangeProcessor) {
     checkNotNull(gossipedSignedBlsToExecutionChangeProcessor);
     this.gossipedSignedBlsToExecutionChangeProcessor = gossipedSignedBlsToExecutionChangeProcessor;
+    return this;
+  }
+
+  public Eth2P2PNetworkBuilder gossipedDataColumnSidecarOperationProcessor(
+      OperationProcessor<DataColumnSidecar> dataColumnSidecarOperationProcessor) {
+    checkNotNull(dataColumnSidecarOperationProcessor);
+    this.dataColumnSidecarOperationProcessor = dataColumnSidecarOperationProcessor;
     return this;
   }
 

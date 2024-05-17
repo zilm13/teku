@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.IntStream;
+import org.apache.tuweni.units.bigints.UInt256;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
@@ -62,6 +63,7 @@ class Eth2PeerTest {
   private final PeerChainValidator peerChainValidator = mock(PeerChainValidator.class);
   private final RateTracker blockRateTracker = mock(RateTracker.class);
   private final RateTracker blobSidecarsRateTracker = mock(RateTracker.class);
+  private final RateTracker dataColumnSidecarsRateTracker = mock(RateTracker.class);
   private final RateTracker rateTracker = mock(RateTracker.class);
   private final KZG kzg = mock(KZG.class);
 
@@ -71,12 +73,14 @@ class Eth2PeerTest {
       Eth2Peer.create(
           spec,
           delegate,
+          UInt256.ZERO,
           rpcMethods,
           statusMessageFactory,
           metadataMessagesFactory,
           peerChainValidator,
           blockRateTracker,
           blobSidecarsRateTracker,
+          dataColumnSidecarsRateTracker,
           rateTracker,
           kzg);
 

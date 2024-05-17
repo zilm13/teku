@@ -17,9 +17,11 @@ import com.google.common.base.Suppliers;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
+import tech.pegasys.teku.ethereum.performance.trackers.BlockPublishingPerformance;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.networking.eth2.gossip.BlobSidecarGossipChannel;
 import tech.pegasys.teku.networking.eth2.gossip.BlockGossipChannel;
+import tech.pegasys.teku.networking.eth2.gossip.DataColumnSidecarGossipChannel;
 import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.spec.SpecMilestone;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBlockContainer;
@@ -43,6 +45,7 @@ public class MilestoneBasedBlockPublisher implements BlockPublisher {
       final BlockGossipChannel blockGossipChannel,
       final BlockBlobSidecarsTrackersPool blockBlobSidecarsTrackersPool,
       final BlobSidecarGossipChannel blobSidecarGossipChannel,
+      final DataColumnSidecarGossipChannel dataColumnSidecarGossipChannel,
       final PerformanceTracker performanceTracker,
       final DutyMetrics dutyMetrics) {
     this.spec = spec;
@@ -62,13 +65,27 @@ public class MilestoneBasedBlockPublisher implements BlockPublisher {
                     blobSidecarGossipChannel,
                     performanceTracker,
                     dutyMetrics));
+    final Supplier<BlockPublisherEip7594> blockAndDataColumnSidecarsPublisherSupplier =
+        Suppliers.memoize(
+            () ->
+                new BlockPublisherEip7594(
+                    blockFactory,
+                    blockImportChannel,
+                    blockGossipChannel,
+                    blockBlobSidecarsTrackersPool,
+                    dataColumnSidecarGossipChannel,
+                    performanceTracker,
+                    dutyMetrics));
 
     // Populate forks publishers
     spec.getEnabledMilestones()
         .forEach(
             forkAndSpecMilestone -> {
               final SpecMilestone milestone = forkAndSpecMilestone.getSpecMilestone();
-              if (milestone.isGreaterThanOrEqualTo(SpecMilestone.DENEB)) {
+              if (milestone.equals(SpecMilestone.EIP7594)) {
+                registeredPublishers.put(
+                    milestone, blockAndDataColumnSidecarsPublisherSupplier.get());
+              } else if (milestone.equals(SpecMilestone.DENEB)) {
                 registeredPublishers.put(milestone, blockAndBlobSidecarsPublisherSupplier.get());
               } else {
                 registeredPublishers.put(milestone, blockPublisherPhase0);
@@ -79,10 +96,11 @@ public class MilestoneBasedBlockPublisher implements BlockPublisher {
   @Override
   public SafeFuture<SendSignedBlockResult> sendSignedBlock(
       final SignedBlockContainer blockContainer,
-      final BroadcastValidationLevel broadcastValidationLevel) {
+      final BroadcastValidationLevel broadcastValidationLevel,
+      BlockPublishingPerformance blockPublishingPerformance) {
     final SpecMilestone blockMilestone = spec.atSlot(blockContainer.getSlot()).getMilestone();
     return registeredPublishers
         .get(blockMilestone)
-        .sendSignedBlock(blockContainer, broadcastValidationLevel);
+        .sendSignedBlock(blockContainer, broadcastValidationLevel, blockPublishingPerformance);
   }
 }
