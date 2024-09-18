@@ -28,6 +28,7 @@ import tech.pegasys.teku.spec.datastructures.attestation.ValidatableAttestation;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.statetransition.blobs.BlockBlobSidecarsTrackerFactory;
 import tech.pegasys.teku.statetransition.block.BlockImportChannel;
+import tech.pegasys.teku.statetransition.datacolumns.PreImportBlockResolver;
 import tech.pegasys.teku.storage.client.RecentChainData;
 
 public class PoolFactory {
@@ -144,6 +145,15 @@ public class PoolFactory {
         historicalBlockTolerance,
         futureBlockTolerance,
         maxTrackers);
+  }
+
+  // FIXME: not actually a pool but need the same setup
+  public PreImportBlockResolver createPreImportBlockResolver(final Spec spec) {
+    return new PreImportBlockResolverImpl(
+        spec,
+        DEFAULT_HISTORICAL_SLOT_TOLERANCE,
+        FutureItems.DEFAULT_FUTURE_SLOT_TOLERANCE,
+        DEFAULT_MAX_BLOCKS);
   }
 
   @VisibleForTesting

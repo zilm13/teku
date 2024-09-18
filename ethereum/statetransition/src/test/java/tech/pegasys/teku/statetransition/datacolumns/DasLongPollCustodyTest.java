@@ -49,7 +49,7 @@ public class DasLongPollCustodyTest {
   final DelayedDasDb delayedDb = new DelayedDasDb(db, stubAsyncRunner, dbDelay);
   final DataColumnSidecarDbAccessor dbAccessor =
       DataColumnSidecarDbAccessor.builder(delayedDb).spec(spec).build();
-  final CanonicalBlockResolverStub blockResolver = new CanonicalBlockResolverStub(spec);
+  final BlockResolverStub blockResolver = new BlockResolverStub(spec);
   final UInt256 myNodeId = UInt256.ONE;
 
   final SpecConfigEip7594 config =

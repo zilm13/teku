@@ -24,14 +24,14 @@ import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBody;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
 
-public class CanonicalBlockResolverStub implements CanonicalBlockResolver {
+public class BlockResolverStub implements BlockResolver {
 
   private final Map<UInt64, BeaconBlock> chain = new HashMap<>();
 
   private final DataStructureUtil dataStructureUtil;
   private AtomicLong blockAccessCounter = new AtomicLong();
 
-  public CanonicalBlockResolverStub(Spec spec) {
+  public BlockResolverStub(Spec spec) {
     dataStructureUtil = new DataStructureUtil(0, spec);
   }
 

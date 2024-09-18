@@ -90,6 +90,7 @@ import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.statetransition.blobs.BlobSidecarManager;
 import tech.pegasys.teku.statetransition.blobs.BlockBlobSidecarsTrackersPool;
 import tech.pegasys.teku.statetransition.block.BlockImportChannel.BlockImportAndBroadcastValidationResults;
+import tech.pegasys.teku.statetransition.datacolumns.PreImportBlockResolver;
 import tech.pegasys.teku.statetransition.forkchoice.ForkChoice;
 import tech.pegasys.teku.statetransition.forkchoice.ForkChoiceNotifier;
 import tech.pegasys.teku.statetransition.forkchoice.MergeTransitionBlockValidator;
@@ -120,6 +121,7 @@ public class BlockManagerTest {
   private final int maxPendingBlocks = 10;
   private final BlockBlobSidecarsTrackersPool blockBlobSidecarsTrackersPool =
       mock(BlockBlobSidecarsTrackersPool.class);
+  private final PreImportBlockResolver preImportBlockResolver = mock(PreImportBlockResolver.class);
   private PendingPool<SignedBeaconBlock> pendingBlocks;
   private final FutureItems<SignedBeaconBlock> futureBlocks =
       FutureItems.create(SignedBeaconBlock::getSlot, mock(SettableLabelledGauge.class), "blocks");
@@ -195,6 +197,7 @@ public class BlockManagerTest {
             localRecentChainData,
             blockImporter,
             blockBlobSidecarsTrackersPool,
+            preImportBlockResolver,
             pendingBlocks,
             futureBlocks,
             invalidBlockRoots,
@@ -336,6 +339,7 @@ public class BlockManagerTest {
             localRecentChainData,
             blockImporter,
             blockBlobSidecarsTrackersPool,
+            preImportBlockResolver,
             pendingBlocks,
             futureBlocks,
             invalidBlockRoots,
@@ -1179,6 +1183,7 @@ public class BlockManagerTest {
         localRecentChainData,
         blockImporter,
         blockBlobSidecarsTrackersPool,
+        preImportBlockResolver,
         pendingBlocks,
         futureBlocks,
         invalidBlockRoots,

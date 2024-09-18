@@ -37,7 +37,7 @@ import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlockHeader;
 import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.DataColumnIdentifier;
 import tech.pegasys.teku.spec.logic.versions.eip7594.helpers.MiscHelpersEip7594;
 import tech.pegasys.teku.spec.schemas.SchemaDefinitionsEip7594;
-import tech.pegasys.teku.statetransition.datacolumns.CanonicalBlockResolver;
+import tech.pegasys.teku.statetransition.datacolumns.BlockResolver;
 import tech.pegasys.teku.statetransition.datacolumns.DataColumnSlotAndIdentifier;
 import tech.pegasys.teku.statetransition.datacolumns.db.DataColumnSidecarDbAccessor;
 
@@ -48,7 +48,7 @@ public class RecoveringSidecarRetriever implements DataColumnSidecarRetriever {
   private final KZG kzg;
   private final MiscHelpersEip7594 specHelpers;
   private final SchemaDefinitionsEip7594 schemaDefinitions;
-  private final CanonicalBlockResolver blockResolver;
+  private final BlockResolver blockResolver;
   private final DataColumnSidecarDbAccessor sidecarDB;
   private final AsyncRunner asyncRunner;
   private final Duration recoverInitiationTimeout;
@@ -62,7 +62,7 @@ public class RecoveringSidecarRetriever implements DataColumnSidecarRetriever {
       KZG kzg,
       MiscHelpersEip7594 specHelpers,
       SchemaDefinitionsEip7594 schemaDefinitionsEip7594,
-      CanonicalBlockResolver blockResolver,
+      BlockResolver blockResolver,
       DataColumnSidecarDbAccessor sidecarDB,
       AsyncRunner asyncRunner,
       Duration recoverInitiationTimeout,

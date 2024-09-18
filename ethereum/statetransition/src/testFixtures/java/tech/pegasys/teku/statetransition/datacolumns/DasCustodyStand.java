@@ -56,7 +56,7 @@ public class DasCustodyStand {
 
   public final Spec spec;
 
-  public final CanonicalBlockResolverStub blockResolver;
+  public final BlockResolverStub blockResolver;
   public final UInt256 myNodeId;
 
   public final MinCustodyPeriodSlotCalculator minCustodyPeriodSlotCalculator;
@@ -83,14 +83,13 @@ public class DasCustodyStand {
       Optional<Duration> asyncBlockResolverDelay) {
     this.spec = spec;
     this.myNodeId = myNodeId;
-    this.blockResolver = new CanonicalBlockResolverStub(spec);
-    CanonicalBlockResolver asyncBlockResolver =
+    this.blockResolver = new BlockResolverStub(spec);
+    BlockResolver asyncBlockResolver =
         asyncBlockResolverDelay
             .map(
                 delay ->
-                    (CanonicalBlockResolver)
-                        new DelayedCanonicalBlockResolver(
-                            this.blockResolver, stubAsyncRunner, delay))
+                    (BlockResolver)
+                        new DelayedBlockResolver(this.blockResolver, stubAsyncRunner, delay))
             .orElse(this.blockResolver);
     this.config = SpecConfigEip7594.required(spec.forMilestone(SpecMilestone.EIP7594).getConfig());
     this.minCustodyPeriodSlotCalculator = MinCustodyPeriodSlotCalculator.createFromSpec(spec);

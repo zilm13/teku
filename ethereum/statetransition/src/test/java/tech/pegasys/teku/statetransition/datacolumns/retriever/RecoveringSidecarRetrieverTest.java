@@ -38,7 +38,7 @@ import tech.pegasys.teku.spec.datastructures.networking.libp2p.rpc.DataColumnIde
 import tech.pegasys.teku.spec.logic.versions.eip7594.helpers.MiscHelpersEip7594;
 import tech.pegasys.teku.spec.schemas.SchemaDefinitionsEip7594;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
-import tech.pegasys.teku.statetransition.datacolumns.CanonicalBlockResolverStub;
+import tech.pegasys.teku.statetransition.datacolumns.BlockResolverStub;
 import tech.pegasys.teku.statetransition.datacolumns.DataColumnSidecarDBStub;
 import tech.pegasys.teku.statetransition.datacolumns.DataColumnSlotAndIdentifier;
 import tech.pegasys.teku.statetransition.datacolumns.db.DataColumnSidecarDB;
@@ -52,7 +52,7 @@ public class RecoveringSidecarRetrieverTest {
   final DataColumnSidecarDB db = new DataColumnSidecarDBStub();
   final DataColumnSidecarDbAccessor dbAccessor =
       DataColumnSidecarDbAccessor.builder(db).spec(spec).build();
-  final CanonicalBlockResolverStub blockResolver = new CanonicalBlockResolverStub(spec);
+  final BlockResolverStub blockResolver = new BlockResolverStub(spec);
 
   final SpecConfigEip7594 config =
       SpecConfigEip7594.required(spec.forMilestone(SpecMilestone.EIP7594).getConfig());

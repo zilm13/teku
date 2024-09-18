@@ -142,7 +142,7 @@ import tech.pegasys.teku.statetransition.block.BlockImporter;
 import tech.pegasys.teku.statetransition.block.BlockManager;
 import tech.pegasys.teku.statetransition.block.FailedExecutionPool;
 import tech.pegasys.teku.statetransition.block.ReceivedBlockEventsChannel;
-import tech.pegasys.teku.statetransition.datacolumns.CanonicalBlockResolver;
+import tech.pegasys.teku.statetransition.datacolumns.BlockResolver;
 import tech.pegasys.teku.statetransition.datacolumns.DasCustodySync;
 import tech.pegasys.teku.statetransition.datacolumns.DasLongPollCustody;
 import tech.pegasys.teku.statetransition.datacolumns.DasSamplerBasic;
@@ -153,6 +153,7 @@ import tech.pegasys.teku.statetransition.datacolumns.DataColumnSidecarManager;
 import tech.pegasys.teku.statetransition.datacolumns.DataColumnSidecarManagerImpl;
 import tech.pegasys.teku.statetransition.datacolumns.LateInitDataColumnSidecarCustody;
 import tech.pegasys.teku.statetransition.datacolumns.MinCustodyPeriodSlotCalculator;
+import tech.pegasys.teku.statetransition.datacolumns.PreImportBlockResolver;
 import tech.pegasys.teku.statetransition.datacolumns.db.DataColumnSidecarDB;
 import tech.pegasys.teku.statetransition.datacolumns.db.DataColumnSidecarDbAccessor;
 import tech.pegasys.teku.statetransition.datacolumns.retriever.DasPeerCustodyCountSupplier;
@@ -329,6 +330,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
   protected IntSupplier rejectedExecutionCountSupplier;
   protected volatile UInt256 nodeId;
   protected volatile BlobSidecarReconstructionProvider blobSidecarReconstructionProvider;
+  protected volatile PreImportBlockResolver preImportBlockResolver;
 
   public BeaconChainController(
       final ServiceConfig serviceConfig, final BeaconChainConfiguration beaconConfig) {
@@ -532,6 +534,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
     initBlockBlobSidecarsTrackersPool();
     initBlobSidecarManager();
     initDasSamplerManager();
+    initPreImportBlockResolver();
     initDataColumnSidecarManager();
     initForkChoiceStateProvider();
     initForkChoiceNotifier();
@@ -638,6 +641,15 @@ public class BeaconChainController extends Service implements BeaconChainControl
     }
   }
 
+  private void initPreImportBlockResolver() {
+    if (spec.isMilestoneSupported(SpecMilestone.EIP7594)) {
+      this.preImportBlockResolver = poolFactory.createPreImportBlockResolver(spec);
+      eventChannels.subscribe(FinalizedCheckpointChannel.class, preImportBlockResolver);
+    } else {
+      this.preImportBlockResolver = PreImportBlockResolver.NOOP;
+    }
+  }
+
   protected void initDataColumnSidecarManager() {
     if (spec.isMilestoneSupported(SpecMilestone.EIP7594)) {
       final DataColumnSidecarGossipValidator dataColumnSidecarGossipValidator =
@@ -681,7 +693,8 @@ public class BeaconChainController extends Service implements BeaconChainControl
                       pruneBuilder.pruneMarginSlots(slotsPerEpoch).prunePeriodSlots(slotsPerEpoch))
               .build();
     }
-    CanonicalBlockResolver canonicalBlockResolver =
+
+    BlockResolver canonicalBlockResolver =
         slot ->
             combinedChainDataClient
                 .getBlockAtSlotExact(slot)
@@ -697,7 +710,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
     DataColumnSidecarCustodyImpl dataColumnSidecarCustodyImpl =
         new DataColumnSidecarCustodyImpl(
             spec,
-            canonicalBlockResolver,
+            preImportBlockResolver.orElse(canonicalBlockResolver),
             dbAccessor,
             minCustodyPeriodSlotCalculator,
             nodeId,
@@ -1447,6 +1460,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
             recentChainData,
             blockImporter,
             blockBlobSidecarsTrackersPool,
+            preImportBlockResolver,
             pendingBlocks,
             futureBlocks,
             invalidBlockRoots,

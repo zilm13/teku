@@ -21,14 +21,13 @@ import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
 
-public class DelayedCanonicalBlockResolver implements CanonicalBlockResolver {
+public class DelayedBlockResolver implements BlockResolver {
 
-  private final CanonicalBlockResolver delegate;
+  private final BlockResolver delegate;
   private final AsyncRunner asyncRunner;
   private Duration delay;
 
-  public DelayedCanonicalBlockResolver(
-      CanonicalBlockResolver delegate, AsyncRunner asyncRunner, Duration delay) {
+  public DelayedBlockResolver(BlockResolver delegate, AsyncRunner asyncRunner, Duration delay) {
     this.delegate = delegate;
     this.asyncRunner = asyncRunner;
     this.delay = delay;

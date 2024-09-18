@@ -84,7 +84,7 @@ public class DataColumnSidecarCustodyImpl
 
   private final Spec spec;
   private final DataColumnSidecarDbAccessor db;
-  private final CanonicalBlockResolver blockResolver;
+  private final BlockResolver blockResolver;
   private final UInt256 nodeId;
   private final int totalCustodySubnetCount;
   private final Map<DataColumnIdentifier, ColumnSlotAndIdentifier> knownSavedIdentifiers;
@@ -95,7 +95,7 @@ public class DataColumnSidecarCustodyImpl
 
   public DataColumnSidecarCustodyImpl(
       Spec spec,
-      CanonicalBlockResolver blockResolver,
+      BlockResolver blockResolver,
       DataColumnSidecarDbAccessor db,
       MinCustodyPeriodSlotCalculator minCustodyPeriodSlotCalculator,
       UInt256 nodeId,

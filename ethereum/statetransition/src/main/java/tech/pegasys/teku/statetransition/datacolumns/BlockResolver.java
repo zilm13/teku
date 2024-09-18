@@ -18,8 +18,22 @@ import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
 
-public interface CanonicalBlockResolver {
+public interface BlockResolver {
 
   /** Should return the canonical block at slot */
   SafeFuture<Optional<BeaconBlock>> getBlockAtSlot(UInt64 slot);
+
+  default BlockResolver orElse(final BlockResolver blockResolverBackup) {
+    final BlockResolver that = this;
+    return slot ->
+        that.getBlockAtSlot(slot)
+            .thenCompose(
+                maybeBeaconBlock -> {
+                  if (maybeBeaconBlock.isPresent()) {
+                    return SafeFuture.completedFuture(maybeBeaconBlock);
+                  } else {
+                    return blockResolverBackup.getBlockAtSlot(slot);
+                  }
+                });
+  }
 }
