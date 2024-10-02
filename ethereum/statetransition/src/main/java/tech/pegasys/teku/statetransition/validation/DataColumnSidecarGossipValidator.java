@@ -32,6 +32,7 @@ import org.hyperledger.besu.plugin.services.MetricsSystem;
 import org.hyperledger.besu.plugin.services.metrics.Counter;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.collections.LimitedSet;
+import tech.pegasys.teku.infrastructure.metrics.MetricsTimedHistogram;
 import tech.pegasys.teku.infrastructure.metrics.TekuMetricCategory;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.kzg.KZG;
@@ -61,6 +62,7 @@ public class DataColumnSidecarGossipValidator {
   private final KZG kzg;
   private final Counter totalDataColumnSidecarsProcessingRequestsCounter;
   private final Counter totalDataColumnSidecarsProcessingSuccessesCounter;
+  private final MetricsTimedHistogram gossipHistogram;
 
   public static DataColumnSidecarGossipValidator create(
       final Spec spec,
@@ -122,9 +124,20 @@ public class DataColumnSidecarGossipValidator {
             "Total number of data column sidecars verified for gossip");
     this.validInclusionProofInfoSet = validInclusionProofInfoSet;
     this.validSignedBlockHeaders = validSignedBlockHeaders;
+    this.gossipHistogram = new MetricsTimedHistogram("verification_timer", "ss");
   }
 
   public SafeFuture<InternalValidationResult> validate(final DataColumnSidecar dataColumnSidecar) {
+    try (MetricsTimedHistogram.HistogramTimer histogramTimer = gossipHistogram.startTimer()) {
+      return validateImpl(dataColumnSidecar);
+    } catch (final Throwable t) {
+      // TODO: debug log
+    }
+    return SafeFuture.completedFuture(InternalValidationResult.reject("error"));
+  }
+
+  private SafeFuture<InternalValidationResult> validateImpl(
+      final DataColumnSidecar dataColumnSidecar) {
     final BeaconBlockHeader blockHeader =
         dataColumnSidecar.getSignedBeaconBlockHeader().getMessage();
 
