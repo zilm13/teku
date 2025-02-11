@@ -29,6 +29,7 @@ import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlockHeader;
 import tech.pegasys.teku.spec.datastructures.blocks.SlotAndBlockRoot;
 import tech.pegasys.teku.spec.datastructures.type.SszKZGCommitment;
 import tech.pegasys.teku.spec.datastructures.type.SszKZGProof;
+import tech.pegasys.teku.spec.datastructures.util.DataColumnSlotAndIdentifier;
 
 public class DataColumnSidecar
     extends Container6<
@@ -129,6 +130,10 @@ public class DataColumnSidecar
 
   public SlotAndBlockRoot getSlotAndBlockRoot() {
     return new SlotAndBlockRoot(getSlot(), getBlockRoot());
+  }
+
+  public DataColumnSlotAndIdentifier getDataColumnSlotAndIdentifier() {
+    return new DataColumnSlotAndIdentifier(getSlot(), getBlockRoot(), getIndex());
   }
 
   public String toLogString() {

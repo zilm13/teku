@@ -77,26 +77,39 @@ public class ColumnIdCachingDasDbTest {
   }
 
   @Test
-  void checkCacheIsInvalidated() {
+  void checkCacheIsUpdated() {
     SafeFuture<List<DataColumnSlotAndIdentifier>> res1 =
         columnIdCachingDb.getColumnIdentifiers(UInt64.valueOf(777));
 
     stubAsync.advanceTimeGradually(ofMillis(1));
 
-    SafeFuture<Void> addCompleteFuture = columnIdCachingDb.addSidecar(createSidecar(777, 77));
+    final DataColumnSidecar sidecar = createSidecar(777, 77);
+    SafeFuture<Void> addCompleteFuture1 = columnIdCachingDb.addSidecar(sidecar);
     stubAsync.advanceTimeGraduallyUntilAllDone(ofSeconds(1));
 
     assertThat(res1)
         .isCompleted(); // no assumptions on result: cache may or may not pick up latest changes
-    assertThat(addCompleteFuture).isCompleted();
-    long reads0 = db.getDbReadCounter().get();
-    assertThat(reads0).isGreaterThan(0);
+    assertThat(addCompleteFuture1).isCompleted();
+    long reads1 = db.getDbReadCounter().get();
+    assertThat(reads1).isEqualTo(1);
+    long writes1 = db.getDbWriteCounter().get();
+    assertThat(writes1).isEqualTo(1);
 
     SafeFuture<List<DataColumnSlotAndIdentifier>> res2 =
         columnIdCachingDb.getColumnIdentifiers(UInt64.valueOf(777));
     stubAsync.advanceTimeGradually(dbDelay);
 
     assertThat(res2).isCompletedWithValueMatching(l -> !l.isEmpty());
+
+    // Retry saving the same sidecar, db should not be used
+    SafeFuture<Void> addCompleteFuture2 = columnIdCachingDb.addSidecar(sidecar);
+    stubAsync.advanceTimeGraduallyUntilAllDone(ofSeconds(1));
+
+    assertThat(addCompleteFuture2).isCompleted();
+    long reads2 = db.getDbReadCounter().get();
+    assertThat(reads2).isEqualTo(reads1);
+    long writes2 = db.getDbWriteCounter().get();
+    assertThat(writes2).isEqualTo(writes1);
   }
 
   @Test

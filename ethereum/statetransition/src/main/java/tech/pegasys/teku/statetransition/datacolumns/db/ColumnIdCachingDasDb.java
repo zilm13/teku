@@ -13,6 +13,7 @@
 
 package tech.pegasys.teku.statetransition.datacolumns.db;
 
+import com.google.common.collect.Iterables;
 import java.util.BitSet;
 import java.util.HashMap;
 import java.util.List;
@@ -47,11 +48,8 @@ class ColumnIdCachingDasDb implements DataColumnSidecarDB {
         slot,
         __ ->
             new SlotCache(
-                delegateDb.getColumnIdentifiers(slot), slotToNumberOfColumns.apply(slot)));
-  }
-
-  private void invalidateSlotCache(final UInt64 slot) {
-    slotCaches.remove(slot);
+                delegateDb.getColumnIdentifiers(slot).thenApply(Function.identity()),
+                slotToNumberOfColumns.apply(slot)));
   }
 
   @Override
@@ -61,15 +59,42 @@ class ColumnIdCachingDasDb implements DataColumnSidecarDB {
 
   @Override
   public SafeFuture<Void> addSidecar(final DataColumnSidecar sidecar) {
-    invalidateSlotCache(sidecar.getSlot());
-    return delegateDb.addSidecar(sidecar);
+    return getOrCreateSlotCache(sidecar.getSlot())
+        .contains(sidecar.getDataColumnSlotAndIdentifier())
+        .thenCompose(
+            inDb -> {
+              if (inDb) {
+                return SafeFuture.COMPLETE;
+              } else {
+                return delegateDb
+                    .addSidecar(sidecar)
+                    .thenPeek(
+                        __ -> {
+                          final UInt64 slot = sidecar.getSlot();
+                          updateSlotCache(slot, sidecar.getDataColumnSlotAndIdentifier());
+                        });
+              }
+            });
+  }
+
+  private synchronized void updateSlotCache(
+      final UInt64 slot, final DataColumnSlotAndIdentifier newIdentifier) {
+    final SlotCache slotCache = getOrCreateSlotCache(slot);
+    final Map<Bytes32, BitSet> oldSet = slotCache.compactCacheFuture.getImmediately();
+    final List<DataColumnSlotAndIdentifier> columnIdentifiers =
+        SlotCache.toColumnIdentifiers(slot, oldSet);
+    final SlotCache updatedCache =
+        new SlotCache(
+            SafeFuture.completedFuture(Iterables.concat(columnIdentifiers, List.of(newIdentifier))),
+            slotToNumberOfColumns.apply(slot));
+    slotCaches.put(slot, updatedCache);
   }
 
   private static class SlotCache {
     private final SafeFuture<Map<Bytes32, BitSet>> compactCacheFuture;
 
     public SlotCache(
-        final SafeFuture<List<DataColumnSlotAndIdentifier>> dbResponseFuture,
+        final SafeFuture<Iterable<DataColumnSlotAndIdentifier>> dbResponseFuture,
         final int numberOfColumns) {
       this.compactCacheFuture =
           dbResponseFuture.thenApply(slotColumns -> toCompactCache(slotColumns, numberOfColumns));
@@ -80,8 +105,13 @@ class ColumnIdCachingDasDb implements DataColumnSidecarDB {
       return compactCacheFuture.thenApply(compactCache -> toColumnIdentifiers(slot, compactCache));
     }
 
+    public SafeFuture<Boolean> contains(final DataColumnSlotAndIdentifier id) {
+      return compactCacheFuture.thenApply(
+          cache -> toColumnIdentifiers(id.slot(), cache).contains(id));
+    }
+
     private static Map<Bytes32, BitSet> toCompactCache(
-        final List<DataColumnSlotAndIdentifier> slotColumns, final int numberOfColumns) {
+        final Iterable<DataColumnSlotAndIdentifier> slotColumns, final int numberOfColumns) {
       final Map<Bytes32, BitSet> compactCache = new HashMap<>();
       slotColumns.forEach(
           colId ->
