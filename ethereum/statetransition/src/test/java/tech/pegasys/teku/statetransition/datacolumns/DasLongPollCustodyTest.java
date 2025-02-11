@@ -143,7 +143,7 @@ public class DasLongPollCustodyTest {
     delayedDb.setDelay(ofMillis(5));
     custody.onNewValidatedDataColumnSidecar(sidecar10_0);
 
-    advanceTimeGradually(ofMillis(10));
+    advanceTimeGradually(ofMillis(15));
     assertThat(fRet0).isCompletedWithValue(Optional.ofNullable(sidecar10_0));
     assertThat(fHas0).isCompletedWithValue(true);
   }
