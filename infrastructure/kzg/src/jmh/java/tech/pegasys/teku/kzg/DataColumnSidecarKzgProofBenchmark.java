@@ -25,14 +25,24 @@ import org.openjdk.jmh.infra.Blackhole;
 @Fork(1)
 @State(Scope.Thread)
 public class DataColumnSidecarKzgProofBenchmark {
-  SidecarBenchmarkConfig config = new SidecarBenchmarkConfig(false, false);
+  SidecarBenchmarkConfig configCKZG = new SidecarBenchmarkConfig(false, false);
+  SidecarBenchmarkConfig configCRust = new SidecarBenchmarkConfig(true, false);
 
   @Benchmark
   @Warmup(iterations = 5, time = 2000, timeUnit = TimeUnit.MILLISECONDS)
   @Measurement(iterations = 10)
-  public void test(Blackhole bh) {
+  public void testCKZG(Blackhole bh) {
     bh.consume(
-        config.miscHelpersFulu.verifyDataColumnSidecarKzgProofs(
-            config.kzg, config.dataColumnSidecars.stream().findAny().orElseThrow()));
+        configCKZG.miscHelpersFulu.verifyDataColumnSidecarKzgProofs(
+            configCKZG.kzg, configCKZG.dataColumnSidecars.stream().findAny().orElseThrow()));
+  }
+
+  @Benchmark
+  @Warmup(iterations = 5, time = 2000, timeUnit = TimeUnit.MILLISECONDS)
+  @Measurement(iterations = 10)
+  public void testRust(Blackhole bh) {
+    bh.consume(
+            configCRust.miscHelpersFulu.verifyDataColumnSidecarKzgProofs(
+                    configCRust.kzg, configCRust.dataColumnSidecars.stream().findAny().orElseThrow()));
   }
 }
