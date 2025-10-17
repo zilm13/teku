@@ -15,67 +15,55 @@ package tech.pegasys.teku.networking.eth2.peers;
 
 import java.util.Objects;
 import java.util.Optional;
-import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.units.bigints.UInt256;
 import tech.pegasys.teku.networking.p2p.peer.NodeId;
 
 public final class PeerId {
-  private final NodeId existingId;
-  private final Bytes candidateId;
+  private final NodeId libp2pId;
+  private final UInt256 discoveryId;
 
-  private PeerId(final NodeId existingId, final Bytes candidateId) {
-    this.existingId = existingId;
-    this.candidateId = candidateId;
+  private PeerId(final NodeId libp2pId, final UInt256 discoveryId) {
+    this.libp2pId = libp2pId;
+    this.discoveryId = discoveryId;
   }
 
-  public static PeerId fromExistingId(final NodeId id) {
-    Objects.requireNonNull(id, "id must not be null");
-    return new PeerId(id, null);
+  public static PeerId ofExisting(final NodeId libp2pId, final Optional<UInt256> discoveryId) {
+    Objects.requireNonNull(libp2pId, "id must not be null");
+    return new PeerId(libp2pId, discoveryId.orElse(null));
   }
 
-  public static PeerId fromCandidateId(final Bytes id) {
+  public static PeerId ofCandidate(final UInt256 id) {
     Objects.requireNonNull(id, "id must not be null");
     return new PeerId(null, id);
   }
 
   public boolean isExisting() {
-    return existingId != null;
+    return libp2pId != null;
   }
 
   public boolean isCandidate() {
-    return candidateId != null;
+    return libp2pId == null;
   }
 
-  public Optional<NodeId> getExistingId() {
-    return existingId == null ? Optional.empty() : Optional.of(existingId);
+  public Optional<NodeId> getLibp2pId() {
+    return Optional.ofNullable(libp2pId);
   }
 
-  public Bytes getCandidateId() {
-    return candidateId;
-  }
-
-  /** Returns canonical bytes representation for equality/hashCode */
-  public Bytes asBytes() {
-    return isExisting() ? existingId.toBytes() : candidateId;
-  }
-
-  public UInt256 toUInt256() {
-    return UInt256.fromBytes(asBytes());
+  public Optional<UInt256> getDiscoveryId() {
+    return Optional.ofNullable(discoveryId);
   }
 
   @Override
-  public boolean equals(final Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (!(o instanceof PeerId other)) {
+  public boolean equals(Object o) {
+    if (!(o instanceof PeerId peerId)) {
       return false;
     }
-    return Objects.equals(this.asBytes(), other.asBytes());
+    return Objects.equals(libp2pId, peerId.libp2pId)
+        && Objects.equals(discoveryId, peerId.discoveryId);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(asBytes());
+    return Objects.hash(libp2pId, discoveryId);
   }
 }

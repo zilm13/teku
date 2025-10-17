@@ -102,8 +102,7 @@ public class PeerSubnetSubscriptions {
                                   .forEach(
                                       subscriber ->
                                           b.addSubscriber(
-                                              attestationSubnet,
-                                              PeerId.fromExistingId(subscriber)));
+                                              attestationSubnet, PeerId.ofExisting(subscriber)));
                             }))
             .syncCommitteeSubnetSubscriptions(
                 b ->
@@ -121,8 +120,7 @@ public class PeerSubnetSubscriptions {
                                   .forEach(
                                       subscriber ->
                                           b.addSubscriber(
-                                              syncCommitteeSubnet,
-                                              PeerId.fromExistingId(subscriber)));
+                                              syncCommitteeSubnet, PeerId.ofExisting(subscriber)));
                             }))
             .dataColumnSidecarSubnetSubscriptions(
                 b ->
@@ -139,7 +137,7 @@ public class PeerSubnetSubscriptions {
                                   .forEach(
                                       subscriber ->
                                           b.addSubscriber(
-                                              columnSubnet, PeerId.fromExistingId(subscriber)));
+                                              columnSubnet, PeerId.ofExisting(subscriber)));
                             }))
             .build();
     updateMetrics(

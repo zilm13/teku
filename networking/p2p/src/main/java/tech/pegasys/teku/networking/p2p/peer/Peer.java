@@ -15,6 +15,7 @@ package tech.pegasys.teku.networking.p2p.peer;
 
 import java.util.Objects;
 import java.util.Optional;
+import org.apache.tuweni.units.bigints.UInt256;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.networking.p2p.libp2p.PeerClientType;
 import tech.pegasys.teku.networking.p2p.network.PeerAddress;
@@ -82,4 +83,8 @@ public interface Peer {
   }
 
   void adjustReputation(final ReputationAdjustment adjustment);
+
+  default Optional<UInt256> getDiscoveryNodeId() {
+    return Optional.empty();
+  }
 }

@@ -154,8 +154,6 @@ public interface Eth2Peer extends Peer, SyncSource {
 
   int getUnansweredPingCount();
 
-  Optional<UInt256> getDiscoveryNodeId();
-
   interface PeerStatusSubscriber {
     void onPeerStatus(final PeerStatus initialStatus);
   }

@@ -187,7 +187,9 @@ public class Eth2PeerSelectionStrategy implements PeerSelectionStrategy {
             peersBySource.getOrDefault(SCORE_BASED, emptyList()).stream())
         .sorted(
             Comparator.comparing(
-                id -> peerScorer.scoreExistingPeer(PeerId.fromExistingId(id.getId()))))
+                id ->
+                    peerScorer.scoreExistingPeer(
+                        PeerId.ofExisting(id.getId(), id.getDiscoveryNodeId()))))
         .limit(peersToDrop)
         .toList();
   }

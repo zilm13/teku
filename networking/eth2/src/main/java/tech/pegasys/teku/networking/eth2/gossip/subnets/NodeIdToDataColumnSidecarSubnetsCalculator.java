@@ -42,12 +42,13 @@ public interface NodeIdToDataColumnSidecarSubnetsCalculator {
             .flatMap(
                 slot -> {
                   final SpecVersion version = spec.atSlot(slot);
-                  if (version.getMilestone().isGreaterThanOrEqualTo(SpecMilestone.FULU)) {
+                  if (version.getMilestone().isGreaterThanOrEqualTo(SpecMilestone.FULU)
+                      && peerId.getDiscoveryId().isPresent()) {
                     final SpecConfigFulu config = SpecConfigFulu.required(version.getConfig());
                     final List<UInt64> subnets =
                         MiscHelpersFulu.required(version.miscHelpers())
                             .computeDataColumnSidecarBackboneSubnets(
-                                peerId.toUInt256(),
+                                peerId.getDiscoveryId().get(),
                                 groupCount.orElse(config.getCustodyRequirement()));
                     return Optional.of(
                         SszBitvectorSchema.create(config.getDataColumnSidecarSubnetCount())

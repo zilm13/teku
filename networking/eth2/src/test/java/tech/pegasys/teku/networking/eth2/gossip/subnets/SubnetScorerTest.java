@@ -74,16 +74,16 @@ class SubnetScorerTest {
             PeerSubnetSubscriptions.createEmpty(
                 () -> schemaDefinitions,
                 SszBitvectorSchema.create(DATA_COLUMN_SIDECAR_SUBNET_COUNT)));
-    assertThat(scorer.scoreExistingPeer(PeerId.fromExistingId(new MockNodeId(1)))).isZero();
+    assertThat(scorer.scoreExistingPeer(PeerId.ofExisting(new MockNodeId(1)))).isZero();
   }
 
   @Test
   void shouldScoreExistingPeersOnSubnetsWithFewPeersMoreHighly() {
-    final PeerId node1 = PeerId.fromExistingId(new MockNodeId(0));
-    final PeerId node2 = PeerId.fromExistingId(new MockNodeId(1));
-    final PeerId node3 = PeerId.fromExistingId(new MockNodeId(2));
-    final PeerId node4 = PeerId.fromExistingId(new MockNodeId(3));
-    final PeerId node5 = PeerId.fromExistingId(new MockNodeId(4));
+    final PeerId node1 = PeerId.ofExisting(new MockNodeId(0));
+    final PeerId node2 = PeerId.ofExisting(new MockNodeId(1));
+    final PeerId node3 = PeerId.ofExisting(new MockNodeId(2));
+    final PeerId node4 = PeerId.ofExisting(new MockNodeId(3));
+    final PeerId node5 = PeerId.ofExisting(new MockNodeId(4));
     final SubnetScorer scorer =
         SubnetScorer.create(
             PeerSubnetSubscriptions.builder(
@@ -132,9 +132,9 @@ class SubnetScorerTest {
 
   @Test
   void shouldScoreCandidatePeersOnSubnetsWithFewPeersMoreHighly() {
-    final PeerId node1 = PeerId.fromExistingId(new MockNodeId(0));
-    final PeerId node2 = PeerId.fromExistingId(new MockNodeId(1));
-    final PeerId node3 = PeerId.fromExistingId(new MockNodeId(2));
+    final PeerId node1 = PeerId.ofExisting(new MockNodeId(0));
+    final PeerId node2 = PeerId.ofExisting(new MockNodeId(1));
+    final PeerId node3 = PeerId.ofExisting(new MockNodeId(2));
     final SubnetScorer scorer =
         SubnetScorer.create(
             PeerSubnetSubscriptions.builder(
@@ -248,7 +248,7 @@ class SubnetScorerTest {
 
   @Test
   void scoreCandidatePeer_shouldConsiderSubnetCountChanges() {
-    final PeerId node1 = PeerId.fromExistingId(new MockNodeId(0));
+    final PeerId node1 = PeerId.ofExisting(new MockNodeId(0));
     final SubnetScorer scorer =
         SubnetScorer.create(
             PeerSubnetSubscriptions.builder(
@@ -285,7 +285,7 @@ class SubnetScorerTest {
 
   @Test
   void scoreCandidatePeer_shouldScoreAttestationAndSyncCommitteeSubnetsCombined() {
-    final PeerId node1 = PeerId.fromExistingId(new MockNodeId(0));
+    final PeerId node1 = PeerId.ofExisting(new MockNodeId(0));
     final SubnetScorer scorer =
         SubnetScorer.create(
             PeerSubnetSubscriptions.builder(
@@ -361,9 +361,9 @@ class SubnetScorerTest {
 
   @Test
   void scoreCandidatePeer_shouldScoreLowerWithMoreExistingSubscribers() {
-    final PeerId node1 = PeerId.fromExistingId(new MockNodeId(0));
-    final PeerId node2 = PeerId.fromExistingId(new MockNodeId(1));
-    final PeerId node3 = PeerId.fromExistingId(new MockNodeId(2));
+    final PeerId node1 = PeerId.ofExisting(new MockNodeId(0));
+    final PeerId node2 = PeerId.ofExisting(new MockNodeId(1));
+    final PeerId node3 = PeerId.ofExisting(new MockNodeId(2));
     final SubnetScorer scorer =
         SubnetScorer.create(
             PeerSubnetSubscriptions.builder(
@@ -407,7 +407,7 @@ class SubnetScorerTest {
 
   @Test
   void shouldScoreDataColumnSidecarSubnets() {
-    final PeerId existingPeer = PeerId.fromExistingId(new MockNodeId(0));
+    final PeerId existingPeer = PeerId.ofExisting(new MockNodeId(0));
     final SubnetScorer scorer =
         SubnetScorer.create(
             PeerSubnetSubscriptions.builder(
@@ -580,7 +580,7 @@ class SubnetScorerTest {
 
   @Test
   void shouldScoreWithAllSubnetTypesAndChanges() {
-    final PeerId existingPeer = PeerId.fromExistingId(new MockNodeId(0));
+    final PeerId existingPeer = PeerId.ofExisting(new MockNodeId(0));
     final SubnetScorer scorer =
         SubnetScorer.create(
             PeerSubnetSubscriptions.builder(

@@ -95,7 +95,7 @@ public class SubnetScorer implements PeerScorer {
       selectedPeers.add(highestScoringPeer);
       remainingPeers.remove(highestScoringPeer);
 
-      PeerId highestScoringPeerId = PeerId.fromCandidateId(highestScoringPeer.getNodeId());
+      PeerId highestScoringPeerId = PeerId.ofCandidate(highestScoringPeer.getNodeId());
       peerSubnetSubscriptions
           .getAttestationSubnetSubscriptions(highestScoringPeerId)
           .streamAllSetBits()
@@ -128,7 +128,7 @@ public class SubnetScorer implements PeerScorer {
         candidate,
         cachingCandidate ->
             peerSubnetSubscriptions.getDataColumnSidecarSubnetSubscriptionsByNodeId(
-                PeerId.fromCandidateId(cachingCandidate.getNodeId()),
+                PeerId.ofCandidate(cachingCandidate.getNodeId()),
                 cachingCandidate.getDasCustodySubnetCount()));
   }
 

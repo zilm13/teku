@@ -63,11 +63,11 @@ class Eth2PeerSelectionStrategyTest {
   private static final DiscoveryPeer DISCOVERY_PEER2 = createDiscoveryPeer(PEER2, 2);
   private static final DiscoveryPeer DISCOVERY_PEER3 = createDiscoveryPeer(PEER3, 3);
   private static final StubPeer STUB_PEER1 = new StubPeer(PEER1_NODEID);
-  private static final PeerId PEERID_PEER1 = PeerId.fromExistingId(PEER1_NODEID);
+  private static final PeerId PEERID_PEER1 = PeerId.ofExisting(PEER1_NODEID);
   private static final StubPeer STUB_PEER2 = new StubPeer(PEER2_NODEID);
-  private static final PeerId PEERID_PEER2 = PeerId.fromExistingId(PEER2_NODEID);
+  private static final PeerId PEERID_PEER2 = PeerId.ofExisting(PEER2_NODEID);
   private static final StubPeer STUB_PEER3 = new StubPeer(PEER3_NODEID);
-  private static final PeerId PEERID_PEER3 = PeerId.fromExistingId(PEER3_NODEID);
+  private static final PeerId PEERID_PEER3 = PeerId.ofExisting(PEER3_NODEID);
 
   @SuppressWarnings("unchecked")
   private final P2PNetwork<Peer> network = mock(P2PNetwork.class);

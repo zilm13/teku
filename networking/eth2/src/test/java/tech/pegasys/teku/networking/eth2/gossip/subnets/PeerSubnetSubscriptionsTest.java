@@ -62,12 +62,12 @@ import tech.pegasys.teku.spec.schemas.SchemaDefinitionsSupplier;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
 
 class PeerSubnetSubscriptionsTest {
-  private static final PeerId EXISTING_PEER1 = PeerId.fromExistingId(new MockNodeId(1));
-  private static final PeerId EXISTING_PEER2 = PeerId.fromExistingId(new MockNodeId(2));
-  private static final PeerId EXISTING_PEER3 = PeerId.fromExistingId(new MockNodeId(3));
-  private static final PeerId CANDIDATE_PEER1 = PeerId.fromCandidateId(new MockNodeId(1).toBytes());
-  private static final PeerId CANDIDATE_PEER2 = PeerId.fromCandidateId(new MockNodeId(2).toBytes());
-  private static final PeerId CANDIDATE_PEER3 = PeerId.fromCandidateId(new MockNodeId(3).toBytes());
+  private static final PeerId EXISTING_PEER1 = PeerId.ofExisting(new MockNodeId(1));
+  private static final PeerId EXISTING_PEER2 = PeerId.ofExisting(new MockNodeId(2));
+  private static final PeerId EXISTING_PEER3 = PeerId.ofExisting(new MockNodeId(3));
+  private static final PeerId CANDIDATE_PEER1 = PeerId.ofCandidate(new MockNodeId(1).toBytes());
+  private static final PeerId CANDIDATE_PEER2 = PeerId.ofCandidate(new MockNodeId(2).toBytes());
+  private static final PeerId CANDIDATE_PEER3 = PeerId.ofCandidate(new MockNodeId(3).toBytes());
   private static final String BEACON_BLOCK_SUBNET_TOPIC = "beacon_block";
   private static final String ATTESTATION_SUBNET_TOPIC_PREFIX = "attestation_";
   private static final String SYNC_COMMITTEE_SUBNET_TOPIC_PREFIX = "sync_committee_";
@@ -113,7 +113,7 @@ class PeerSubnetSubscriptionsTest {
   private Set<NodeId> extractNodeIds(final PeerId... peers) {
     return Arrays.stream(peers)
         .filter(PeerId::isExisting)
-        .map(PeerId::getExistingId)
+        .map(PeerId::getLibp2pId)
         .flatMap(Optional::stream)
         .collect(Collectors.toSet());
   }
@@ -205,7 +205,7 @@ class PeerSubnetSubscriptionsTest {
                         List.of(CANDIDATE_PEER1, CANDIDATE_PEER2, CANDIDATE_PEER3), peer2subnets),
                     2)
                 .stream()
-                .map(candidate -> PeerId.fromCandidateId(candidate.getNodeId()))
+                .map(candidate -> PeerId.ofCandidate(candidate.getNodeId()))
                 .toList())
         .containsExactlyInAnyOrder(CANDIDATE_PEER1, CANDIDATE_PEER3);
   }
@@ -239,7 +239,7 @@ class PeerSubnetSubscriptionsTest {
       assertThat(
               subscriptions
                   .getDataColumnSidecarSubnetSubscriptions(
-                      PeerId.fromCandidateId(nodeIdEntry.getKey().toBytes()))
+                      PeerId.ofCandidate(nodeIdEntry.getKey().toBytes()))
                   .getAllSetBits()
                   .intStream()
                   .boxed()
@@ -286,7 +286,7 @@ class PeerSubnetSubscriptionsTest {
                         List.of(CANDIDATE_PEER1, CANDIDATE_PEER2, CANDIDATE_PEER3), peer2subnets),
                     2)
                 .stream()
-                .map(candidate -> PeerId.fromCandidateId(candidate.getNodeId()))
+                .map(candidate -> PeerId.ofCandidate(candidate.getNodeId()))
                 .toList())
         .containsExactlyInAnyOrder(CANDIDATE_PEER1, CANDIDATE_PEER3);
   }
@@ -331,7 +331,7 @@ class PeerSubnetSubscriptionsTest {
                 .selectCandidatePeers(
                     makeCandidatePeers(List.of(CANDIDATE_PEER2, CANDIDATE_PEER3), peer2subnets), 1)
                 .stream()
-                .map(candidate -> PeerId.fromCandidateId(candidate.getNodeId()))
+                .map(candidate -> PeerId.ofCandidate(candidate.getNodeId()))
                 .toList())
         .containsExactlyInAnyOrder(CANDIDATE_PEER3);
   }
@@ -350,7 +350,7 @@ class PeerSubnetSubscriptionsTest {
     final PeerId[] peers = new PeerId[100];
     final ImmutableMap.Builder<PeerId, SszBitvector> builder = ImmutableMap.builder();
     for (int i = 0; i < 100; i++) {
-      peers[i] = PeerId.fromCandidateId(new MockNodeId(i).toBytes());
+      peers[i] = PeerId.ofCandidate(new MockNodeId(i).toBytes());
       if (i < 49) {
         int subnetStart = i / 3 * 8 % 126;
         builder.put(
@@ -395,7 +395,7 @@ class PeerSubnetSubscriptionsTest {
                 .selectCandidatePeers(
                     makeCandidatePeers(Arrays.stream(peers).toList(), peer2subnets), 50)
                 .stream()
-                .map(candidate -> PeerId.fromCandidateId(candidate.getNodeId()))
+                .map(candidate -> PeerId.ofCandidate(candidate.getNodeId()))
                 .toList())
         .containsAll(List.of(peers[98], peers[99]));
   }
@@ -422,7 +422,7 @@ class PeerSubnetSubscriptionsTest {
             peerId ->
                 new DiscoveryPeer(
                     dataStructureUtil.randomPublicKeyBytes(),
-                    peerId.getCandidateId(),
+                    peerId.getDiscoveryId(),
                     new InetSocketAddress(8888),
                     Optional.empty(),
                     SszBitvectorImpl.ofBits(SszBitvectorSchema.create(128)),
