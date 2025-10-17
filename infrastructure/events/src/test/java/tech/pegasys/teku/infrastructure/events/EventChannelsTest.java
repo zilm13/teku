@@ -13,13 +13,21 @@
 
 package tech.pegasys.teku.infrastructure.events;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static tech.pegasys.teku.infrastructure.events.ChannelExceptionHandler.THROWING_HANDLER;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.junit.jupiter.api.Test;
+import tech.pegasys.teku.infrastructure.async.AsyncRunner;
+import tech.pegasys.teku.infrastructure.async.AsyncRunnerFactory;
+import tech.pegasys.teku.infrastructure.async.MetricTrackingExecutorFactory;
+import tech.pegasys.teku.infrastructure.async.SafeFuture;
 
 class EventChannelsTest {
   private final EventChannels channels =
@@ -81,6 +89,34 @@ class EventChannelsTest {
     consumerPublisher.accept(1);
     verify(consumerSubscriber).accept(1);
     verifyNoMoreInteractions(runnableSubscriber);
+  }
+
+  @Test
+  public void subscribeFutureBeforeWillNotWork() throws InterruptedException {
+    final AsyncRunnerFactory asyncRunnerFactory =
+        AsyncRunnerFactory.createDefault(
+            new MetricTrackingExecutorFactory(new NoOpMetricsSystem()));
+    final AsyncRunner test = asyncRunnerFactory.create("test", 2);
+    final EventChannels eventChannels =
+        new EventChannels(THROWING_HANDLER, new NoOpMetricsSystem());
+    final TestChannel testChannel = eventChannels.getPublisher(TestChannel.class, test);
+    final CountDownLatch latch = new CountDownLatch(1);
+    testChannel
+        .getInteger()
+        .thenAccept(
+            value -> {
+              assertThat(value).isEqualTo(42);
+              latch.countDown();
+            })
+        .finish(__ -> {});
+
+    eventChannels.subscribe(TestChannel.class, () -> SafeFuture.completedFuture(42));
+
+    assertThat(latch.await(500, TimeUnit.MILLISECONDS)).isTrue();
+  }
+
+  interface TestChannel extends ChannelInterface {
+    SafeFuture<Integer> getInteger();
   }
 
   private interface SimpleConsumer extends VoidReturningChannelInterface {
