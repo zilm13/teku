@@ -28,6 +28,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.stream.IntStream;
@@ -84,10 +85,6 @@ public class DataColumnSidecarELManagerImpl extends AbstractIgnoringFutureHistor
                   });
 
   private final ConcurrentSkipListMap<SlotAndBlockRoot, RecoveryTask> recoveryTasks =
-      new ConcurrentSkipListMap<>();
-  // Tracks column indices seen before a full recovery task could be created (Gloas sidecars
-  // arriving before their block). Consumed when the block arrives to seed recoveredColumnIndices.
-  private final ConcurrentSkipListMap<SlotAndBlockRoot, Set<UInt64>> earlyColumnIndices =
       new ConcurrentSkipListMap<>();
   private final Spec spec;
   private final AsyncRunner asyncRunner;
@@ -204,9 +201,17 @@ public class DataColumnSidecarELManagerImpl extends AbstractIgnoringFutureHistor
 
     final SlotAndBlockRoot slotAndBlockRoot = dataColumnSidecar.getSlotAndBlockRoot();
 
-    if (createRecoveryTaskFromDataColumnSidecar(dataColumnSidecar)) {
-      onFirstSeen(slotAndBlockRoot);
+    final Optional<RecoveryTask> recoveryTaskFromDataColumnSidecar =
+        createRecoveryTaskFromDataColumnSidecar(dataColumnSidecar);
+    if (shouldStartRecovery(recoveryTaskFromDataColumnSidecar)) {
+      startRecovery(slotAndBlockRoot);
     }
+  }
+
+  private boolean shouldStartRecovery(final Optional<RecoveryTask> recoveryTask) {
+    return recoveryTask.isPresent()
+        && recoveryTask.get().canStart()
+        && recoveryTask.get().recoveryStarted().compareAndSet(false, true);
   }
 
   @Override
@@ -234,78 +239,86 @@ public class DataColumnSidecarELManagerImpl extends AbstractIgnoringFutureHistor
       LOG.debug("Block {} is too old or from the future. Ignoring.", block::getSlotAndBlockRoot);
       return;
     }
-    if (createRecoveryTaskFromBlock(block)) {
-      onFirstSeen(block.getSlotAndBlockRoot());
+
+    final Optional<RecoveryTask> recoveryTaskFromBlock = createRecoveryTaskFromBlock(block);
+    if (shouldStartRecovery(recoveryTaskFromBlock)) {
+      startRecovery(block.getSlotAndBlockRoot());
     }
   }
 
-  private boolean createRecoveryTaskFromDataColumnSidecar(
+  private Optional<RecoveryTask> createRecoveryTaskFromDataColumnSidecar(
       final DataColumnSidecar dataColumnSidecar) {
     final SlotAndBlockRoot slotAndBlockRoot = dataColumnSidecar.getSlotAndBlockRoot();
     final RecoveryTask existingTask = recoveryTasks.get(slotAndBlockRoot);
     if (existingTask != null) {
       existingTask.recoveredColumnIndices().add(dataColumnSidecar.getIndex());
-      return false;
+      return Optional.of(existingTask);
     }
     if (!dataColumnSidecar.getSlot().equals(getCurrentSlot())) {
-      return false;
+      return Optional.empty();
     }
-    final Optional<RecoveryTask> maybeRecoveryTask =
-        createRecoveryTaskForSelfContainedDataColumnSidecar(dataColumnSidecar);
-    if (maybeRecoveryTask.isPresent()) {
-      makeRoomForNewTracker();
-      return recoveryTasks.putIfAbsent(slotAndBlockRoot, maybeRecoveryTask.get()) == null;
-    }
-    // can't create a full task (no KZG commitments). Track index so it is available
-    // when the block arrives and creates the recovery task
-    earlyColumnIndices
-        .computeIfAbsent(
-            slotAndBlockRoot, key -> Collections.newSetFromMap(new ConcurrentHashMap<>()))
-        .add(dataColumnSidecar.getIndex());
-    return false;
+
+    return Optional.of(
+        recoveryTasks.computeIfAbsent(
+            dataColumnSidecar.getSlotAndBlockRoot(),
+            __ -> createRecoveryTaskFromDataColumnSidecarImpl(dataColumnSidecar)));
   }
 
-  private Optional<RecoveryTask> createRecoveryTaskForSelfContainedDataColumnSidecar(
+  private RecoveryTask createRecoveryTaskFromDataColumnSidecarImpl(
       final DataColumnSidecar dataColumnSidecar) {
     if (dataColumnSidecar.getMaybeKzgCommitments().isPresent()) {
       final DataColumnSidecarUtil dataColumnSidecarUtil =
           spec.getDataColumnSidecarUtil(dataColumnSidecar.getSlot());
-      return Optional.of(
-          new RecoveryTask(
-              dataColumnSidecar.getMaybeSignedBlockHeader(),
-              dataColumnSidecar.getMaybeKzgCommitments(),
-              dataColumnSidecarUtil
-                  .getMaybeKzgCommitmentsProof(dataColumnSidecar)
-                  .map(SszPrimitiveCollection::asListUnboxed),
-              Collections.newSetFromMap(new ConcurrentHashMap<>())));
+      new RecoveryTask(
+          dataColumnSidecar.getMaybeSignedBlockHeader(),
+          SafeFuture.completedFuture(dataColumnSidecar.getMaybeKzgCommitments().get()),
+          dataColumnSidecarUtil
+              .getMaybeKzgCommitmentsProof(dataColumnSidecar)
+              .map(SszPrimitiveCollection::asListUnboxed),
+          Collections.newSetFromMap(new ConcurrentHashMap<>()),
+          new AtomicBoolean(false));
     }
-    return Optional.empty();
+
+    return new RecoveryTask(
+        Optional.empty(),
+        new SafeFuture<>(),
+        Optional.empty(),
+        Collections.newSetFromMap(new ConcurrentHashMap<>()),
+        new AtomicBoolean(false));
   }
 
-  private boolean createRecoveryTaskFromBlock(final SignedBeaconBlock block) {
+  private Optional<RecoveryTask> createRecoveryTaskFromBlock(final SignedBeaconBlock block) {
     final SlotAndBlockRoot slotAndBlockRoot = block.getSlotAndBlockRoot();
-    if (recoveryTasks.containsKey(slotAndBlockRoot)) {
-      return false;
-    }
-    if (!block.getSlot().equals(getCurrentSlot())) {
-      return false;
-    }
-    makeRoomForNewTracker();
     final DataColumnSidecarUtil dataColumnSidecarUtil =
         spec.getDataColumnSidecarUtil(block.getSlot());
-    // sidecar indices that arrived before the block
-    final Set<UInt64> recoveredColumnIndices =
-        earlyColumnIndices.computeIfAbsent(
-            slotAndBlockRoot, key -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
-    return recoveryTasks.putIfAbsent(
+    if (recoveryTasks.containsKey(slotAndBlockRoot)) {
+      final RecoveryTask recoveryTask = recoveryTasks.get(slotAndBlockRoot);
+      if (!recoveryTask.sszKzgCommitmentsFuture().isDone()) {
+        recoveryTask
+            .sszKzgCommitmentsFuture()
+            .complete(dataColumnSidecarUtil.getKzgCommitments(block.getMessage()));
+      }
+
+      return Optional.of(recoveryTask);
+    }
+
+    if (!block.getSlot().equals(getCurrentSlot())) {
+      return Optional.empty();
+    }
+    makeRoomForNewTracker();
+
+    return Optional.of(
+        recoveryTasks.computeIfAbsent(
             slotAndBlockRoot,
-            new RecoveryTask(
-                Optional.of(block.asHeader()),
-                Optional.of(dataColumnSidecarUtil.getKzgCommitments(block.getMessage())),
-                dataColumnSidecarUtil.computeDataColumnKzgCommitmentsInclusionProof(
-                    block.getMessage().getBody()),
-                recoveredColumnIndices))
-        == null;
+            __ ->
+                new RecoveryTask(
+                    Optional.of(block.asHeader()),
+                    SafeFuture.completedFuture(
+                        dataColumnSidecarUtil.getKzgCommitments(block.getMessage())),
+                    dataColumnSidecarUtil.computeDataColumnKzgCommitmentsInclusionProof(
+                        block.getMessage().getBody()),
+                    Collections.newSetFromMap(new ConcurrentHashMap<>()),
+                    new AtomicBoolean(false))));
   }
 
   private void publishRecoveredDataColumnSidecars(
@@ -364,7 +377,6 @@ public class DataColumnSidecarELManagerImpl extends AbstractIgnoringFutureHistor
 
   private void removeAllForBlock(final SlotAndBlockRoot slotAndBlockRoot) {
     recoveryTasks.remove(slotAndBlockRoot);
-    earlyColumnIndices.remove(slotAndBlockRoot);
   }
 
   @VisibleForTesting
@@ -397,7 +409,6 @@ public class DataColumnSidecarELManagerImpl extends AbstractIgnoringFutureHistor
       removeAllForBlock(toRemove);
       toRemove = recoveryTasks.keySet().pollFirst();
     }
-    earlyColumnIndices.keySet().removeIf(k -> k.getSlot().isLessThanOrEqualTo(slotLimit));
   }
 
   private void makeRoomForNewTracker() {
@@ -410,7 +421,7 @@ public class DataColumnSidecarELManagerImpl extends AbstractIgnoringFutureHistor
     }
   }
 
-  private void onFirstSeen(final SlotAndBlockRoot slotAndBlockRoot) {
+  private void startRecovery(final SlotAndBlockRoot slotAndBlockRoot) {
     LOG.debug("Data from {} is first seen, checking if recovery is needed", slotAndBlockRoot);
 
     asyncRunner
@@ -435,13 +446,9 @@ public class DataColumnSidecarELManagerImpl extends AbstractIgnoringFutureHistor
       return SafeFuture.COMPLETE;
     }
 
-    final Optional<SszList<SszKZGCommitment>> maybeKZGCommitments =
-        recoveryTask.maybeSszKzgCommitments();
-    if (maybeKZGCommitments.isEmpty() || maybeKZGCommitments.get().isEmpty()) {
-      return SafeFuture.COMPLETE;
-    }
+    final SszList<SszKZGCommitment> sszKzgCommitments =
+        recoveryTask.sszKzgCommitmentsFuture().getImmediately();
 
-    final SszList<SszKZGCommitment> sszKzgCommitments = maybeKZGCommitments.get();
     final List<BlobIdentifier> missingBlobsIdentifiers =
         IntStream.range(0, sszKzgCommitments.size())
             .mapToObj(
@@ -497,7 +504,13 @@ public class DataColumnSidecarELManagerImpl extends AbstractIgnoringFutureHistor
 
   public record RecoveryTask(
       Optional<SignedBeaconBlockHeader> maybeSignedBeaconBlockHeader,
-      Optional<SszList<SszKZGCommitment>> maybeSszKzgCommitments,
+      SafeFuture<SszList<SszKZGCommitment>> sszKzgCommitmentsFuture,
       Optional<List<Bytes32>> maybeKzgCommitmentsInclusionProof,
-      Set<UInt64> recoveredColumnIndices) {}
+      Set<UInt64> recoveredColumnIndices,
+      AtomicBoolean recoveryStarted) {
+
+    public boolean canStart() {
+      return sszKzgCommitmentsFuture.isDone();
+    }
+  }
 }
