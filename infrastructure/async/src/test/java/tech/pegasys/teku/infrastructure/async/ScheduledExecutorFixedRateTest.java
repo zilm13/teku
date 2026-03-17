@@ -15,6 +15,8 @@ package tech.pegasys.teku.infrastructure.async;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -41,20 +43,92 @@ class ScheduledExecutorFixedRateTest {
     executor.shutdownNow();
   }
 
+  private void scheduledTask() {
+    LOG.info(
+        "Scheduled event fired at {}",
+        LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS")));
+    try {
+      Thread.sleep(300);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+  }
+
   @Test
   void shouldFireEventEvery10Seconds() throws InterruptedException {
     long now = System.currentTimeMillis();
     long initialDelay = 10_000 - (now % 10_000);
 
     executor.scheduleAtFixedRate(
-        () ->
-            LOG.info(
-                "Scheduled event fired at {}",
-                LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))),
-        initialDelay,
-        10_000,
-        TimeUnit.MILLISECONDS);
+        this::scheduledTask, initialDelay, 10_000, TimeUnit.MILLISECONDS);
 
-    Thread.sleep(TimeUnit.MINUTES.toMillis(300));
+    Thread.sleep(TimeUnit.MINUTES.toMillis(3));
+  }
+
+  @Test
+  void shouldScheduleBeforeEachTask() throws InterruptedException {
+    ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    ExecutorService taskExecutor = Executors.newSingleThreadExecutor();
+
+    try {
+      scheduleNextSlot(scheduler, taskExecutor);
+      Thread.sleep(TimeUnit.MINUTES.toMillis(3));
+    } finally {
+      scheduler.shutdownNow();
+      taskExecutor.shutdownNow();
+    }
+  }
+
+  private void scheduleNextSlot(
+      final ScheduledExecutorService scheduler, final ExecutorService taskExecutor) {
+    long now = System.currentTimeMillis();
+    long delay = 10_000 - (now % 10_000);
+
+    scheduler.schedule(
+        () -> {
+          scheduleNextSlot(scheduler, taskExecutor);
+          taskExecutor.execute(this::scheduledTask);
+        },
+        delay,
+        TimeUnit.MILLISECONDS);
+  }
+
+  @Test
+  void shouldScheduleBeforeEachTaskWithDuplicateCheck() throws InterruptedException {
+    ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    ExecutorService taskExecutor = Executors.newSingleThreadExecutor();
+    AtomicLong lastScheduledSecond = new AtomicLong(-1);
+
+    try {
+      scheduleNextSlotWithDuplicateCheck(scheduler, taskExecutor, lastScheduledSecond);
+      Thread.sleep(TimeUnit.MINUTES.toMillis(3));
+    } finally {
+      scheduler.shutdownNow();
+      taskExecutor.shutdownNow();
+    }
+  }
+
+  private void scheduleNextSlotWithDuplicateCheck(
+      final ScheduledExecutorService scheduler,
+      final ExecutorService taskExecutor,
+      final AtomicLong lastScheduledSecond) {
+    long now = System.currentTimeMillis();
+    long delay = 10_000 - (now % 10_000);
+    long targetSecond = (now + delay) / 1000;
+
+    if (lastScheduledSecond.get() >= targetSecond) {
+      delay += 10_000;
+      targetSecond += 10;
+      LOG.info("Duplicate slot detected, skipping to next at {}s", targetSecond);
+    }
+    lastScheduledSecond.set(targetSecond);
+
+    scheduler.schedule(
+        () -> {
+          scheduleNextSlotWithDuplicateCheck(scheduler, taskExecutor, lastScheduledSecond);
+          taskExecutor.execute(this::scheduledTask);
+        },
+        delay,
+        TimeUnit.MILLISECONDS);
   }
 }
