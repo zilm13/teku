@@ -99,9 +99,11 @@ public class BlobKzgCommitmentsProvider
     return retrieveBlockByRoot
         .apply(blockRoot)
         .thenApply(
-            maybeBlock ->
-                maybeBlock.flatMap(
-                    block -> block.getMessage().getBody().getOptionalBlobKzgCommitments()));
+            maybeBlock -> {
+              maybeBlock.ifPresent(this::onNewBlock);
+              return maybeBlock.flatMap(
+                  block -> block.getMessage().getBody().getOptionalBlobKzgCommitments());
+            });
   }
 
   @Override

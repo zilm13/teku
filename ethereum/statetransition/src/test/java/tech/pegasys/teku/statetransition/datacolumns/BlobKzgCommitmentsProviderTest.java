@@ -112,7 +112,7 @@ class BlobKzgCommitmentsProviderTest {
   }
 
   @Test
-  void fallsBackToStoreOnMissWithoutCachingStoreResult() {
+  void fallsBackToStoreOnMissAndCachesStoreResult() {
     final SignedBeaconBlock block =
         dataStructureUtil.randomSignedBeaconBlockWithCommitments(UInt64.ONE, 2);
     final SszList<SszKZGCommitment> commitments =
@@ -123,7 +123,7 @@ class BlobKzgCommitmentsProviderTest {
     assertThat(provider.getBlobKzgCommitments(block.getRoot()).join()).contains(commitments);
     assertThat(provider.getBlobKzgCommitments(block.getRoot()).join()).contains(commitments);
 
-    verify(combinedChainDataClient, times(2)).getBlockByBlockRoot(block.getRoot());
+    verify(combinedChainDataClient, times(1)).getBlockByBlockRoot(block.getRoot());
   }
 
   @Test
