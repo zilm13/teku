@@ -30,6 +30,7 @@ import tech.pegasys.teku.infrastructure.ssz.SszList;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.spec.TestSpecFactory;
+import tech.pegasys.teku.spec.datastructures.blobs.DataColumnSidecar;
 import tech.pegasys.teku.spec.datastructures.blocks.BeaconBlock;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
@@ -81,6 +82,23 @@ class BlobKzgCommitmentsProviderTest {
   }
 
   @Test
+  void returnsSidecarCommitmentsWithoutStoringThem() {
+    final Spec fuluSpec = TestSpecFactory.createMinimalFulu();
+    final DataStructureUtil fuluDataStructureUtil = new DataStructureUtil(fuluSpec);
+    final SignedBeaconBlock block =
+        fuluDataStructureUtil.randomSignedBeaconBlockWithCommitments(UInt64.ONE, 2);
+    final DataColumnSidecar dataColumnSidecar =
+        fuluDataStructureUtil.randomDataColumnSidecar(block, UInt64.ZERO);
+    final SszList<SszKZGCommitment> commitments =
+        dataColumnSidecar.getMaybeKzgCommitments().orElseThrow();
+
+    assertThat(provider.getBlobKzgCommitments(dataColumnSidecar).join()).contains(commitments);
+    assertThat(provider.getBlobKzgCommitments(dataColumnSidecar.getBeaconBlockRoot()).join())
+        .isEmpty();
+    verify(combinedChainDataClient).getBlockByBlockRoot(dataColumnSidecar.getBeaconBlockRoot());
+  }
+
+  @Test
   void ignoresBlocksWhoseBodyHasNoBlobCommitmentsField() {
     final Spec phase0Spec = TestSpecFactory.createMinimalPhase0();
     final SignedBeaconBlock blockWithoutBlobCommitments =
@@ -94,7 +112,7 @@ class BlobKzgCommitmentsProviderTest {
   }
 
   @Test
-  void fallsBackToStoreOnMissAndCachesStoreResult() {
+  void fallsBackToStoreOnMissWithoutCachingStoreResult() {
     final SignedBeaconBlock block =
         dataStructureUtil.randomSignedBeaconBlockWithCommitments(UInt64.ONE, 2);
     final SszList<SszKZGCommitment> commitments =
@@ -105,7 +123,7 @@ class BlobKzgCommitmentsProviderTest {
     assertThat(provider.getBlobKzgCommitments(block.getRoot()).join()).contains(commitments);
     assertThat(provider.getBlobKzgCommitments(block.getRoot()).join()).contains(commitments);
 
-    verify(combinedChainDataClient, times(1)).getBlockByBlockRoot(block.getRoot());
+    verify(combinedChainDataClient, times(2)).getBlockByBlockRoot(block.getRoot());
   }
 
   @Test
