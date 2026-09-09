@@ -270,6 +270,27 @@ public class VoluntaryExitValidatorTest {
   }
 
   @Test
+  public void shouldIgnoreExitWhenEpochIsInFuture() {
+    advanceChainAndUpdateBestBlock(6);
+    SignedVoluntaryExit exit = dataStructureUtil.randomSignedVoluntaryExit();
+    when(gossipValidationHelper.isEpochFromFuture(exit.getMessage().getEpoch())).thenReturn(true);
+
+    assertValidationResult(exit, IGNORE, "future epoch");
+  }
+
+  @Test
+  public void shouldNotIgnoreExitWhenEpochIsNotInFuture() {
+    advanceChainAndUpdateBestBlock(6);
+    SignedVoluntaryExit exit = dataStructureUtil.randomSignedVoluntaryExit();
+    when(gossipValidationHelper.isEpochFromFuture(exit.getMessage().getEpoch())).thenReturn(false);
+    when(mockSpec.validateVoluntaryExit(getBestState(), exit)).thenReturn(Optional.empty());
+    when(mockSpec.verifyVoluntaryExitSignature(getBestState(), exit, BLSSignatureVerifier.SIMPLE))
+        .thenReturn(true);
+
+    assertValidationResult(exit, ACCEPT);
+  }
+
+  @Test
   public void shouldRejectInvalidExit() {
     advanceChainAndUpdateBestBlock(6);
     SignedVoluntaryExit exit = dataStructureUtil.randomSignedVoluntaryExit();
