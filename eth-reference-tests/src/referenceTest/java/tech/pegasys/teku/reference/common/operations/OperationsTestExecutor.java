@@ -563,7 +563,7 @@ public class OperationsTestExecutor<T extends SszData> implements TestExecutor {
       case VOLUNTARY_EXIT -> {
         final SignedVoluntaryExit voluntaryExit = loadVoluntaryExit(testDefinition);
         final VoluntaryExitValidator voluntaryExitValidator =
-            new VoluntaryExitValidator(spec, null, timeProvider);
+            new VoluntaryExitValidator(spec, null, timeProvider, null);
         checkValidationForBlockInclusion(
             voluntaryExitValidator, state, voluntaryExit, expectInclusion);
       }
