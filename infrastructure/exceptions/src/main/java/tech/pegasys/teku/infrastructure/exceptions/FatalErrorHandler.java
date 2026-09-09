@@ -166,10 +166,15 @@ public class FatalErrorHandler {
       LOG.fatal("Shutting down after unrecoverable error in {}", context, error);
     } catch (final Throwable t) {
       // Logging itself can fail when out of memory, shutting down still needs to happen
-      System.err.println(
-          "Shutting down after unrecoverable error in " + context + " (" + error + ")");
+      try {
+        System.err.println(
+            "Shutting down after unrecoverable error in " + context + " (" + error + ")");
+      } catch (final Throwable ignored) {
+        // String concatenation can also fail under memory pressure; terminate regardless
+      }
+    } finally {
+      processTerminator.terminate(ExitConstants.ERROR_EXIT_CODE, GRACEFUL_SHUTDOWN_TIMEOUT);
     }
-    processTerminator.terminate(ExitConstants.ERROR_EXIT_CODE, GRACEFUL_SHUTDOWN_TIMEOUT);
   }
 
   /**
@@ -220,7 +225,11 @@ public class FatalErrorHandler {
               Thread.currentThread().interrupt();
               return;
             }
-            System.err.println("Graceful shutdown did not complete in time, halting JVM");
+            try {
+              System.err.println("Graceful shutdown did not complete in time, halting JVM");
+            } catch (final Throwable ignored) {
+              // String writes can fail under memory pressure; halt regardless
+            }
             halt.run();
           });
       startDaemonThread("fatal-error-shutdown", exit);
