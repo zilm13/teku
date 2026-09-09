@@ -3122,6 +3122,31 @@ public class DatabaseTest {
   }
 
   @TestTemplate
+  public void archiveSidecarsProofs_skipsSlotWithMissingFirstHalfColumns(
+      final DatabaseContext context) throws IOException {
+    setupWithSpec(TestSpecFactory.createMinimalFulu());
+    initialize(context);
+
+    final int numberOfColumns = spec.getNumberOfDataColumns().orElseThrow();
+    final UInt64 slot = UInt64.valueOf(3);
+
+    final SignedBeaconBlockHeader header = dataStructureUtil.randomSignedBeaconBlockHeader(slot);
+    final SszList<SszKZGCommitment> kzgCommitments = randomFuluKzgCommitments();
+    // store all columns except index 0 (one first-half gap) — a single gap must prevent archiving
+    Stream.iterate(UInt64.ONE, UInt64::increment)
+        .limit(numberOfColumns - 1L)
+        .map(index -> dataStructureUtil.randomDataColumnSidecar(header, kzgCommitments, index))
+        .forEach(database::addSidecar);
+
+    database.archiveSidecarsProofs(ZERO, slot);
+
+    // archiving must be skipped: a missing first-half column makes extension data irrecoverable
+    assertThat(database.getDataColumnSidecarsProofs(slot)).isEmpty();
+    assertThat(database.getLastDataColumnSidecarsProofsSlot()).isEmpty();
+    assertThat(getStoredColumnIndices(slot)).hasSize(numberOfColumns - 1);
+  }
+
+  @TestTemplate
   public void pruneAllSidecars_alsoRemovesArchivedProofs(final DatabaseContext context)
       throws IOException {
     setupWithSpec(TestSpecFactory.createMinimalFulu());

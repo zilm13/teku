@@ -1408,11 +1408,8 @@ public class KvStoreDatabase implements Database {
 
       final Map<UInt64, List<DataColumnSlotAndIdentifier>> archiveMap = new HashMap<>();
 
-      dataColumnSidecars
-          // we need only extension
-          .filter(identifier -> identifier.columnIndex().isGreaterThanOrEqualTo(halfColumns))
-          .forEach(
-              item -> archiveMap.computeIfAbsent(item.slot(), k -> new ArrayList<>()).add(item));
+      dataColumnSidecars.forEach(
+          item -> archiveMap.computeIfAbsent(item.slot(), k -> new ArrayList<>()).add(item));
 
       final List<UInt64> slots = archiveMap.keySet().stream().sorted().toList();
 
@@ -1423,20 +1420,40 @@ public class KvStoreDatabase implements Database {
             slots.getLast());
         try (final FinalizedUpdater updater = finalizedUpdater()) {
           for (final UInt64 slot : slots) {
-            final List<DataColumnSlotAndIdentifier> keys =
-                archiveMap.get(slot).stream().sorted().toList();
+            final List<DataColumnSlotAndIdentifier> extensionKeys =
+                archiveMap.get(slot).stream()
+                    .filter(id -> id.columnIndex().isGreaterThanOrEqualTo(halfColumns))
+                    .sorted()
+                    .toList();
+            final long firstHalfCount =
+                archiveMap.get(slot).stream()
+                    .filter(id -> id.columnIndex().isLessThan(halfColumns))
+                    .count();
+
+            // Skip slots where either half is incomplete: first-half columns are required for
+            // reconstruction, and archiving extension columns without them would make the archived
+            // data irrecoverable.
+            if (extensionKeys.size() != halfColumns || firstHalfCount != halfColumns) {
+              LOG.trace(
+                  "Skipping archival for slot {}: have {}/{} extension and {}/{} first-half columns",
+                  slot,
+                  extensionKeys.size(),
+                  halfColumns,
+                  firstHalfCount,
+                  halfColumns);
+              continue;
+            }
+
             final List<DataColumnSidecar> sidecars = new ArrayList<>();
 
-            for (final DataColumnSlotAndIdentifier key : keys) {
+            for (final DataColumnSlotAndIdentifier key : extensionKeys) {
               final Optional<Bytes> sidecar = dao.getSidecar(key);
-              // surprise, let's skip this slot
               if (sidecar.isEmpty()) {
                 break;
               }
               sidecars.add(spec.deserializeSidecar(sidecar.get(), key.slot()));
             }
 
-            // remove sidecars only if we have required 1/2
             if (sidecars.size() == halfColumns) {
               final List<List<KZGProof>> proofs =
                   sidecars.stream()
@@ -1447,13 +1464,13 @@ public class KvStoreDatabase implements Database {
                                   .toList())
                       .toList();
               updater.addDataColumnSidecarsProofs(slot, proofs);
-              for (final DataColumnSlotAndIdentifier key : keys) {
+              for (final DataColumnSlotAndIdentifier key : extensionKeys) {
                 updater.removeSidecar(key);
               }
               ++archivedSlots;
               LOG.trace(
                   "Pruned {} extension data column sidecars, keeping their proofs, at slot {}",
-                  keys.size(),
+                  extensionKeys.size(),
                   slot);
             }
           }
