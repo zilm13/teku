@@ -77,20 +77,20 @@ public final class TekuDefaultExceptionHandler
 
     if (fatalServiceError.isPresent()) {
       final String failedService = fatalServiceError.get().getService();
-      statusLog.fatalError(failedService, exception);
+      tryLog(() -> statusLog.fatalError(failedService, exception));
       FatalErrorHandler.terminate(FATAL_EXIT_CODE);
     } else if (ExceptionUtil.getCause(exception, DatabaseStorageException.class)
         .filter(DatabaseStorageException::isUnrecoverable)
         .isPresent()) {
-      statusLog.fatalError(subscriberDescription, exception);
+      tryLog(() -> statusLog.fatalError(subscriberDescription, exception));
       FatalErrorHandler.terminate(FATAL_EXIT_CODE);
     } else if (FatalErrorHandler.isFatalError(exception)) {
       // An out of memory error is frequently wrapped, so all causes are checked. Exits with
       // ERROR_EXIT_CODE because restarting is expected to recover.
-      statusLog.fatalError(subscriberDescription, exception);
+      tryLog(() -> statusLog.fatalError(subscriberDescription, exception));
       FatalErrorHandler.terminate(ERROR_EXIT_CODE);
     } else if (exception instanceof EphemeryLifecycleException) {
-      statusLog.fatalError(subscriberDescription, exception);
+      tryLog(() -> statusLog.fatalError(subscriberDescription, exception));
       FatalErrorHandler.terminate(ERROR_EXIT_CODE);
     } else if (exception instanceof ShuttingDownException) {
       LOG.debug("Shutting down", exception);
@@ -103,6 +103,15 @@ public final class TekuDefaultExceptionHandler
       statusLog.specificationFailure(subscriberDescription, exception);
     } else {
       statusLog.unexpectedFailure(subscriberDescription, exception);
+    }
+  }
+
+  @SuppressWarnings("unused")
+  private static void tryLog(final Runnable logAction) {
+    try {
+      logAction.run();
+    } catch (final Throwable ignored) {
+      // Logging may itself throw when resources (e.g. memory) are exhausted; proceed to terminate.
     }
   }
 

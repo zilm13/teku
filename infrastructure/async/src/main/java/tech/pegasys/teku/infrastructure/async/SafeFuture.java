@@ -742,14 +742,18 @@ public class SafeFuture<T> extends CompletableFuture<T> {
 
   @Override
   public SafeFuture<T> exceptionally(final Function<Throwable, ? extends T> fn) {
-    return (SafeFuture<T>) super.exceptionally(error -> fn.apply(checkForFatalError(error)));
+    return (SafeFuture<T>)
+        super.exceptionally(
+            error -> FatalErrorHandler.callGuarded(() -> fn.apply(checkForFatalError(error))));
   }
 
   @SuppressWarnings("unchecked")
   @Override
   public <U> SafeFuture<U> handle(final BiFunction<? super T, Throwable, ? extends U> fn) {
     return (SafeFuture<U>)
-        super.handle((result, error) -> fn.apply(result, checkForFatalError(error)));
+        super.handle(
+            (result, error) ->
+                FatalErrorHandler.callGuarded(() -> fn.apply(result, checkForFatalError(error))));
   }
 
   @SuppressWarnings("unchecked")
@@ -757,7 +761,10 @@ public class SafeFuture<T> extends CompletableFuture<T> {
   public <U> SafeFuture<U> handleAsync(
       final BiFunction<? super T, Throwable, ? extends U> fn, final Executor executor) {
     return (SafeFuture<U>)
-        super.handleAsync((result, error) -> fn.apply(result, checkForFatalError(error)), executor);
+        super.handleAsync(
+            (result, error) ->
+                FatalErrorHandler.callGuarded(() -> fn.apply(result, checkForFatalError(error))),
+            executor);
   }
 
   /**
@@ -782,6 +789,7 @@ public class SafeFuture<T> extends CompletableFuture<T> {
           try {
             propagateResult(fn.apply(value, error), result);
           } catch (final Throwable t) {
+            checkForFatalError(t);
             result.completeExceptionally(t);
           }
         });
@@ -791,7 +799,10 @@ public class SafeFuture<T> extends CompletableFuture<T> {
   @Override
   public SafeFuture<T> whenComplete(final BiConsumer<? super T, ? super Throwable> action) {
     return (SafeFuture<T>)
-        super.whenComplete((result, error) -> action.accept(result, checkForFatalError(error)));
+        super.whenComplete(
+            (result, error) ->
+                FatalErrorHandler.runGuarded(
+                    () -> action.accept(result, checkForFatalError(error))));
   }
 
   public SafeFuture<T> orTimeout(final Duration timeout) {

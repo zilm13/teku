@@ -21,6 +21,7 @@ import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -59,6 +60,34 @@ public class FatalErrorHandler {
   private static volatile ProcessTerminator processTerminator = FatalErrorHandler::terminateProcess;
 
   private FatalErrorHandler() {}
+
+  /**
+   * Runs {@code action}, triggering shutdown if it throws a fatal error, then rethrows. Use this
+   * for void callbacks (e.g. {@link java.util.function.BiConsumer}) in async pipelines where the
+   * JVM's {@link java.util.concurrent.CompletableFuture} internals would otherwise swallow the
+   * error before our {@code completeExceptionally} override can see it.
+   */
+  public static void runGuarded(final Runnable action) {
+    try {
+      action.run();
+    } catch (final RuntimeException | Error t) {
+      shutdownIfFatalError(t, "async callback");
+      throw t;
+    }
+  }
+
+  /**
+   * Calls {@code action}, triggering shutdown if it throws a fatal error, then rethrows. Use this
+   * for value-returning callbacks (e.g. {@link java.util.function.Function}) in async pipelines.
+   */
+  public static <T> T callGuarded(final Supplier<T> action) {
+    try {
+      return action.get();
+    } catch (final RuntimeException | Error t) {
+      shutdownIfFatalError(t, "async callback");
+      throw t;
+    }
+  }
 
   /**
    * Returns true if the supplied error is, or was caused by, an unrecoverable error. All causes and
