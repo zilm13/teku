@@ -847,13 +847,12 @@ public class SafeFuture<T> extends CompletableFuture<T> {
    * if this future completes exceptionally
    */
   public SafeFuture<T> whenException(final Consumer<Throwable> action) {
-    return (SafeFuture<T>)
-        super.whenComplete(
-            (r, t) -> {
-              if (t != null) {
-                action.accept(t);
-              }
-            });
+    return whenComplete(
+        (r, t) -> {
+          if (t != null) {
+            action.accept(t);
+          }
+        });
   }
 
   /**
@@ -861,13 +860,12 @@ public class SafeFuture<T> extends CompletableFuture<T> {
    * future completes successfully
    */
   public SafeFuture<T> whenSuccess(final Runnable action) {
-    return (SafeFuture<T>)
-        super.whenComplete(
-            (r, t) -> {
-              if (t == null) {
-                action.run();
-              }
-            });
+    return whenComplete(
+        (r, t) -> {
+          if (t == null) {
+            action.run();
+          }
+        });
   }
 
   /**
