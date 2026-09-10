@@ -468,6 +468,60 @@ class FastConfirmationCalculatorTest {
   }
 
   @Test
+  void shouldBatchScoreGloasFullPayloadVoteMatchingPerBlockScores() {
+    buildLinearChain(7);
+    final BeaconState balanceSource = gloasGenesisState();
+    final UInt64 voteSlot = UInt64.valueOf(6);
+    final Bytes32 votedRoot = chain.get(6);
+    // Validator 0's vote resolves to a FULL node; validator 1's resolves to the base node.
+    final ForkChoiceNode fullNode =
+        new ForkChoiceNode(votedRoot, ForkChoicePayloadStatus.PAYLOAD_STATUS_FULL);
+    when(store.getVoteSnapshot())
+        .thenReturn(
+            voteSnapshot(
+                Map.of(
+                    0,
+                    new VoteTracker(
+                        Bytes32.ZERO, votedRoot, false, false, voteSlot, true, UInt64.ZERO, false),
+                    1,
+                    vote(votedRoot))));
+    when(forkChoice.getSupportedNode(voteSlot, votedRoot, voteSlot, true))
+        .thenReturn(Optional.of(fullNode));
+    // The FULL path follows the chain up to block 3 and diverges above it. Scored chain nodes are
+    // always base nodes, so ancestry holds only where getAncestorNode returns exactly the base
+    // node — making the FULL vote support chain[1..3] and nothing above.
+    for (int i = 0; i <= 3; i++) {
+      when(forkChoice.getAncestorNode(fullNode, UInt64.valueOf(i)))
+          .thenReturn(Optional.of(ForkChoiceNode.createBase(chain.get(i))));
+    }
+    final ForkChoiceNode divergentNode =
+        new ForkChoiceNode(Bytes32.random(), ForkChoicePayloadStatus.PAYLOAD_STATUS_FULL);
+    for (int i = 4; i <= 6; i++) {
+      when(forkChoice.getAncestorNode(fullNode, UInt64.valueOf(i)))
+          .thenReturn(Optional.of(divergentNode));
+    }
+    final FastConfirmationCalculator calculator =
+        gloasCalculator(balanceSource, chain.get(6), voteSlot.longValue());
+
+    final List<Bytes32> scoredChain = List.copyOf(chain.subList(1, 7));
+    final Map<Bytes32, UInt64> batchScores =
+        calculator.computeChainAttestationScores(scoredChain, balanceSource);
+
+    // The batch binary search must agree with per-block scoring on the FULL-vote/base-node
+    // combination: a divergent FULL path at the chain tip forces the search past its whole-chain
+    // fast path and through every prefix boundary.
+    for (final Bytes32 root : scoredChain) {
+      assertThat(batchScores.get(root))
+          .isEqualTo(calculator.getAttestationScore(root, balanceSource));
+    }
+    // The FULL vote counts for exactly the prefix its payload path supports, the base vote for all.
+    final UInt64 fullVoterBalance = effectiveBalance(balanceSource, 0);
+    final UInt64 baseVoterBalance = effectiveBalance(balanceSource, 1);
+    assertThat(batchScores.get(chain.get(3))).isEqualTo(fullVoterBalance.plus(baseVoterBalance));
+    assertThat(batchScores.get(chain.get(4))).isEqualTo(baseVoterBalance);
+  }
+
+  @Test
   void shouldSumBlockSupportOnlyForInRangeVotersOfTheExactBlockRoot() {
     final BeaconState balanceSource = genesisState();
     final int voterForBlock = firstCommitteeMember(balanceSource, UInt64.ZERO); // slot 0
