@@ -192,10 +192,14 @@ public class SyncStateTracker extends Service
 
     if (currentState != previousState) {
       // the catch up, whatever caused it, is announced exactly once here
-      if (previousState.isSyncing() && currentState.isInSync()) {
+      if (currentState.isInSync()) {
         reportedBehindKnownChainHead = false;
-        reportedSyncStart = false;
-        eventLogger.syncCompleted();
+        // we owe a completion if we announced a start, or if we were visibly syncing without one -
+        // held behind the head, waiting for peers, or waiting for the EL
+        if (reportedSyncStart || previousState.isSyncing()) {
+          reportedSyncStart = false;
+          eventLogger.syncCompleted();
+        }
       }
       isSyncingGauge.set(currentState.isSyncing() ? 1.0 : 0.0);
       subscribers.deliver(SyncStateSubscriber::onSyncStateChange, currentState);

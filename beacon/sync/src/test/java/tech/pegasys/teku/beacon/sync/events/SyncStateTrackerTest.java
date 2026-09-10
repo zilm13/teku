@@ -173,9 +173,30 @@ class SyncStateTrackerTest {
     assertSyncState(SyncState.START_UP);
     verify(eventLogger, never()).syncCompleted();
 
+    // reaching sync closes out the start we announced, even though startup is what got us there
     completeStartup();
     assertSyncState(SyncState.IN_SYNC);
-    verify(eventLogger, never()).syncCompleted();
+    verify(eventLogger, times(1)).syncCompleted();
+  }
+
+  @Test
+  public void shouldAnnounceANewSyncStartAfterASyncRanDuringStartup() {
+    syncSubscriber.onSyncingChange(true);
+    verify(eventLogger).syncStart();
+    syncSubscriber.onSyncingChange(false);
+    assertSyncState(SyncState.START_UP);
+
+    // reaching sync closes out the start we announced, and means the next sync really is a new one
+    completeStartup();
+    assertSyncState(SyncState.IN_SYNC);
+    verify(eventLogger, times(1)).syncCompleted();
+
+    syncSubscriber.onSyncingChange(true);
+    verify(eventLogger, times(2)).syncStart();
+
+    syncSubscriber.onSyncingChange(false);
+    assertSyncState(SyncState.IN_SYNC);
+    verify(eventLogger, times(2)).syncCompleted();
   }
 
   @Test
