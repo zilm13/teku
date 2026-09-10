@@ -58,12 +58,15 @@ public class SyncStateTracker extends Service
   private long syncSubscriptionId;
   private boolean headIsOptimistic = false;
 
-  /**
-   * True once we've told the user we're behind and haven't yet told them we caught up. Survives
-   * forward sync starting and stopping, so that repeated sync attempts against a head we can't
-   * reach don't each announce a start we never said had finished.
-   */
+  /** True once we've told the user we're behind the known chain head, so we only say it once. */
   private boolean reportedBehindKnownChainHead = false;
+
+  /**
+   * True once we've announced a sync starting and haven't yet announced reaching sync. Forward sync
+   * can start and stop many times before it gets there - retrying, or losing every peer - and none
+   * of those is a new sync as far as the user is concerned.
+   */
+  private boolean reportedSyncStart = false;
 
   private volatile SyncState currentState;
 
@@ -185,12 +188,15 @@ public class SyncStateTracker extends Service
                   eventLogger.syncStoppedWhileBehindHead(
                       knownHead.minusMinZero(recentChainData.getHeadSlot()).longValue()),
               eventLogger::notInSyncWithoutPeers);
-    } else if (reportedBehindKnownChainHead && currentState == SyncState.IN_SYNC) {
-      reportedBehindKnownChainHead = false;
-      eventLogger.syncCompleted();
     }
 
     if (currentState != previousState) {
+      // the catch up, whatever caused it, is announced exactly once here
+      if (previousState.isSyncing() && currentState.isInSync()) {
+        reportedBehindKnownChainHead = false;
+        reportedSyncStart = false;
+        eventLogger.syncCompleted();
+      }
       isSyncingGauge.set(currentState.isSyncing() ? 1.0 : 0.0);
       subscribers.deliver(SyncStateSubscriber::onSyncStateChange, currentState);
     }
@@ -286,10 +292,8 @@ public class SyncStateTracker extends Service
 
     if (syncActive) {
       eventLogger.headNoLongerOptimisticWhileSyncing();
-    } else if (!isBehindKnownChainHead()) {
-      eventLogger.syncCompleted();
     }
-    // when the head is too far behind, updateCurrentState() reports that we're still behind instead
+    // otherwise we're leaving AWAITING_EL, and updateCurrentState() announces the catch up
   }
 
   private void logSyncStateOnSyncingChanged(
@@ -300,9 +304,8 @@ public class SyncStateTracker extends Service
     }
 
     if (isSyncing) {
-      if (!reportedBehindKnownChainHead) {
-        // while we're reporting that we're behind we never said syncing had finished, so a retry
-        // isn't a new sync as far as the user is concerned
+      if (!reportedSyncStart) {
+        reportedSyncStart = true;
         eventLogger.syncStart();
       }
       return;
@@ -310,10 +313,8 @@ public class SyncStateTracker extends Service
 
     if (headIsOptimistic) {
       eventLogger.syncCompletedWhileHeadIsOptimistic();
-    } else if (!isBehindKnownChainHead()) {
-      eventLogger.syncCompleted();
     }
-    // when the head is too far behind, updateCurrentState() reports that we're still behind instead
+    // otherwise updateCurrentState() announces it, if this stop actually reached the head
   }
 
   private synchronized void markStartupComplete() {
