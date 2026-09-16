@@ -63,6 +63,8 @@ import tech.pegasys.teku.beacon.sync.gossip.blocks.RecentBlocksFetcher;
 import tech.pegasys.teku.beacon.sync.gossip.executionpayloads.RecentExecutionPayloadsFetcher;
 import tech.pegasys.teku.beaconrestapi.BeaconRestApi;
 import tech.pegasys.teku.beaconrestapi.JsonTypeDefinitionBeaconRestApi;
+import tech.pegasys.teku.builder.rest.OkHttpStakedBuilderClientProvider;
+import tech.pegasys.teku.builder.rest.StakedBuilderClientProvider;
 import tech.pegasys.teku.dataproviders.lookup.BlindedExecutionPayloadProvider;
 import tech.pegasys.teku.dataproviders.lookup.ExecutionPayloadProvider;
 import tech.pegasys.teku.dataproviders.lookup.SingleBlockProvider;
@@ -206,6 +208,7 @@ import tech.pegasys.teku.statetransition.datacolumns.retriever.DataColumnSidecar
 import tech.pegasys.teku.statetransition.datacolumns.retriever.SimpleSidecarRetriever;
 import tech.pegasys.teku.statetransition.datacolumns.retriever.recovering.SidecarRetriever;
 import tech.pegasys.teku.statetransition.datacolumns.util.SuperNodeSupplier;
+import tech.pegasys.teku.statetransition.execution.BuilderBidFetcher;
 import tech.pegasys.teku.statetransition.execution.DefaultExecutionPayloadBidManager;
 import tech.pegasys.teku.statetransition.execution.DefaultExecutionPayloadManager;
 import tech.pegasys.teku.statetransition.execution.DefaultProposerPreferencesManager;
@@ -414,6 +417,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
   protected volatile DataColumnSidecarGossipValidator dataColumnSidecarGossipValidator;
   protected volatile DataColumnSidecarManager dataColumnSidecarManager;
   protected volatile ProposerPreferencesManager proposerPreferencesManager;
+  protected volatile StakedBuilderClientProvider stakedBuilderClientProvider;
   protected volatile ExecutionPayloadBidManager executionPayloadBidManager;
   protected volatile ExecutionPayloadManager executionPayloadManager;
   protected volatile ExecutionProofManager executionProofManager;
@@ -1023,6 +1027,9 @@ public class BeaconChainController extends Service implements BeaconChainControl
           beaconConfig
               .executionPayloadBidCircuitBreakerFactory()
               .create(recentChainData::getForkChoiceStrategy);
+      stakedBuilderClientProvider = new OkHttpStakedBuilderClientProvider(spec, beaconAsyncRunner);
+      final BuilderBidFetcher builderBidFetcher =
+          new BuilderBidFetcher(spec, stakedBuilderClientProvider);
       final ExecutionPayloadBidSelector executionPayloadBidSelector =
           new ExecutionPayloadBidSelector(
               beaconConfig.executionLayerConfig().getUseShouldOverrideBuilderFlag(),
@@ -1034,6 +1041,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
               executionPayloadBidCircuitBreaker,
               receivedExecutionPayloadBidEventsChannelPublisher,
               poolFactory.createPendingPoolForExecutionPayloadBids(spec),
+              builderBidFetcher,
               executionPayloadBidSelector);
       proposerPreferencesManager.subscribeOperationAdded(defaultExecutionPayloadBidManager);
       eventChannels.subscribe(SlotEventsChannel.class, defaultExecutionPayloadBidManager);
@@ -1042,6 +1050,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
           ReceivedExecutionPayloadEventsChannel.class, defaultExecutionPayloadBidManager);
       executionPayloadBidManager = defaultExecutionPayloadBidManager;
     } else {
+      stakedBuilderClientProvider = StakedBuilderClientProvider.NOOP;
       executionPayloadBidManager = ExecutionPayloadBidManager.NOOP;
     }
   }
@@ -1532,7 +1541,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
   protected void initVoluntaryExitPool() {
     LOG.debug("BeaconChainController.initVoluntaryExitPool()");
     final VoluntaryExitValidator validator =
-        new VoluntaryExitValidator(spec, recentChainData, timeProvider);
+        new VoluntaryExitValidator(spec, recentChainData, timeProvider, gossipValidationHelper);
     voluntaryExitPool =
         new MappedOperationPool<>(
             "VoluntaryExitPool",
@@ -1929,7 +1938,8 @@ public class BeaconChainController extends Service implements BeaconChainControl
             dutyMetrics,
             custodyGroupCountManager,
             beaconConfig.p2pConfig().getDasPublishWithholdColumnsEverySlots(),
-            beaconConfig.p2pConfig().isGossipBlobsAfterBlockEnabled());
+            beaconConfig.p2pConfig().isGossipBlobsAfterBlockEnabled(),
+            stakedBuilderClientProvider);
 
     final ExecutionPayloadFactory executionPayloadFactory;
     final ExecutionPayloadPublisher executionPayloadPublisher;

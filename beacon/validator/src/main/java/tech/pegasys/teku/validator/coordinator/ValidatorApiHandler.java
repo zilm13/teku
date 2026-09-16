@@ -829,7 +829,8 @@ public class ValidatorApiHandler implements ValidatorApiChannel, SlotEventsChann
   @Override
   public SafeFuture<SendSignedBlockResult> sendSignedBlock(
       final SignedBlockContainer maybeBlindedBlockContainer,
-      final BroadcastValidationLevel broadcastValidationLevel) {
+      final BroadcastValidationLevel broadcastValidationLevel,
+      final Optional<String> builderUrl) {
     final BlockPublishingPerformance blockPublishingPerformance =
         blockProductionAndPublishingPerformanceFactory.createForPublishing(
             maybeBlindedBlockContainer.getSlot());
@@ -846,7 +847,8 @@ public class ValidatorApiHandler implements ValidatorApiChannel, SlotEventsChann
             broadcastValidationLevel == GOSSIP && isLocallyCreated
                 ? EQUIVOCATION
                 : broadcastValidationLevel,
-            blockPublishingPerformance)
+            blockPublishingPerformance,
+            builderUrl)
         .exceptionally(
             ex -> {
               final String reason = getRootCauseMessage(ex);
@@ -931,7 +933,11 @@ public class ValidatorApiHandler implements ValidatorApiChannel, SlotEventsChann
       final List<SignedProposerPreferences> signedProposerPreferences) {
     return SafeFuture.collectAll(
             signedProposerPreferences.stream().map(proposerPreferencesManager::addLocal))
-        .thenApply(this::convertInternalValidationResults);
+        .thenApply(this::convertInternalValidationResults)
+        .thenPeek(
+            __ ->
+                proposersDataManager.updatePreparedProposersFromProposerPreferences(
+                    signedProposerPreferences, combinedChainDataClient.getCurrentSlot()));
   }
 
   @Override
@@ -939,7 +945,7 @@ public class ValidatorApiHandler implements ValidatorApiChannel, SlotEventsChann
       final Collection<BeaconPreparableProposer> beaconPreparableProposers) {
     return SafeFuture.fromRunnable(
         () ->
-            proposersDataManager.updatePreparedProposers(
+            proposersDataManager.updatePreparedProposersFromPrepareBeaconProposer(
                 beaconPreparableProposers, combinedChainDataClient.getCurrentSlot()));
   }
 

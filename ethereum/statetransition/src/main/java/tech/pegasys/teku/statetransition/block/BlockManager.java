@@ -13,10 +13,14 @@
 
 package tech.pegasys.teku.statetransition.block;
 
+import static tech.pegasys.teku.statetransition.validation.InternalValidationResult.ACCEPT;
+
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -90,7 +94,7 @@ public class BlockManager extends Service
   private final TimeProvider timeProvider;
   private final EventLogger eventLogger;
 
-  private final FutureItems<SignedBeaconBlock> futureBlocks;
+  private final FutureBlockTracker futureBlockTracker;
   // in the invalidBlockRoots map we are going to store blocks whose import result is invalid
   // and will not require any further retry. Descendants of these blocks will be considered invalid
   // as well.
@@ -121,7 +125,7 @@ public class BlockManager extends Service
     this.blockEventsListener = blockEventsListener;
     this.executionPayloadEventsListenerSupplier = executionPayloadEventsListenerSupplier;
     this.pendingBlockPool = pendingBlockPool;
-    this.futureBlocks = futureBlocks;
+    this.futureBlockTracker = new FutureBlockTracker(futureBlocks);
     this.invalidBlockRoots = invalidBlockRoots;
     this.blockValidator = blockValidator;
     this.timeProvider = timeProvider;
@@ -150,7 +154,7 @@ public class BlockManager extends Service
         blockValidator.initiateBroadcastValidation(block, broadcastValidationLevel);
 
     final SafeFuture<BlockImportResult> importResult =
-        doImportBlock(block, Optional.empty(), blockBroadcastValidator, origin);
+        doImportBlock(block, Optional.empty(), blockBroadcastValidator, origin, false);
 
     // we want to intercept any early import exceptions happening before the consensus validation is
     // completed
@@ -198,7 +202,8 @@ public class BlockManager extends Service
                         block,
                         blockImportPerformance,
                         BlockBroadcastValidator.NOOP,
-                        Optional.of(RemoteOrigin.GOSSIP))
+                        Optional.of(RemoteOrigin.GOSSIP),
+                        result.isSaveForFuture())
                     .finish(err -> LOG.error("Failed to process received block.", err));
 
             // block failed gossip validation, let's drop it from the pool, so it won't be served
@@ -213,8 +218,7 @@ public class BlockManager extends Service
 
   @Override
   public void onSlot(final UInt64 slot) {
-    futureBlocks.onSlot(slot);
-    futureBlocks.prune(slot).forEach(this::importBlockIgnoringResult);
+    futureBlockTracker.prune(slot).forEach(this::processFutureBlock);
   }
 
   public void subscribeFailedPayloadExecution(final FailedPayloadExecutionSubscriber subscriber) {
@@ -274,20 +278,51 @@ public class BlockManager extends Service
 
   private void importBlockIgnoringResult(final SignedBeaconBlock block) {
     // we don't care about origin here because flow calls this function for retries only
-    doImportBlock(block, Optional.empty(), BlockBroadcastValidator.NOOP, Optional.empty())
+    doImportBlock(block, Optional.empty(), BlockBroadcastValidator.NOOP, Optional.empty(), false)
         .finishStackTrace();
+  }
+
+  private void processFutureBlock(final QueuedFutureBlock futureBlock) {
+    // Future-block retries need to handle the exact sequence below.
+    //
+    // 1. Gossip validation may accept a near-future block because of clock tolerance.
+    // 2. Import can still return BLOCK_IS_FROM_FUTURE, so we queue it for later.
+    // 3. When the slot arrives, retry gossip may return IGNORE_ALREADY_SEEN.
+    // 4. In that case, retry the import without gossip validation so the block is not lost.
+    // 5. Retry gossip may also return IGNORE_EQUIVOCATION_DETECTED.
+    // 6. In that case, drop the block listeners and stop.
+    if (futureBlock.needsGossipValidation()) {
+      validateAndImportBlock(futureBlock.block(), Optional.empty())
+          .thenAccept(
+              result -> {
+                if (result.isIgnoreAlreadySeen()) {
+                  importBlockIgnoringResult(futureBlock.block());
+                } else if (result.isIgnoreEquivocationDetected()) {
+                  blockEventsListener.removeAllForBlock(futureBlock.block().getSlotAndBlockRoot());
+                }
+              })
+          .finishError(LOG);
+    } else {
+      importBlockIgnoringResult(futureBlock.block());
+    }
   }
 
   private SafeFuture<BlockImportResult> doImportBlock(
       final SignedBeaconBlock block,
       final Optional<BlockImportPerformance> blockImportPerformance,
       final BlockBroadcastValidator blockBroadcastValidator,
-      final Optional<RemoteOrigin> origin) {
+      final Optional<RemoteOrigin> origin,
+      final boolean needsGossipValidationOnRetry) {
     return handleInvalidBlock(block)
         .or(() -> handleKnownBlock(block))
         .orElseGet(
             () ->
-                handleBlockImport(block, blockImportPerformance, blockBroadcastValidator, origin)
+                handleBlockImport(
+                        block,
+                        blockImportPerformance,
+                        blockBroadcastValidator,
+                        origin,
+                        needsGossipValidationOnRetry)
                     .thenPeek(
                         result -> lateBlockImportCheck(blockImportPerformance, block, result)));
   }
@@ -314,7 +349,7 @@ public class BlockManager extends Service
   }
 
   private Optional<SafeFuture<BlockImportResult>> handleKnownBlock(final SignedBeaconBlock block) {
-    if (pendingBlockPool.contains(block) || futureBlocks.contains(block)) {
+    if (pendingBlockPool.contains(block) || futureBlockTracker.contains(block)) {
       // Pending and future blocks can't have been executed yet so must be marked optimistic
       return Optional.of(SafeFuture.completedFuture(BlockImportResult.knownBlock(block, true)));
     }
@@ -329,7 +364,8 @@ public class BlockManager extends Service
       final SignedBeaconBlock block,
       final Optional<BlockImportPerformance> blockImportPerformance,
       final BlockBroadcastValidator blockBroadcastValidator,
-      final Optional<RemoteOrigin> origin) {
+      final Optional<RemoteOrigin> origin,
+      final boolean needsGossipValidationOnRetry) {
     blockEventsListener.onNewBlock(block, origin);
     preImportBlockSubscribers.deliver(l -> l.onNewBlock(block, origin));
 
@@ -357,7 +393,8 @@ public class BlockManager extends Service
                   case UNKNOWN_PARENT_EXECUTION_PAYLOAD -> {
                     addBlockPendingParentExecutionPayload(block);
                   }
-                  case BLOCK_IS_FROM_FUTURE -> futureBlocks.add(block);
+                  case BLOCK_IS_FROM_FUTURE ->
+                      futureBlockTracker.add(block, needsGossipValidationOnRetry);
                   case FAILED_EXECUTION_PAYLOAD_EXECUTION_SYNCING -> {
                     LOG.warn(
                         "Unable to import block {} with execution payload {}: Execution Client is still syncing",
@@ -539,4 +576,35 @@ public class BlockManager extends Service
   public interface RequiredParentExecutionPayloadSubscriber {
     void onRequiredParentExecutionPayload(ParentExecutionPayloadDependency dependency);
   }
+
+  private static final class FutureBlockTracker {
+    private final FutureItems<SignedBeaconBlock> futureBlocks;
+    private final Set<Bytes32> gossipRetryRoots = new HashSet<>();
+
+    private FutureBlockTracker(final FutureItems<SignedBeaconBlock> futureBlocks) {
+      this.futureBlocks = futureBlocks;
+    }
+
+    synchronized void add(
+        final SignedBeaconBlock block, final boolean needsGossipValidationOnRetry) {
+      // FutureItems drops blocks that are beyond the future-slot tolerance, so only remember the
+      // retry mode when the block actually made it into the queue.
+      if (futureBlocks.add(block) && needsGossipValidationOnRetry) {
+        gossipRetryRoots.add(block.getRoot());
+      }
+    }
+
+    synchronized List<QueuedFutureBlock> prune(final UInt64 slot) {
+      futureBlocks.onSlot(slot);
+      return futureBlocks.prune(slot).stream()
+          .map(block -> new QueuedFutureBlock(block, gossipRetryRoots.remove(block.getRoot())))
+          .toList();
+    }
+
+    synchronized boolean contains(final SignedBeaconBlock block) {
+      return futureBlocks.contains(block);
+    }
+  }
+
+  private record QueuedFutureBlock(SignedBeaconBlock block, boolean needsGossipValidation) {}
 }

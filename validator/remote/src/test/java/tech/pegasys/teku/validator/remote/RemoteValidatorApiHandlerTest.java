@@ -76,6 +76,7 @@ import tech.pegasys.teku.spec.datastructures.builder.versions.gloas.BuilderConfi
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.ExecutionPayloadEnvelope;
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.PayloadAttestationData;
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.PayloadAttestationMessage;
+import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.SignedProposerPreferences;
 import tech.pegasys.teku.spec.datastructures.genesis.GenesisData;
 import tech.pegasys.teku.spec.datastructures.metadata.BlockContainerAndMetaData;
 import tech.pegasys.teku.spec.datastructures.metadata.ObjectAndMetaData;
@@ -584,6 +585,27 @@ class RemoteValidatorApiHandlerTest {
   }
 
   @Test
+  public void sendSignedProposerPreferences_InvokeApiWithCorrectRequest() {
+    final SignedProposerPreferences signedProposerPreferences =
+        new DataStructureUtil(TestSpecFactory.createMinimalGloas())
+            .randomSignedProposerPreferences();
+    final List<SignedProposerPreferences> signedProposerPreferencesList =
+        List.of(signedProposerPreferences);
+    final List<SubmitDataError> expectedErrors =
+        List.of(new SubmitDataError(UInt64.valueOf(3), "invalid proposer preferences"));
+
+    when(typeDefClient.sendSignedProposerPreferences(signedProposerPreferencesList))
+        .thenReturn(expectedErrors);
+
+    final SafeFuture<List<SubmitDataError>> result =
+        apiHandler.sendSignedProposerPreferences(signedProposerPreferencesList);
+    asyncRunner.executeQueuedActions();
+
+    assertThat(result).isCompletedWithValue(expectedErrors);
+    verify(typeDefClient).sendSignedProposerPreferences(signedProposerPreferencesList);
+  }
+
+  @Test
   public void createUnsignedBlock_WhenNoneFound_ReturnsEmpty() {
     final BLSSignature blsSignature = dataStructureUtil.randomSignature();
 
@@ -678,17 +700,23 @@ class RemoteValidatorApiHandlerTest {
         dataStructureUtil.signedBlock(beaconBlock, signature);
     final SendSignedBlockResult expectedResult = SendSignedBlockResult.success(Bytes32.ZERO);
 
-    when(typeDefClient.sendSignedBlock(any(), any())).thenReturn(expectedResult);
+    when(typeDefClient.sendSignedBlock(any(), any(), any())).thenReturn(expectedResult);
 
     final ArgumentCaptor<SignedBeaconBlock> argumentCaptor =
         ArgumentCaptor.forClass(SignedBeaconBlock.class);
 
+    final String builderUrl = "https://foobar.com";
+
     final SafeFuture<SendSignedBlockResult> result =
-        apiHandler.sendSignedBlock(signedBeaconBlock, BroadcastValidationLevel.GOSSIP);
+        apiHandler.sendSignedBlock(
+            signedBeaconBlock, BroadcastValidationLevel.GOSSIP, Optional.of(builderUrl));
     asyncRunner.executeQueuedActions();
 
     verify(typeDefClient)
-        .sendSignedBlock(argumentCaptor.capture(), eq(BroadcastValidationLevel.GOSSIP));
+        .sendSignedBlock(
+            argumentCaptor.capture(),
+            eq(BroadcastValidationLevel.GOSSIP),
+            eq(Optional.of(builderUrl)));
     assertThat(argumentCaptor.getValue()).isEqualTo(signedBeaconBlock);
     assertThat(result).isCompletedWithValue(expectedResult);
   }
