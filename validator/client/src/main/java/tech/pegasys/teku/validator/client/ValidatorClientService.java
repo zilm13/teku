@@ -199,7 +199,7 @@ public class ValidatorClientService extends Service {
             asyncRunner);
     final Optional<ProposerConfigManager> proposerConfigManager;
     Optional<BeaconProposerPreparer> beaconProposerPreparer = Optional.empty();
-    Optional<ValidatorRegistrator> validatorRegistrator = Optional.empty();
+    Optional<ValidatorRegistrator> maybeValidatorRegistrator = Optional.empty();
     if (config.getSpec().isMilestoneSupported(SpecMilestone.BELLATRIX)) {
 
       final ProposerConfigProvider proposerConfigProvider =
@@ -228,7 +228,7 @@ public class ValidatorClientService extends Service {
                   Optional.empty(),
                   proposerConfigManager.get(),
                   config.getSpec()));
-      final ValidatorRegistrator validatorRegistratorImpl =
+      final ValidatorRegistrator validatorRegistrator =
           new ValidatorRegistrator(
               config.getSpec(),
               validatorLoader.getOwnedValidators(),
@@ -239,8 +239,8 @@ public class ValidatorClientService extends Service {
               validatorConfig.getBuilderRegistrationSendingBatchSize(),
               asyncRunner);
       validatorStatusProvider.subscribeValidatorStatusesUpdates(
-          validatorRegistratorImpl::onUpdatedValidatorStatuses);
-      validatorRegistrator = Optional.of(validatorRegistratorImpl);
+          validatorRegistrator::onUpdatedValidatorStatuses);
+      maybeValidatorRegistrator = Optional.of(validatorRegistrator);
     } else {
       proposerConfigManager = Optional.empty();
     }
@@ -254,7 +254,7 @@ public class ValidatorClientService extends Service {
             validatorStatusProvider,
             proposerConfigManager,
             beaconProposerPreparer,
-            validatorRegistrator,
+            maybeValidatorRegistrator,
             config.getSpec(),
             metricsSystem,
             doppelgangerDetectionAction,
@@ -602,7 +602,7 @@ public class ValidatorClientService extends Service {
           new RetryingDutyLoader<>(
               asyncRunner,
               timeProvider,
-              new PtcDutyLoader(
+              new PayloadTimelinessCommitteeDutyLoader(
                   validatorApiChannel,
                   dependentRoot ->
                       new SlotBasedScheduledDuties<>(
@@ -611,7 +611,8 @@ public class ValidatorClientService extends Service {
                           validatorDutyMetrics::performDutyWithMetrics),
                   validators,
                   validatorIndexProvider));
-      validatorTimingChannels.add(new PtcDutyScheduler(metricsSystem, payloadDutyLoader, spec));
+      validatorTimingChannels.add(
+          new PayloadTimelinessCommitteeDutyScheduler(metricsSystem, payloadDutyLoader, spec));
     }
 
     addValidatorCountMetric(metricsSystem, validators);

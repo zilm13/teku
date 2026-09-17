@@ -38,8 +38,8 @@ import tech.pegasys.teku.ethereum.json.types.beacon.StateValidatorData;
 import tech.pegasys.teku.ethereum.json.types.node.PeerCount;
 import tech.pegasys.teku.ethereum.json.types.validator.AttesterDuties;
 import tech.pegasys.teku.ethereum.json.types.validator.BeaconCommitteeSelectionProof;
+import tech.pegasys.teku.ethereum.json.types.validator.PayloadTimelinessCommitteeDuties;
 import tech.pegasys.teku.ethereum.json.types.validator.ProposerDuties;
-import tech.pegasys.teku.ethereum.json.types.validator.PtcDuties;
 import tech.pegasys.teku.ethereum.json.types.validator.SyncCommitteeDuties;
 import tech.pegasys.teku.ethereum.json.types.validator.SyncCommitteeSelectionProof;
 import tech.pegasys.teku.ethereum.json.types.validator.SyncCommitteeSubnetSubscription;
@@ -170,10 +170,10 @@ public class FailoverValidatorApiHandler implements ValidatorApiChannel {
   }
 
   @Override
-  public SafeFuture<Optional<PtcDuties>> getPtcDuties(
+  public SafeFuture<Optional<PayloadTimelinessCommitteeDuties>> getPayloadTimelinessCommitteeDuties(
       final UInt64 epoch, final IntCollection validatorIndices) {
     return tryRequestUntilSuccess(
-        apiChannel -> apiChannel.getPtcDuties(epoch, validatorIndices),
+        apiChannel -> apiChannel.getPayloadTimelinessCommitteeDuties(epoch, validatorIndices),
         BeaconNodeRequestLabels.GET_PTC_DUTIES_METHOD);
   }
 
@@ -305,7 +305,8 @@ public class FailoverValidatorApiHandler implements ValidatorApiChannel {
   @Override
   public SafeFuture<SendSignedBlockResult> sendSignedBlock(
       final SignedBlockContainer blockContainer,
-      final BroadcastValidationLevel broadcastValidationLevel) {
+      final BroadcastValidationLevel broadcastValidationLevel,
+      final Optional<String> builderUrl) {
     final SlotAndBlockRoot slotAndBlockRoot = blockContainer.getSignedBlock().getSlotAndBlockRoot();
     // when block is blinded, we need to send it only to the BN which would be able to unblind it
     if (blockContainer.isBlinded() && blockCreatorCache.containsKey(slotAndBlockRoot)) {
@@ -314,10 +315,12 @@ public class FailoverValidatorApiHandler implements ValidatorApiChannel {
           "Block for slot {} and root {} was blinded and will only be sent to the beacon node which created it.",
           slotAndBlockRoot.getSlot(),
           slotAndBlockRoot.getBlockRoot().toHexString());
-      return blockCreatorApiChannel.sendSignedBlock(blockContainer, broadcastValidationLevel);
+      return blockCreatorApiChannel.sendSignedBlock(
+          blockContainer, broadcastValidationLevel, builderUrl);
     }
     return relayRequest(
-        apiChannel -> apiChannel.sendSignedBlock(blockContainer, broadcastValidationLevel),
+        apiChannel ->
+            apiChannel.sendSignedBlock(blockContainer, broadcastValidationLevel, builderUrl),
         BeaconNodeRequestLabels.PUBLISH_BLOCK_METHOD,
         failoversPublishSignedDuties);
   }

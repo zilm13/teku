@@ -30,8 +30,8 @@ import tech.pegasys.teku.ethereum.json.types.beacon.StateValidatorData;
 import tech.pegasys.teku.ethereum.json.types.node.PeerCount;
 import tech.pegasys.teku.ethereum.json.types.validator.AttesterDuties;
 import tech.pegasys.teku.ethereum.json.types.validator.BeaconCommitteeSelectionProof;
+import tech.pegasys.teku.ethereum.json.types.validator.PayloadTimelinessCommitteeDuties;
 import tech.pegasys.teku.ethereum.json.types.validator.ProposerDuties;
-import tech.pegasys.teku.ethereum.json.types.validator.PtcDuties;
 import tech.pegasys.teku.ethereum.json.types.validator.SyncCommitteeDuties;
 import tech.pegasys.teku.ethereum.json.types.validator.SyncCommitteeSelectionProof;
 import tech.pegasys.teku.ethereum.json.types.validator.SyncCommitteeSubnetSubscription;
@@ -47,6 +47,7 @@ import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.PayloadAttestat
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.PayloadAttestationMessage;
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.SignedExecutionPayloadEnvelope;
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.SignedExecutionPayloadEnvelopeContents;
+import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.SignedProposerPreferences;
 import tech.pegasys.teku.spec.datastructures.metadata.BlockContainerAndMetaData;
 import tech.pegasys.teku.spec.datastructures.metadata.ObjectAndMetaData;
 import tech.pegasys.teku.spec.datastructures.operations.Attestation;
@@ -76,7 +77,7 @@ import tech.pegasys.teku.validator.remote.typedef.handlers.GetProposerDutiesV2Re
 import tech.pegasys.teku.validator.remote.typedef.handlers.GetStateValidatorsRequest;
 import tech.pegasys.teku.validator.remote.typedef.handlers.GetSyncingStatusRequest;
 import tech.pegasys.teku.validator.remote.typedef.handlers.PostAttesterDutiesRequest;
-import tech.pegasys.teku.validator.remote.typedef.handlers.PostPtcDutiesRequest;
+import tech.pegasys.teku.validator.remote.typedef.handlers.PostPayloadTimelinessCommitteeDutiesRequest;
 import tech.pegasys.teku.validator.remote.typedef.handlers.PostSyncDutiesRequest;
 import tech.pegasys.teku.validator.remote.typedef.handlers.PrepareBeaconProposersRequest;
 import tech.pegasys.teku.validator.remote.typedef.handlers.ProduceBlockRequest;
@@ -87,6 +88,7 @@ import tech.pegasys.teku.validator.remote.typedef.handlers.SendContributionAndPr
 import tech.pegasys.teku.validator.remote.typedef.handlers.SendPayloadAttestationMessagesRequest;
 import tech.pegasys.teku.validator.remote.typedef.handlers.SendSignedAttestationsRequest;
 import tech.pegasys.teku.validator.remote.typedef.handlers.SendSignedBlockRequest;
+import tech.pegasys.teku.validator.remote.typedef.handlers.SendSignedProposerPreferencesRequest;
 import tech.pegasys.teku.validator.remote.typedef.handlers.SendSubscribeToSyncCommitteeSubnetsRequest;
 import tech.pegasys.teku.validator.remote.typedef.handlers.SendSyncCommitteeMessagesRequest;
 import tech.pegasys.teku.validator.remote.typedef.handlers.SendValidatorLivenessRequest;
@@ -111,8 +113,8 @@ public class OkHttpValidatorTypeDefClient extends OkHttpValidatorMinimalTypeDefC
       final boolean attestationsV2ApisEnabled) {
     super(baseEndpoint, okHttpClient);
     this.spec = spec;
-    schemaDefinitionCache = new SchemaDefinitionCache(spec);
     this.preferSszBlockEncoding = preferSszBlockEncoding;
+    schemaDefinitionCache = new SchemaDefinitionCache(spec);
     this.attestationsV2ApisEnabled = attestationsV2ApisEnabled;
   }
 
@@ -160,20 +162,21 @@ public class OkHttpValidatorTypeDefClient extends OkHttpValidatorMinimalTypeDefC
     return postAttesterDutiesRequest.submit(epoch, validatorIndices);
   }
 
-  public Optional<PtcDuties> postPtcDuties(
+  public Optional<PayloadTimelinessCommitteeDuties> postPayloadTimelinessCommitteeDuties(
       final UInt64 epoch, final Collection<Integer> validatorIndices) {
-    final PostPtcDutiesRequest postPtcDutiesRequest =
-        new PostPtcDutiesRequest(getBaseEndpoint(), getOkHttpClient());
-    return postPtcDutiesRequest.submit(epoch, validatorIndices);
+    final PostPayloadTimelinessCommitteeDutiesRequest postPayloadTimelinessCommitteeDutiesRequest =
+        new PostPayloadTimelinessCommitteeDutiesRequest(getBaseEndpoint(), getOkHttpClient());
+    return postPayloadTimelinessCommitteeDutiesRequest.submit(epoch, validatorIndices);
   }
 
   public SendSignedBlockResult sendSignedBlock(
       final SignedBlockContainer blockContainer,
-      final BroadcastValidationLevel broadcastValidationLevel) {
+      final BroadcastValidationLevel broadcastValidationLevel,
+      final Optional<String> builderUrl) {
     final SendSignedBlockRequest sendSignedBlockRequest =
         new SendSignedBlockRequest(
             spec, getBaseEndpoint(), getOkHttpClient(), preferSszBlockEncoding);
-    return sendSignedBlockRequest.submit(blockContainer, broadcastValidationLevel);
+    return sendSignedBlockRequest.submit(blockContainer, broadcastValidationLevel, builderUrl);
   }
 
   public Optional<BlockContainerAndMetaData> createUnsignedBlock(
@@ -347,6 +350,13 @@ public class OkHttpValidatorTypeDefClient extends OkHttpValidatorMinimalTypeDefC
     final SendPayloadAttestationMessagesRequest sendPayloadAttestationMessagesRequest =
         new SendPayloadAttestationMessagesRequest(getBaseEndpoint(), getOkHttpClient());
     return sendPayloadAttestationMessagesRequest.submit(payloadAttestationMessages);
+  }
+
+  public List<SubmitDataError> sendSignedProposerPreferences(
+      final List<SignedProposerPreferences> signedProposerPreferences) {
+    final SendSignedProposerPreferencesRequest sendSignedProposerPreferencesRequest =
+        new SendSignedProposerPreferencesRequest(getBaseEndpoint(), getOkHttpClient());
+    return sendSignedProposerPreferencesRequest.submit(signedProposerPreferences);
   }
 
   public PublishSignedExecutionPayloadResult publishSignedExecutionPayload(

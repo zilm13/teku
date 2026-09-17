@@ -175,11 +175,12 @@ class FastConfirmationCalculator {
   private IntSet computeSlotCommittee(final UInt64 slot) {
     final BeaconState shufflingSource = getPulledUpHeadState();
     final UInt64 epoch = spec.computeEpochAtSlot(slot);
-    final int committeesCount = spec.getCommitteeCountPerSlot(shufflingSource, epoch).intValue();
+    final UInt64 committeesCount = spec.getCommitteeCountPerSlot(shufflingSource, epoch);
     final IntSet participants = new IntOpenHashSet();
-    for (int committeeIndex = 0; committeeIndex < committeesCount; committeeIndex++) {
-      participants.addAll(
-          spec.getBeaconCommittee(shufflingSource, slot, UInt64.valueOf(committeeIndex)));
+    for (UInt64 committeeIndex = UInt64.ZERO;
+        committeeIndex.isLessThan(committeesCount);
+        committeeIndex = committeeIndex.increment()) {
+      participants.addAll(spec.getBeaconCommittee(shufflingSource, slot, committeeIndex));
     }
     return participants;
   }
@@ -347,7 +348,7 @@ class FastConfirmationCalculator {
    * common case, since most latest messages vote at or near the head and so support the whole chain
    * — and otherwise binary-searches the boundary of the supported prefix.
    */
-  private int findLatestSupportedChainIndex(
+  int findLatestSupportedChainIndex(
       final List<ForkChoiceNode> chainNodes, final ForkChoiceNode votedNode) {
     final int last = chainNodes.size() - 1;
     if (isAncestor(votedNode, chainNodes.get(last))) {
@@ -798,6 +799,9 @@ class FastConfirmationCalculator {
     // a phase actually scores, so slots where neither gate passes do no scoring work at all.
     final List<Bytes32> candidateChain = getAncestorRoots(head, latestConfirmedRoot);
     Map<Bytes32, UInt64> chainScores = null;
+    // How many blocks of candidateChain the previous-epoch phase confirmed. The current-epoch phase
+    // resumes from exactly this offset, so the suffix it walks needs no second protoarray walk.
+    int advanced = 0;
 
     // The previous slot head is a root persisted in the FCR store across slots, so it may have been
     // pruned from fork choice (protoarray only keeps finalized-onward blocks, while the spec
@@ -830,6 +834,7 @@ class FastConfirmationCalculator {
           break;
         }
         confirmedRoot = blockRoot;
+        advanced++;
       }
     }
 
@@ -838,9 +843,11 @@ class FastConfirmationCalculator {
         chainScores = computeChainAttestationScores(candidateChain, currentBalanceSource);
       }
       Bytes32 tentativeConfirmedRoot = confirmedRoot;
-      // A suffix of candidateChain: confirmedRoot only ever advances along it, so every walked
-      // block already has a precomputed score.
-      for (final Bytes32 blockRoot : getAncestorRoots(head, confirmedRoot)) {
+      // The unconfirmed suffix of candidateChain: confirmedRoot only ever advances along it, so
+      // every walked block already has a precomputed score, and slicing at the offset the first
+      // phase reached is equivalent to re-deriving the suffix with getAncestorRoots(head,
+      // confirmedRoot) — without the second O(n) protoarray walk.
+      for (final Bytes32 blockRoot : candidateChain.subList(advanced, candidateChain.size())) {
         // Only true the first time the walk advances into the current epoch.
         if (getBlockEpoch(blockRoot).isGreaterThan(getBlockEpoch(tentativeConfirmedRoot))
             && !willCurrentTargetBeJustified()) {

@@ -36,6 +36,7 @@ import tech.pegasys.teku.api.NodeDataProvider;
 import tech.pegasys.teku.beacon.sync.events.SyncState;
 import tech.pegasys.teku.beacon.sync.events.SyncStateProvider;
 import tech.pegasys.teku.beacon.sync.events.SyncStateTracker;
+import tech.pegasys.teku.builder.rest.StakedBuilderClientProvider;
 import tech.pegasys.teku.ethereum.performance.trackers.BlockProductionAndPublishingPerformanceFactory;
 import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.infrastructure.async.DelayedExecutorAsyncRunner;
@@ -209,7 +210,8 @@ public class ValidatorApiHandlerIntegrationTest {
             dutyMetrics,
             CustodyGroupCountManager.NOOP,
             OptionalInt.empty(),
-            P2PConfig.DEFAULT_GOSSIP_BLOBS_AFTER_BLOCK_ENABLED);
+            P2PConfig.DEFAULT_GOSSIP_BLOBS_AFTER_BLOCK_ENABLED,
+            StakedBuilderClientProvider.NOOP);
     handler =
         new ValidatorApiHandler(
             chainDataProvider,
@@ -313,7 +315,8 @@ public class ValidatorApiHandlerIntegrationTest {
 
     when(blockImportChannel.importBlock(block, NOT_REQUIRED))
         .thenReturn(prepareBlockImportResult(BlockImportResult.successful(block)));
-    final SafeFuture<SendSignedBlockResult> result = handler.sendSignedBlock(block, NOT_REQUIRED);
+    final SafeFuture<SendSignedBlockResult> result =
+        handler.sendSignedBlock(block, NOT_REQUIRED, Optional.empty());
     assertThat(result).isCompletedWithValue(SendSignedBlockResult.success(block.getRoot()));
 
     if (specContext.getSpecMilestone() == SpecMilestone.DENEB) {
@@ -338,13 +341,16 @@ public class ValidatorApiHandlerIntegrationTest {
         .thenReturn(
             SafeFuture.completedFuture(InternalValidationResult.reject(rejectionDescription)));
 
+    final List<SignedProposerPreferences> signedProposerPreferences = List.of(accepted, rejected);
     final SafeFuture<List<SubmitDataError>> result =
-        handler.sendSignedProposerPreferences(List.of(accepted, rejected));
+        handler.sendSignedProposerPreferences(signedProposerPreferences);
 
     assertThatSafeFuture(result)
         .isCompletedWithValue(List.of(new SubmitDataError(ONE, rejectionDescription)));
     verify(proposerPreferencesManager).addLocal(accepted);
     verify(proposerPreferencesManager).addLocal(rejected);
+    verify(proposersDataManager)
+        .updatePreparedProposersFromProposerPreferences(signedProposerPreferences, UInt64.ZERO);
   }
 
   @TestTemplate
@@ -360,12 +366,16 @@ public class ValidatorApiHandlerIntegrationTest {
     when(proposerPreferencesManager.addLocal(savedForFuture))
         .thenReturn(SafeFuture.completedFuture(InternalValidationResult.SAVE_FOR_FUTURE));
 
+    final List<SignedProposerPreferences> signedProposerPreferences =
+        List.of(ignored, savedForFuture);
     final SafeFuture<List<SubmitDataError>> result =
-        handler.sendSignedProposerPreferences(List.of(ignored, savedForFuture));
+        handler.sendSignedProposerPreferences(signedProposerPreferences);
 
     assertThatSafeFuture(result).isCompletedWithValue(List.of());
     verify(proposerPreferencesManager).addLocal(ignored);
     verify(proposerPreferencesManager).addLocal(savedForFuture);
+    verify(proposersDataManager)
+        .updatePreparedProposersFromProposerPreferences(signedProposerPreferences, UInt64.ZERO);
   }
 
   private SafeFuture<BlockImportAndBroadcastValidationResults> prepareBlockImportResult(
