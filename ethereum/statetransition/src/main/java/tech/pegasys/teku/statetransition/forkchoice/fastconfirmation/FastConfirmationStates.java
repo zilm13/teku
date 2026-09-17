@@ -19,7 +19,9 @@ import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
 /**
  * The source beacon states the Fast Confirmation Rule reads from, retrieved once per slot.
  *
- * <p>The spec distinguishes four state sources; not all are needed every slot:
+ * <p>The spec distinguishes four state sources, but only these three are loaded, and not all of
+ * them every slot. The fourth, the raw head block state ({@code store.block_states[head]}), is
+ * needed only to derive {@code get_pulled_up_head_state}, which the loader retrieves directly:
  *
  * <ul>
  *   <li>{@code previousBalanceSource} — {@code get_previous_balance_source}: {@code
