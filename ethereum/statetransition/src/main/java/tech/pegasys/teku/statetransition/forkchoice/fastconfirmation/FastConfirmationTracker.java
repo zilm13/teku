@@ -20,6 +20,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.tuweni.bytes.Bytes32;
@@ -381,7 +382,7 @@ public class FastConfirmationTracker {
     if (nextSlotIsEpochStart) {
       // This checkpoint rotates into the next epoch's current balance source; warm its state and
       // scoring balances off the critical path so the epoch-start slot finds both cached.
-      prefetchNextEpochBalanceSource(store, greatestUnrealizedJustifiedCheckpoint);
+      prefetchNextEpochBalanceSource(store, greatestUnrealizedJustifiedCheckpoint, input.slot());
     }
 
     final FastConfirmationStore withUpdatedVariables =
@@ -417,13 +418,26 @@ public class FastConfirmationTracker {
    * are built on the fast confirmation runner (idle between slots) rather than on the store's
    * completion thread. Fire-and-forget: on any failure the epoch-start slot simply loads both
    * itself, as before.
+   *
+   * <p>The balance build is bounded to one slot, because it shares the single-threaded fast
+   * confirmation runner with the per-slot critical path. A regeneration that overruns the slot
+   * would otherwise dispatch the (O(validators)) build into that queue after the epoch-start slot
+   * it was meant to warm had already passed — head-of-line blocking a later slot for a checkpoint
+   * that may by then have been superseded (a reorg, or the unrealized justification moving), so the
+   * work is pure added delay with no cache to warm. Abandoning the build costs nothing: the
+   * regeneration itself is unaffected and the epoch-start slot builds the list inline, exactly as
+   * it did before this prefetch existed.
    */
   private void prefetchNextEpochBalanceSource(
-      final ReadOnlyStore store, final Checkpoint checkpoint) {
+      final ReadOnlyStore store, final Checkpoint checkpoint, final UInt64 slot) {
     asyncRunner.ifPresent(
         runner ->
             store
                 .retrieveCheckpointState(checkpoint)
+                // orTimeout completes its receiver, and this is CachingTaskQueue's shared future:
+                // bound a copy, or the epoch-start slot's own load of it fails too.
+                .thenApply(Function.identity())
+                .orTimeout(runner, Duration.ofMillis(spec.getSlotDurationMillis(slot)))
                 .thenCompose(
                     maybeState ->
                         runner.runAsync(
