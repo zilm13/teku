@@ -23,17 +23,15 @@ import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.spec.TestSpecFactory;
 import tech.pegasys.teku.spec.config.SpecConfigGloas;
 import tech.pegasys.teku.spec.datastructures.blobs.DataColumnSidecarSchema;
-import tech.pegasys.teku.spec.datastructures.blocks.blockbody.BeaconBlockBodySchema;
-import tech.pegasys.teku.spec.datastructures.blocks.blockbody.versions.gloas.BeaconBlockBodySchemaGloas;
 import tech.pegasys.teku.spec.datastructures.execution.ExecutionPayloadFields;
-import tech.pegasys.teku.spec.datastructures.execution.ExecutionRequestsSchema;
-import tech.pegasys.teku.spec.datastructures.execution.versions.electra.ExecutionRequestsFields;
-import tech.pegasys.teku.spec.datastructures.execution.versions.gloas.ExecutionRequestsFieldsGloas;
 
 /**
  * Every progressive list that appears in a network message declares the limit the spec assigns to
  * it (the {@code LIMIT} of the corresponding {@code ProgressiveList} type), enforced by the schema
  * on construction and deserialization.
+ *
+ * <p>The lists of the beacon block body and of execution requests are covered by {@link
+ * ProgressiveListLimitsSanityTest}.
  */
 class GloasProgressiveListLimitsTest {
 
@@ -41,44 +39,6 @@ class GloasProgressiveListLimitsTest {
   private final SpecConfigGloas config = SpecConfigGloas.required(spec.getGenesisSpecConfig());
   private final SchemaDefinitionsGloas schemaDefinitions =
       SchemaDefinitionsGloas.required(spec.getGenesisSchemaDefinitions());
-
-  @Test
-  void blockBodyOperationLists() {
-    final BeaconBlockBodySchema<?> body = schemaDefinitions.getBeaconBlockBodySchema();
-    assertThat(body.getProposerSlashingsSchema().getMaxLength())
-        .isEqualTo(config.getMaxProposerSlashings());
-    assertThat(body.getAttesterSlashingsSchema().getMaxLength())
-        .isEqualTo(config.getMaxAttesterSlashingsElectra());
-    assertThat(body.getAttestationsSchema().getMaxLength())
-        .isEqualTo(config.getMaxAttestationsElectra());
-    // Gloas blocks must not contain deposits
-    assertThat(body.getDepositsSchema().getMaxLength()).isZero();
-    assertThat(body.getVoluntaryExitsSchema().getMaxLength())
-        .isEqualTo(config.getMaxVoluntaryExits());
-    assertThat(
-            BeaconBlockBodySchemaGloas.required(body)
-                .getBlsToExecutionChangesSchema()
-                .getMaxLength())
-        .isEqualTo(config.getMaxBlsToExecutionChanges());
-    assertThat(
-            BeaconBlockBodySchemaGloas.required(body).getPayloadAttestationsSchema().getMaxLength())
-        .isEqualTo(config.getMaxPayloadAttestations());
-  }
-
-  @Test
-  void executionRequestLists() {
-    final ExecutionRequestsSchema<?> requests = schemaDefinitions.getExecutionRequestsSchema();
-    // deposit requests have no Gloas limit
-    assertThat(requests.getDepositRequestsSchema().getMaxLength()).isEqualTo(Long.MAX_VALUE);
-    assertThat(listMaxLength(requests, ExecutionRequestsFields.WITHDRAWALS))
-        .isEqualTo(config.getMaxWithdrawalRequestsPerPayload());
-    assertThat(listMaxLength(requests, ExecutionRequestsFields.CONSOLIDATIONS))
-        .isEqualTo(config.getMaxConsolidationRequestsPerPayload());
-    assertThat(listMaxLength(requests, ExecutionRequestsFieldsGloas.BUILDER_DEPOSITS))
-        .isEqualTo(config.getMaxBuilderDepositRequestsPerPayload());
-    assertThat(listMaxLength(requests, ExecutionRequestsFieldsGloas.BUILDER_EXITS))
-        .isEqualTo(config.getMaxBuilderExitRequestsPerPayload());
-  }
 
   @Test
   void executionPayloadWithdrawals() {
