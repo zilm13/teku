@@ -74,6 +74,21 @@ public final class TekuDefaultExceptionHandler
   }
 
   private void handleException(final Throwable exception, final String subscriberDescription) {
+    if (exception instanceof OutOfMemoryError
+        || ExceptionUtil.hasCause(exception, OutOfMemoryError.class)) {
+      // Checked before everything else: an out of memory error wrapped in one of the exceptions
+      // below would otherwise take the graceful System.exit path, which can block forever in a
+      // shutdown hook (#7166). Terminating reliably matters more than the wrapper's exit code.
+      //
+      // Heap exhaustion never gets here, as -XX:+ExitOnOutOfMemoryError terminates the JVM where
+      // the error is thrown. This is for the errors thrown by Java code, which that flag does not
+      // detect: Netty's OutOfDirectMemoryError and NIO's "Cannot reserve ... direct buffer
+      // memory". Causes are checked because they arrive wrapped, for example in a
+      // CompletionException.
+      haltImmediately(subscriberDescription, exception);
+      return;
+    }
+
     final Optional<FatalServiceFailureException> fatalServiceError =
         ExceptionUtil.getCause(exception, FatalServiceFailureException.class);
 
@@ -86,14 +101,6 @@ public final class TekuDefaultExceptionHandler
         .isPresent()) {
       statusLog.fatalError(subscriberDescription, exception);
       System.exit(FATAL_EXIT_CODE);
-    } else if (exception instanceof OutOfMemoryError
-        || ExceptionUtil.hasCause(exception, OutOfMemoryError.class)) {
-      // Heap exhaustion is handled by -XX:+ExitOnOutOfMemoryError, which terminates the JVM before
-      // this handler runs. What reaches here are the out of memory errors thrown by Java code,
-      // which that flag does not cover: Netty's OutOfDirectMemoryError and the NIO "Cannot reserve
-      // ... direct buffer memory" error. Causes are checked because they arrive wrapped, for
-      // example in a CompletionException.
-      haltImmediately(subscriberDescription, exception);
     } else if (exception instanceof EphemeryLifecycleException) {
       statusLog.fatalError(subscriberDescription, exception);
       System.exit(ERROR_EXIT_CODE);

@@ -28,4 +28,4 @@
  - Fixed gossip wire validator to reject inbound messages containing the `key` field.
  - Fixed the gossip message size gate comparing the compressed payload size against the uncompressed `MAX_PAYLOAD_SIZE`.
  - Fixed an out of memory error when a sync stopped while the chain head was still far behind. The node no longer reports itself as in sync in that case.
- - Teku now shuts down on an `OutOfMemoryError` instead of continuing to run in a broken state or hanging during shutdown. This is done with the `-XX:+ExitOnOutOfMemoryError` JVM flag, so the process exits with code 3.
+ - Fixed cases where Teku kept running, or hung while shutting down, after an out of memory error instead of exiting. It can now exit with code 3 as well as the usual code 1; both mean the node can be restarted.

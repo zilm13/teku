@@ -28,7 +28,9 @@ import java.util.List;
 import java.util.concurrent.CompletionException;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.infrastructure.exceptions.ExitConstants;
+import tech.pegasys.teku.infrastructure.exceptions.FatalServiceFailureException;
 import tech.pegasys.teku.infrastructure.logging.StatusLogger;
+import tech.pegasys.teku.storage.server.DatabaseStorageException;
 
 class TekuDefaultExceptionHandlerTest {
 
@@ -81,6 +83,29 @@ class TekuDefaultExceptionHandlerTest {
 
     verify(log).fatalError(anyString(), eq(error));
     verify(log, never()).unexpectedFailure(anyString(), any());
+    assertThat(haltedWith).containsExactly(ExitConstants.ERROR_EXIT_CODE);
+  }
+
+  @Test
+  void shouldHaltWhenOutOfMemoryErrorIsWrappedInAFatalServiceFailure() {
+    // Would otherwise take the graceful System.exit path for FatalServiceFailureException, which
+    // can block forever in a shutdown hook (#7166)
+    final Throwable error =
+        new FatalServiceFailureException(
+            TekuDefaultExceptionHandlerTest.class, new OutOfMemoryError());
+
+    exceptionHandler.uncaughtException(Thread.currentThread(), error);
+
+    assertThat(haltedWith).containsExactly(ExitConstants.ERROR_EXIT_CODE);
+  }
+
+  @Test
+  void shouldHaltWhenOutOfMemoryErrorIsWrappedInAnUnrecoverableStorageException() {
+    final Throwable error =
+        DatabaseStorageException.unrecoverable("storage failed", new OutOfMemoryError());
+
+    exceptionHandler.uncaughtException(Thread.currentThread(), error);
+
     assertThat(haltedWith).containsExactly(ExitConstants.ERROR_EXIT_CODE);
   }
 
