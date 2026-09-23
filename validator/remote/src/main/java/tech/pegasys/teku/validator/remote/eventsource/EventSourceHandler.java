@@ -41,6 +41,13 @@ class EventSourceHandler implements BackgroundEventHandler {
   private final String beaconNodeEndpoint;
 
   /**
+   * Whether a stream to this beacon node is currently open. Only a stream which was opened and then
+   * failed tells us anything about the events the beacon node delivers: never reaching the node at
+   * all is reported elsewhere.
+   */
+  private final AtomicBoolean connected = new AtomicBoolean(false);
+
+  /**
    * Whether the current connection has delivered a head event. A beacon node which does not accept
    * the subscription still accepts the connection, so a stream which connects and then never
    * delivers anything is the only symptom, and without this it would leave the validator client
@@ -68,6 +75,7 @@ class EventSourceHandler implements BackgroundEventHandler {
 
   @Override
   public void onOpen() {
+    connected.set(true);
     headEventReceivedSinceConnected.set(false);
     validatorLogger.connectedToBeaconNodeEventStream();
     // We might have missed some events while connecting or reconnected so ensure the duties are
@@ -88,7 +96,6 @@ class EventSourceHandler implements BackgroundEventHandler {
       final EventType eventType = EventType.valueOf(event);
       if (eventType == EventType.head) {
         headEventReceivedSinceConnected.set(true);
-        metrics.headEventCounter().labels(beaconNodeEndpoint).inc();
       }
       switch (eventType) {
         case head -> handleHeadEvent(messageEvent.getData());
@@ -137,8 +144,9 @@ class EventSourceHandler implements BackgroundEventHandler {
 
   @Override
   public void onError(final Throwable t) {
-    if (!headEventReceivedSinceConnected.get()) {
-      validatorLogger.noHeadEventsReceivedFromBeaconNodeEventStream(beaconNodeEndpoint);
+    final boolean wasConnected = connected.getAndSet(false);
+    if (wasConnected) {
+      warnIfNoHeadEventsWereReceived();
     }
     if (Throwables.getRootCause(t) instanceof SocketTimeoutException) {
       metrics.timeoutCounter().inc();
@@ -148,6 +156,12 @@ class EventSourceHandler implements BackgroundEventHandler {
     } else {
       metrics.errorCounter().inc();
       validatorLogger.beaconNodeEventStreamConnectionError();
+    }
+  }
+
+  private void warnIfNoHeadEventsWereReceived() {
+    if (!headEventReceivedSinceConnected.get()) {
+      validatorLogger.noHeadEventsReceivedFromBeaconNodeEventStream(beaconNodeEndpoint);
     }
   }
 }

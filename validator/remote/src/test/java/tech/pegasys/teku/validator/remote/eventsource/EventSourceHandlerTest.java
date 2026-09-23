@@ -13,11 +13,11 @@
 
 package tech.pegasys.teku.validator.remote.eventsource;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -30,7 +30,6 @@ import tech.pegasys.teku.api.response.EventType;
 import tech.pegasys.teku.infrastructure.json.JsonUtil;
 import tech.pegasys.teku.infrastructure.logging.ValidatorLogger;
 import tech.pegasys.teku.infrastructure.metrics.StubMetricsSystem;
-import tech.pegasys.teku.infrastructure.metrics.TekuMetricCategory;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.spec.TestSpecFactory;
@@ -179,6 +178,26 @@ class EventSourceHandlerTest {
   }
 
   @Test
+  void onError_shouldNotWarnWhenTheStreamWasNeverOpened() {
+    // failing to reach the beacon node at all says nothing about the events it would deliver
+    handler.onError(new IOException("connection refused"));
+
+    verify(validatorLogger, never()).noHeadEventsReceivedFromBeaconNodeEventStream(ENDPOINT);
+  }
+
+  @Test
+  void onError_shouldNotWarnRepeatedlyWhileTheBeaconNodeIsUnreachable() throws Exception {
+    handler.onOpen();
+    handler.onError(new IOException("connection reset"));
+
+    // reconnect attempts which never get a stream open must stay quiet
+    handler.onError(new IOException("connection refused"));
+    handler.onError(new IOException("connection refused"));
+
+    verify(validatorLogger, times(1)).noHeadEventsReceivedFromBeaconNodeEventStream(ENDPOINT);
+  }
+
+  @Test
   void onError_shouldWarnWhenTheStreamDeliveredNoHeadEvents() {
     handler.onOpen();
 
@@ -227,18 +246,6 @@ class EventSourceHandlerTest {
     handler.onError(new IOException("connection reset"));
 
     verify(validatorLogger).noHeadEventsReceivedFromBeaconNodeEventStream(ENDPOINT);
-  }
-
-  @Test
-  void onMessage_shouldCountHeadEventsPerBeaconNode() throws Exception {
-    handler.onOpen();
-    handler.onMessage(EventType.head.name(), headEvent());
-    handler.onMessage(EventType.head.name(), headEvent());
-
-    assertThat(
-            metricsSystem.getLabelledCounterValue(
-                TekuMetricCategory.VALIDATOR, "event_stream_head_events_total", ENDPOINT))
-        .isEqualTo(2);
   }
 
   private EventSourceHandler createHandler(final boolean generateEarlyAttestations) {

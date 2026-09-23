@@ -26,8 +26,7 @@ record EventStreamMetrics(
     Counter invalidEventCounter,
     Counter disconnectCounter,
     Counter timeoutCounter,
-    Counter errorCounter,
-    LabelledMetric<Counter> headEventCounter) {
+    Counter errorCounter) {
 
   static EventStreamMetrics create(final MetricsSystem metricsSystem) {
     final Counter invalidEventCounter =
@@ -41,17 +40,10 @@ record EventStreamMetrics(
             "event_stream_disconnections_total",
             "Event stream disconnect status counters",
             "reason");
-    final LabelledMetric<Counter> headEventCounter =
-        metricsSystem.createLabelledCounter(
-            TekuMetricCategory.VALIDATOR,
-            "event_stream_head_events_total",
-            "Head events received from each beacon node event stream",
-            "endpoint");
     return new EventStreamMetrics(
         invalidEventCounter,
         eventSourceMetrics.labels("disconnect"),
         eventSourceMetrics.labels("timeout"),
-        eventSourceMetrics.labels("error"),
-        headEventCounter);
+        eventSourceMetrics.labels("error"));
   }
 }

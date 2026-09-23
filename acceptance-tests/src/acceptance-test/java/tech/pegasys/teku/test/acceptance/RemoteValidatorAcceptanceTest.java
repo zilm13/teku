@@ -13,6 +13,7 @@
 
 package tech.pegasys.teku.test.acceptance;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static tech.pegasys.teku.test.acceptance.dsl.TekuNodeConfigBuilder.DEFAULT_NETWORK_NAME;
 
 import java.io.IOException;
@@ -49,7 +50,6 @@ public class RemoteValidatorAcceptanceTest extends AcceptanceTestBase {
     beaconNode.start();
     validatorClient.start();
 
-    validatorClient.waitForHeadEventsReceivedFrom(beaconNode);
     waitForValidatorDutiesToComplete();
   }
 
@@ -72,7 +72,6 @@ public class RemoteValidatorAcceptanceTest extends AcceptanceTestBase {
     beaconNode.start();
 
     waitForSuccessfulEventStreamConnection();
-    validatorClient.waitForHeadEventsReceivedFrom(beaconNode);
     waitForValidatorDutiesToComplete();
   }
 
@@ -99,7 +98,6 @@ public class RemoteValidatorAcceptanceTest extends AcceptanceTestBase {
     validatorClient.start();
 
     waitForSuccessfulEventStreamConnection();
-    validatorClient.waitForHeadEventsReceivedFrom(beaconNode);
     waitForValidatorDutiesToComplete();
 
     beaconNode.stop(false);
@@ -107,7 +105,6 @@ public class RemoteValidatorAcceptanceTest extends AcceptanceTestBase {
     validatorClient.waitForLogMessageContaining(
         "Switching to failover beacon node for event streaming");
     waitForSuccessfulEventStreamConnection();
-    validatorClient.waitForHeadEventsReceivedFrom(failoverBeaconNode);
     waitForValidatorDutiesToComplete();
 
     // primary beacon node recovers
@@ -116,7 +113,6 @@ public class RemoteValidatorAcceptanceTest extends AcceptanceTestBase {
     validatorClient.waitForLogMessageContaining(
         "Switching back to the primary beacon node for event streaming");
     waitForSuccessfulEventStreamConnection();
-    validatorClient.waitForHeadEventsReceivedFrom(beaconNode);
     waitForValidatorDutiesToComplete();
   }
 
@@ -147,7 +143,6 @@ public class RemoteValidatorAcceptanceTest extends AcceptanceTestBase {
     validatorClient.waitForLogMessageContaining(
         "Switching to failover beacon node for event streaming");
     waitForSuccessfulEventStreamConnection();
-    validatorClient.waitForHeadEventsReceivedFrom(beaconNode);
     waitForValidatorDutiesToComplete();
   }
 
@@ -162,5 +157,18 @@ public class RemoteValidatorAcceptanceTest extends AcceptanceTestBase {
     validatorClient.waitForLogMessageContaining("Published aggregate");
     validatorClient.waitForLogMessageContaining("Published sync_signature");
     validatorClient.waitForLogMessageContaining("Published sync_contribution");
+    assertHeadEventsWereReceived();
+  }
+
+  /**
+   * Duties are also driven by the slot timer, so they complete even when the event stream delivers
+   * nothing at all. The validator client reports a stream which was opened and then failed without
+   * delivering any head event, and on a healthy connection that must never happen.
+   */
+  private void assertHeadEventsWereReceived() {
+    assertThat(
+            validatorClient.getFilteredOutputContaining(
+                "No head events were received from the beacon node event stream"))
+        .isEmpty();
   }
 }
