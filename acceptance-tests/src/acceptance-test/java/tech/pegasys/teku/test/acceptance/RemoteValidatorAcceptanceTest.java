@@ -25,7 +25,6 @@ import tech.pegasys.teku.test.acceptance.dsl.TekuValidatorNode;
 
 public class RemoteValidatorAcceptanceTest extends AcceptanceTestBase {
   private static final int VALIDATOR_COUNT = 8;
-
   private TekuBeaconNode beaconNode;
   private TekuValidatorNode validatorClient;
 
@@ -50,6 +49,7 @@ public class RemoteValidatorAcceptanceTest extends AcceptanceTestBase {
     beaconNode.start();
     validatorClient.start();
 
+    validatorClient.waitForHeadEventsReceivedFrom(beaconNode);
     waitForValidatorDutiesToComplete();
   }
 
@@ -72,6 +72,7 @@ public class RemoteValidatorAcceptanceTest extends AcceptanceTestBase {
     beaconNode.start();
 
     waitForSuccessfulEventStreamConnection();
+    validatorClient.waitForHeadEventsReceivedFrom(beaconNode);
     waitForValidatorDutiesToComplete();
   }
 
@@ -98,6 +99,7 @@ public class RemoteValidatorAcceptanceTest extends AcceptanceTestBase {
     validatorClient.start();
 
     waitForSuccessfulEventStreamConnection();
+    validatorClient.waitForHeadEventsReceivedFrom(beaconNode);
     waitForValidatorDutiesToComplete();
 
     beaconNode.stop(false);
@@ -105,6 +107,7 @@ public class RemoteValidatorAcceptanceTest extends AcceptanceTestBase {
     validatorClient.waitForLogMessageContaining(
         "Switching to failover beacon node for event streaming");
     waitForSuccessfulEventStreamConnection();
+    validatorClient.waitForHeadEventsReceivedFrom(failoverBeaconNode);
     waitForValidatorDutiesToComplete();
 
     // primary beacon node recovers
@@ -113,6 +116,7 @@ public class RemoteValidatorAcceptanceTest extends AcceptanceTestBase {
     validatorClient.waitForLogMessageContaining(
         "Switching back to the primary beacon node for event streaming");
     waitForSuccessfulEventStreamConnection();
+    validatorClient.waitForHeadEventsReceivedFrom(beaconNode);
     waitForValidatorDutiesToComplete();
   }
 
@@ -143,6 +147,7 @@ public class RemoteValidatorAcceptanceTest extends AcceptanceTestBase {
     validatorClient.waitForLogMessageContaining(
         "Switching to failover beacon node for event streaming");
     waitForSuccessfulEventStreamConnection();
+    validatorClient.waitForHeadEventsReceivedFrom(beaconNode);
     waitForValidatorDutiesToComplete();
   }
 

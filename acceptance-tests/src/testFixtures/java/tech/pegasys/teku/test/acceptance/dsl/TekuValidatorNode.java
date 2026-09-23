@@ -77,6 +77,18 @@ public class TekuValidatorNode extends TekuNode {
         withValueGreaterThan(0));
   }
 
+  /**
+   * Connecting to the event stream is not enough: a beacon node which rejects the subscription
+   * still accepts the connection, and duties keep being performed off the slot timer, so without
+   * this a test passes even when no events ever reach the validator client.
+   */
+  public void waitForHeadEventsReceivedFrom(final TekuBeaconNode node) {
+    waitForMetric(
+        withNameEqualsTo("validator_event_stream_head_events_total"),
+        withLabelsContaining(Map.of("endpoint", node.getBeaconRestApiUrl() + "/")),
+        withValueGreaterThan(0));
+  }
+
   public void waitForAttestationPublishedTo(final TekuBeaconNode node) {
     waitForMetric(
         withNameEqualsTo("validator_remote_beacon_nodes_requests_total"),
