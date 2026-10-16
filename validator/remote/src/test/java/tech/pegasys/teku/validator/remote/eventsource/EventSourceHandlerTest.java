@@ -380,6 +380,35 @@ class EventSourceHandlerTest {
     verify(validatorLogger).noHeadEventsReceivedFromBeaconNodeEventStream(ENDPOINT);
   }
 
+  @Test
+  void onMessage_shouldRequestPayloadAttestationWhenTheExecutionPayloadBecomesAvailable()
+      throws Exception {
+    // Example payload from https://github.com/ethereum/beacon-APIs apis/eventstream/index.yaml
+    final String data =
+        """
+        {"slot": "10", \
+        "block_root": "0x9a2fefd2fdb57f74993c7780ea5b9030d2897b615b89f808011ca5aebed54eaf"}""";
+
+    handler.onMessage(EventType.execution_payload_available.name(), new MessageEvent(data));
+
+    verify(validatorTimingChannel).onPayloadAttestationCreationDue(UInt64.valueOf(10));
+    verifyNoMoreInteractions(validatorTimingChannel);
+  }
+
+  @Test
+  void onMessage_shouldCountAnInvalidExecutionPayloadAvailableEventWithoutThrowing() {
+    final MessageEvent messageEvent = new MessageEvent("{\"slot\": \"10\"}");
+
+    assertDoesNotThrow(
+        () -> handler.onMessage(EventType.execution_payload_available.name(), messageEvent));
+
+    verifyNoInteractions(validatorTimingChannel);
+    assertThat(
+            metricsSystem.getCounterValue(
+                TekuMetricCategory.VALIDATOR, "event_stream_invalid_events_total"))
+        .isEqualTo(1);
+  }
+
   private EventSourceHandler createHandler(final boolean generateEarlyAttestations) {
     return new EventSourceHandler(
         validatorTimingChannel,

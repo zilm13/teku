@@ -133,6 +133,8 @@ class EventSourceHandler implements BackgroundEventHandler {
           handleHeadV2Event(messageEvent.getData());
           headEventReceivedSinceConnected = true;
         }
+        case execution_payload_available ->
+            handleExecutionPayloadAvailableEvent(messageEvent.getData());
         case attester_slashing -> handleAttesterSlashingEvent(messageEvent.getData());
         case proposer_slashing -> handleProposerSlashingEvent(messageEvent.getData());
         default -> {
@@ -173,6 +175,17 @@ class EventSourceHandler implements BackgroundEventHandler {
     if (generateEarlyAttestations) {
       validatorTimingChannel.onAttestationCreationDue(headEvent.data().slot());
     }
+  }
+
+  /**
+   * The payload timeliness attestation should be sent as soon as the execution payload and its data
+   * are available, rather than waiting for the deadline scheduled by the time based adapter.
+   */
+  private void handleExecutionPayloadAvailableEvent(final String data)
+      throws JsonProcessingException {
+    final ExecutionPayloadAvailableEvent executionPayloadAvailableEvent =
+        JsonUtil.parse(data, ExecutionPayloadAvailableEvent.TYPE_DEFINITION);
+    validatorTimingChannel.onPayloadAttestationCreationDue(executionPayloadAvailableEvent.slot());
   }
 
   private void handleAttesterSlashingEvent(final String data) throws JsonProcessingException {

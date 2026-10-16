@@ -18,14 +18,16 @@ import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.events.EventChannels;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
+import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.SignedExecutionPayloadEnvelope;
 import tech.pegasys.teku.spec.datastructures.forkchoice.ForkChoicePayloadStatus;
+import tech.pegasys.teku.statetransition.execution.ReceivedExecutionPayloadEventsChannel;
 import tech.pegasys.teku.storage.api.ChainHeadChannel;
 import tech.pegasys.teku.storage.api.ReorgContext;
 import tech.pegasys.teku.validator.api.ValidatorTimingChannel;
 import tech.pegasys.teku.validator.beaconnode.BeaconChainEventAdapter;
 
 public class IndependentTimerEventChannelEventAdapter
-    implements ChainHeadChannel, BeaconChainEventAdapter {
+    implements ChainHeadChannel, ReceivedExecutionPayloadEventsChannel, BeaconChainEventAdapter {
 
   private final BeaconChainEventAdapter timeBasedEventAdapter;
   private final boolean generateEarlyAttestations;
@@ -47,7 +49,11 @@ public class IndependentTimerEventChannelEventAdapter
   public SafeFuture<Void> start() {
     return timeBasedEventAdapter
         .start()
-        .thenRun(() -> eventChannels.subscribe(ChainHeadChannel.class, this));
+        .thenRun(
+            () -> {
+              eventChannels.subscribe(ChainHeadChannel.class, this);
+              eventChannels.subscribe(ReceivedExecutionPayloadEventsChannel.class, this);
+            });
   }
 
   @Override
@@ -72,4 +78,20 @@ public class IndependentTimerEventChannelEventAdapter
       validatorTimingChannel.onAttestationCreationDue(slot);
     }
   }
+
+  @Override
+  public void onExecutionPayloadValidated(final SignedExecutionPayloadEnvelope executionPayload) {}
+
+  /**
+   * Payload timeliness attestations should be sent as soon as the execution payload and its data
+   * are available, rather than waiting for the deadline which the time based adapter schedules.
+   */
+  @Override
+  public void onExecutionPayloadAvailable(final SignedExecutionPayloadEnvelope executionPayload) {
+    validatorTimingChannel.onPayloadAttestationCreationDue(executionPayload.getSlot());
+  }
+
+  @Override
+  public void onExecutionPayloadImported(
+      final SignedExecutionPayloadEnvelope executionPayload, final boolean executionOptimistic) {}
 }
