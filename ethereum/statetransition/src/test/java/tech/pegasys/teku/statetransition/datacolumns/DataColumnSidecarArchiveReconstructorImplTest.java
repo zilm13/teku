@@ -34,6 +34,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestTemplate;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
+import tech.pegasys.teku.infrastructure.async.StubAsyncRunner;
 import tech.pegasys.teku.infrastructure.async.SyncAsyncRunner;
 import tech.pegasys.teku.infrastructure.metrics.StubMetricsSystem;
 import tech.pegasys.teku.infrastructure.metrics.TekuMetricCategory;
@@ -266,6 +267,85 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     assertThat(result2).isPresent();
     // reconstruction ran only once despite two independent requests
     verify(chainDataClient).getDataColumnSidecars(any(UInt64.class), anyList());
+  }
+
+  @TestTemplate
+  public void shouldJoinRunningReconstructionAfterRequestTimeout() {
+    final StubAsyncRunner stubAsyncRunner = new StubAsyncRunner(timeProvider);
+    final DataColumnSidecarArchiveReconstructorImpl slowReconstructor =
+        new DataColumnSidecarArchiveReconstructorImpl(
+            chainDataClient,
+            stubAsyncRunner,
+            () -> true,
+            spec,
+            0,
+            sidecarArchivePrunableChannel,
+            metricsSystem,
+            timeProvider);
+    final SignedBeaconBlock block = createBlockWithBlobs(UInt64.ONE);
+    final SafeFuture<List<DataColumnSidecar>> firstHalfSidecars = new SafeFuture<>();
+    when(chainDataClient.getDataColumnSidecars(any(UInt64.class), anyList()))
+        .thenReturn(firstHalfSidecars);
+    when(chainDataClient.getDataColumnSidecarProofs(any()))
+        .thenReturn(SafeFuture.completedFuture(createSecondHalfProofs(block)));
+    final UInt64 index = UInt64.valueOf(halfColumns);
+
+    // the first caller gives up after the timeout while the reconstruction is still running
+    final SafeFuture<Optional<DataColumnSidecar>> timedOut =
+        slowReconstructor.reconstructDataColumnSidecar(block, index, slowReconstructor.onRequest());
+    timeProvider.advanceTimeBySeconds(11);
+    stubAsyncRunner.executeDueActions();
+    assertThat(timedOut).isCompletedWithValue(Optional.empty());
+
+    // a later caller joins the running reconstruction instead of starting an overlapping one
+    final SafeFuture<Optional<DataColumnSidecar>> joined =
+        slowReconstructor.reconstructDataColumnSidecar(block, index, slowReconstructor.onRequest());
+    firstHalfSidecars.complete(createFirstHalfSidecars(block));
+    stubAsyncRunner.executeDueActions();
+
+    assertThat(joined).isCompleted();
+    assertThat(joined.join()).isPresent();
+    verify(chainDataClient, times(1)).getDataColumnSidecars(any(UInt64.class), anyList());
+  }
+
+  @TestTemplate
+  public void shouldFailHungReconstructionSoNextRequestRetries() {
+    final StubAsyncRunner stubAsyncRunner = new StubAsyncRunner(timeProvider);
+    final DataColumnSidecarArchiveReconstructorImpl hungReconstructor =
+        new DataColumnSidecarArchiveReconstructorImpl(
+            chainDataClient,
+            stubAsyncRunner,
+            () -> true,
+            spec,
+            0,
+            sidecarArchivePrunableChannel,
+            metricsSystem,
+            timeProvider);
+    final SignedBeaconBlock block = createBlockWithBlobs(UInt64.ONE);
+    // the first read never completes, the retry's read does
+    when(chainDataClient.getDataColumnSidecars(any(UInt64.class), anyList()))
+        .thenReturn(new SafeFuture<>())
+        .thenReturn(SafeFuture.completedFuture(createFirstHalfSidecars(block)));
+    when(chainDataClient.getDataColumnSidecarProofs(any()))
+        .thenReturn(SafeFuture.completedFuture(createSecondHalfProofs(block)));
+    final UInt64 index = UInt64.valueOf(halfColumns);
+
+    final SafeFuture<Optional<DataColumnSidecar>> hung =
+        hungReconstructor.reconstructDataColumnSidecar(block, index, hungReconstructor.onRequest());
+    stubAsyncRunner.executeDueActions();
+    // past the hung-task backstop: the stuck reconstruction is failed
+    timeProvider.advanceTimeBySeconds(61);
+    stubAsyncRunner.executeDueActions();
+    assertThat(hung).isCompletedWithValue(Optional.empty());
+
+    // the next request starts a fresh reconstruction instead of waiting on the hung one
+    final SafeFuture<Optional<DataColumnSidecar>> retried =
+        hungReconstructor.reconstructDataColumnSidecar(block, index, hungReconstructor.onRequest());
+    stubAsyncRunner.executeDueActionsRepeatedly();
+
+    assertThat(retried).isCompleted();
+    assertThat(retried.join()).isPresent();
+    verify(chainDataClient, times(2)).getDataColumnSidecars(any(UInt64.class), anyList());
   }
 
   @TestTemplate

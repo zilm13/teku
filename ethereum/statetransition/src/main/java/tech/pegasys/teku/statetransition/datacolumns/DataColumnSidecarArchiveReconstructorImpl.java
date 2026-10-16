@@ -59,15 +59,18 @@ public class DataColumnSidecarArchiveReconstructorImpl
   private static final Logger LOG = LogManager.getLogger();
 
   // At most this many reconstructions run concurrently; the rest are queued (see
-  // reconstructionQueue)
-  // and dropped by RECONSTRUCTION_TIMEOUT if they can't be served in time.
+  // reconstructionQueue) and callers stop waiting after RECONSTRUCTION_TIMEOUT.
   private static final int MAX_CONCURRENT_RECONSTRUCTIONS = 32;
   // Hard bound on the reconstruction backlog: once this many are already queued, further requests
   // are rejected immediately (served as empty) rather than growing the queue unboundedly.
   private static final int MAX_QUEUED_RECONSTRUCTIONS = 1024;
-  // Per-task deadline: if a queued/running reconstruction isn't done within this, callers get
-  // empty.
+  // Per-request deadline: a caller waiting longer than this gets empty, while the shared
+  // reconstruction keeps running so later requests join it instead of starting another.
   private static final Duration RECONSTRUCTION_TIMEOUT = Duration.ofSeconds(10);
+  // Backstop for a reconstruction that never completes, counted from when it starts running: it is
+  // failed, freeing its throttling slot so the next request retries. Far above normal
+  // reconstruction times, so a merely slow reconstruction is not duplicated.
+  private static final Duration RECONSTRUCTION_HUNG_TIMEOUT = Duration.ofSeconds(60);
   // How long a successful result is kept after its last request before the per-slot prune drops
   // it. A flat wall-clock window, intentionally not derived from network/slot timing since a
   // peer's by-root re-request pattern varies by client; kept generous so successive request waves
@@ -85,7 +88,7 @@ public class DataColumnSidecarArchiveReconstructorImpl
   // completed reconstructions are shared across all ReqResp requests keyed by block. In-flight
   // entries deduplicate any number of concurrent/overlapping requests onto a single reconstruction
   // (not capacity-bounded); successful entries are reused regardless of age and pruned on each slot
-  // once unrequested for RESULT_RETENTION. Failed/timed-out entries are replaced by the next
+  // once unrequested for RESULT_RETENTION. Failed entries are replaced by the next
   // request, so it retries.
   private final Map<SlotAndBlockRoot, ReconstructionCacheEntry> reconstructions =
       new ConcurrentHashMap<>();
@@ -121,7 +124,7 @@ public class DataColumnSidecarArchiveReconstructorImpl
                 .getNumberOfColumns()
             / 2;
     this.sidecarArchivePrunableChannel = sidecarArchivePrunableChannel;
-    // Queue drops (full queue or timeout) are surfaced via reconstructionFailureCounter, so the
+    // Queue rejections (full queue) are surfaced via reconstructionFailureCounter, so the
     // queue's own metrics are omitted here to keep a single reconstructor per node metric-free of
     // duplicates.
     this.reconstructionQueue =
@@ -170,7 +173,20 @@ public class DataColumnSidecarArchiveReconstructorImpl
               maybeReused.lastRequestedAtMillis = now;
               return maybeReused;
             });
-    return entry.future.thenApply(result -> result.get(index));
+    // the deadline applies to this caller's own future only, never to the shared reconstruction
+    return entry
+        .future
+        .thenApply(result -> result.get(index))
+        .orTimeout(reconstructionAsyncRunner, RECONSTRUCTION_TIMEOUT)
+        .exceptionally(
+            error -> {
+              LOG.debug(
+                  "Reconstruction request for {} index {} timed out: {}",
+                  block.getSlotAndBlockRoot(),
+                  index,
+                  error.toString());
+              return Optional.empty();
+            });
   }
 
   @Override
@@ -188,9 +204,10 @@ public class DataColumnSidecarArchiveReconstructorImpl
     final ReconstructionCacheEntry entry = new ReconstructionCacheEntry(RESULT_RETENTION);
     entry.future =
         reconstructionQueue
-            .queueTask(() -> createTask(block))
-            // per-task deadline: a queued/running reconstruction that overruns is dropped
-            .orTimeout(reconstructionAsyncRunner, RECONSTRUCTION_TIMEOUT)
+            .queueTask(
+                () ->
+                    createTask(block)
+                        .orTimeout(reconstructionAsyncRunner, RECONSTRUCTION_HUNG_TIMEOUT))
             .whenComplete(
                 (result, error) -> {
                   final boolean reconstructed =
@@ -205,7 +222,7 @@ public class DataColumnSidecarArchiveReconstructorImpl
                     reconstructionFailureCounter.inc();
                     if (error != null) {
                       LOG.debug(
-                          "Reconstruction failed or timed out for {}: {}",
+                          "Reconstruction failed for {}: {}",
                           block.getSlotAndBlockRoot(),
                           error.toString());
                     }
@@ -347,7 +364,7 @@ public class DataColumnSidecarArchiveReconstructorImpl
   @Override
   public void onRequestCompleted(final int requestId) {
     // No per-request cleanup needed: reconstructions are shared across requests and pruned on each
-    // slot once unrequested for RESULT_RETENTION, or replaced on failure/timeout. Kept for the
+    // slot once unrequested for RESULT_RETENTION, or replaced on failure. Kept for the
     // DataColumnSidecarArchiveReconstructor contract.
   }
 
@@ -398,7 +415,8 @@ public class DataColumnSidecarArchiveReconstructorImpl
    * A shared reconstruction for a single block. While running it deduplicates concurrent and
    * overlapping requests; once successful it is reused by every later request until the per-slot
    * prune finds it unrequested for {@code retentionMillis}. A reconstruction that completed without
-   * producing sidecars (failed or timed out) is replaced by the next request, so it retries.
+   * producing sidecars (failed, hung past RECONSTRUCTION_HUNG_TIMEOUT, or rejected by a full queue)
+   * is replaced by the next request, so it retries.
    */
   private static final class ReconstructionCacheEntry {
     private final long retentionMillis;
