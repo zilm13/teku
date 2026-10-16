@@ -23,6 +23,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -174,7 +175,7 @@ public class GossipExecutionPayloadBidTestExecutor implements TestExecutor {
     // when that time is earlier than the store's time (which only moves forward). This is necessary
     // for the disparity-boundary tests, where blocks must be imported after their slot starts but
     // messages are validated at a time before that slot starts.
-    final UInt64[] validationTimeMs = {UInt64.valueOf(metaData.getCurrentTimeMs())};
+    final UInt64[] validationTimeMs = {UInt64.ZERO};
 
     // Models the spec's seen.execution_payloads: a gossip level cache of payloads that passed
     // gossip validation, keyed by execution block hash. It is deliberately not the fork choice
@@ -247,7 +248,8 @@ public class GossipExecutionPayloadBidTestExecutor implements TestExecutor {
 
     // acceptedPreferences tracks proposer preferences that have been accepted by the validator,
     // so the bid validator can look them up to check bid compatibility.
-    final Map<UInt64, ProposerPreferences> acceptedPreferences = new ConcurrentHashMap<>();
+    final Map<UInt64, Map<Bytes32, ProposerPreferences>> acceptedPreferences =
+        new ConcurrentHashMap<>();
     final ProposerPreferencesManager proposerPreferencesManager =
         new ProposerPreferencesManager() {
           @Override
@@ -263,8 +265,17 @@ public class GossipExecutionPayloadBidTestExecutor implements TestExecutor {
           }
 
           @Override
-          public Optional<ProposerPreferences> getProposerPreferences(final UInt64 slot) {
-            return Optional.ofNullable(acceptedPreferences.get(slot));
+          public Optional<ProposerPreferences> getProposerPreferences(
+              final UInt64 slot, final Bytes32 dependentRoot) {
+            return Optional.ofNullable(acceptedPreferences.get(slot))
+                .map(preferencesByDependentRoot -> preferencesByDependentRoot.get(dependentRoot));
+          }
+
+          @Override
+          public Collection<ProposerPreferences> getProposerPreferencesForSlot(final UInt64 slot) {
+            return Optional.ofNullable(acceptedPreferences.get(slot))
+                .map(preferencesByDependentRoot -> List.copyOf(preferencesByDependentRoot.values()))
+                .orElse(List.of());
           }
 
           @Override
@@ -295,8 +306,10 @@ public class GossipExecutionPayloadBidTestExecutor implements TestExecutor {
                 proposerPreferencesSchema::sszDeserialize);
         result = safeJoin(preferencesValidator.validate(signedPreferences));
         if (result.isAccept()) {
-          acceptedPreferences.put(
-              signedPreferences.getMessage().getProposalSlot(), signedPreferences.getMessage());
+          final ProposerPreferences preferences = signedPreferences.getMessage();
+          acceptedPreferences
+              .computeIfAbsent(preferences.getProposalSlot(), __ -> new ConcurrentHashMap<>())
+              .put(preferences.getDependentRoot(), preferences);
         }
       } else if (messageName.startsWith("execution_payload_envelope_")) {
         final SignedExecutionPayloadEnvelope signedEnvelope =
@@ -360,9 +373,6 @@ public class GossipExecutionPayloadBidTestExecutor implements TestExecutor {
     @JsonProperty(value = "messages", required = true)
     private List<Message> messages;
 
-    @JsonProperty(value = "current_time_ms", required = true)
-    private long currentTimeMs;
-
     @JsonProperty(value = "bls_setting", defaultValue = "0")
     private int blsSetting;
 
@@ -375,10 +385,6 @@ public class GossipExecutionPayloadBidTestExecutor implements TestExecutor {
 
     public List<Message> getMessages() {
       return messages;
-    }
-
-    public long getCurrentTimeMs() {
-      return currentTimeMs;
     }
 
     public BlsSetting getBlsSetting() {

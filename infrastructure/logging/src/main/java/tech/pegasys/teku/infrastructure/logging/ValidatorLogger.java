@@ -48,6 +48,17 @@ public class ValidatorLogger {
             Color.GREEN));
   }
 
+  public void noHeadEventsReceivedFromBeaconNodeEventStream(final String beaconNodeEndpoint) {
+    log.warn(
+        ColorConsolePrinter.print(
+            String.format(
+                "%sNo head events were received from the beacon node event stream before it failed: %s. "
+                    + "The beacon node is likely outdated, please upgrade it to the latest version. "
+                    + "Duties will be driven by the slot timer alone until head events are received",
+                PREFIX, beaconNodeEndpoint),
+            Color.YELLOW));
+  }
+
   public void beaconNodeEventStreamConnectionError() {
     log.debug(
         ColorConsolePrinter.print(
@@ -242,6 +253,12 @@ public class ValidatorLogger {
   public void proposerPreferencesPublicationFailed(final UInt64 epoch, final Throwable error) {
     final String errorString =
         String.format("%sFailed to publish proposer preferences for epoch %s", PREFIX, epoch);
+    log.error(ColorConsolePrinter.print(errorString, Color.RED), error);
+  }
+
+  public void builderPreferencesPublicationFailed(final UInt64 epoch, final Throwable error) {
+    final String errorString =
+        String.format("%sFailed to publish builder preferences for epoch %s", PREFIX, epoch);
     log.error(ColorConsolePrinter.print(errorString, Color.RED), error);
   }
 

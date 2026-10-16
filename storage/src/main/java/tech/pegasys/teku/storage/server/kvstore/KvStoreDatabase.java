@@ -30,8 +30,10 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -66,6 +68,7 @@ import tech.pegasys.teku.spec.datastructures.execution.ExecutionPayloadSummary;
 import tech.pegasys.teku.spec.datastructures.execution.SlotAndExecutionPayloadSummary;
 import tech.pegasys.teku.spec.datastructures.forkchoice.VoteTracker;
 import tech.pegasys.teku.spec.datastructures.hashtree.HashTree;
+import tech.pegasys.teku.spec.datastructures.lightclient.LightClientUpdate;
 import tech.pegasys.teku.spec.datastructures.state.AnchorPoint;
 import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
 import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
@@ -1354,6 +1357,46 @@ public class KvStoreDatabase implements Database {
   }
 
   @Override
+  public void storeBestLightClientUpdate(
+      final UInt64 period, final LightClientUpdate update, final Bytes32 signatureBlockRoot) {
+    try (final HotUpdater updater = hotUpdater()) {
+      updater.addBestLightClientUpdate(period, update, signatureBlockRoot);
+      updater.commit();
+    }
+  }
+
+  @Override
+  @MustBeClosed
+  public Stream<Map.Entry<UInt64, LightClientUpdate>> streamBestLightClientUpdates() {
+    return dao.streamBestLightClientUpdates().map(entry -> entry);
+  }
+
+  @Override
+  public Optional<Bytes32> getBestLightClientUpdateSignatureBlockRoot(final UInt64 period) {
+    return dao.getBestLightClientUpdateSignatureBlockRoot(period);
+  }
+
+  @Override
+  public void pruneBestLightClientUpdatesBefore(final UInt64 period) {
+    final List<UInt64> periodsToDelete;
+    try (final Stream<UInt64> periods = dao.streamBestLightClientUpdatePeriods()) {
+      periodsToDelete = periods.filter(storedPeriod -> storedPeriod.isLessThan(period)).toList();
+    }
+    removeBestLightClientUpdates(periodsToDelete);
+  }
+
+  @Override
+  public void removeBestLightClientUpdates(final Collection<UInt64> periods) {
+    if (periods.isEmpty()) {
+      return;
+    }
+    try (final HotUpdater updater = hotUpdater()) {
+      periods.forEach(updater::removeBestLightClientUpdate);
+      updater.commit();
+    }
+  }
+
+  @Override
   public void setFirstCustodyIncompleteSlot(final UInt64 slot) {
     try (final FinalizedUpdater updater = finalizedUpdater()) {
       updater.setFirstCustodyIncompleteSlot(slot);
@@ -1392,70 +1435,88 @@ public class KvStoreDatabase implements Database {
 
   @Override
   public void archiveSidecarsProofs(final UInt64 startSlot, final UInt64 tillSlotInclusive) {
+    if (getFirstDataColumnSidecarSlot().isEmpty()) {
+      return;
+    }
     // Extension columns (indices >= NUMBER_OF_COLUMNS / 2) are the reconstructable half whose
     // proofs we retain while dropping the columns themselves.
-    final int halfColumns =
+    final int numberOfColumns =
         spec.getNumberOfDataColumns()
-                .orElseThrow(
-                    () ->
-                        new IllegalStateException(
-                            "Cannot archive data column sidecar proofs before the Fulu milestone"))
-            / 2;
+            .orElseThrow(
+                () ->
+                    new IllegalStateException(
+                        "Cannot archive data column sidecar proofs before the Fulu milestone"));
+    final int halfColumns = numberOfColumns / 2;
     try (final Stream<DataColumnSlotAndIdentifier> dataColumnSidecars =
         streamDataColumnIdentifiers(startSlot, tillSlotInclusive)) {
 
       int archivedSlots = 0;
 
-      final Map<UInt64, List<DataColumnSlotAndIdentifier>> archiveMap = new HashMap<>();
+      final NavigableMap<UInt64, List<DataColumnSlotAndIdentifier>> archiveMap =
+          dataColumnSidecars.collect(
+              Collectors.groupingBy(
+                  DataColumnSlotAndIdentifier::slot, TreeMap::new, Collectors.toList()));
 
-      dataColumnSidecars
-          // we need only extension
-          .filter(identifier -> identifier.columnIndex().isGreaterThanOrEqualTo(halfColumns))
-          .forEach(
-              item -> archiveMap.computeIfAbsent(item.slot(), k -> new ArrayList<>()).add(item));
-
-      final List<UInt64> slots = archiveMap.keySet().stream().sorted().toList();
-
-      if (!slots.isEmpty()) {
+      if (!archiveMap.isEmpty()) {
         LOG.debug(
             "Archiving data column sidecars to proofs from slots {} to {}",
-            slots.getFirst(),
-            slots.getLast());
+            archiveMap.firstKey(),
+            archiveMap.lastKey());
         try (final FinalizedUpdater updater = finalizedUpdater()) {
-          for (final UInt64 slot : slots) {
-            final List<DataColumnSlotAndIdentifier> keys =
-                archiveMap.get(slot).stream().sorted().toList();
-            final List<DataColumnSidecar> sidecars = new ArrayList<>();
-
-            for (final DataColumnSlotAndIdentifier key : keys) {
-              final Optional<Bytes> sidecar = dao.getSidecar(key);
-              // surprise, let's skip this slot
-              if (sidecar.isEmpty()) {
-                break;
-              }
-              sidecars.add(spec.deserializeSidecar(sidecar.get(), key.slot()));
-            }
-
-            // remove sidecars only if we have required 1/2
-            if (sidecars.size() == halfColumns) {
-              final List<List<KZGProof>> proofs =
-                  sidecars.stream()
-                      .map(
-                          sidecar ->
-                              sidecar.getKzgProofs().stream()
-                                  .map(SszKZGProof::getKZGProof)
-                                  .toList())
-                      .toList();
-              updater.addDataColumnSidecarsProofs(slot, proofs);
-              for (final DataColumnSlotAndIdentifier key : keys) {
-                updater.removeSidecar(key);
-              }
-              ++archivedSlots;
+          for (final UInt64 slot : archiveMap.keySet()) {
+            // The canonical sidecar table may also hold columns of a never-imported block at this
+            // slot, so columns are grouped by block root and only a block with every column is
+            // archived: first-half columns are required for reconstruction and columns of
+            // different blocks must never be mixed. Proofs are stored per slot, so the slot is
+            // skipped unless exactly one block is complete.
+            final List<List<DataColumnSlotAndIdentifier>> completeBlocks =
+                archiveMap.get(slot).stream()
+                    .collect(Collectors.groupingBy(DataColumnSlotAndIdentifier::blockRoot))
+                    .values()
+                    .stream()
+                    .filter(keys -> keys.size() == numberOfColumns)
+                    .toList();
+            if (completeBlocks.size() != 1) {
               LOG.trace(
-                  "Pruned {} extension data column sidecars, keeping their proofs, at slot {}",
-                  keys.size(),
-                  slot);
+                  "Skipping archival for slot {}: {} blocks have all {} columns",
+                  slot,
+                  completeBlocks.size(),
+                  numberOfColumns);
+              continue;
             }
+            final List<DataColumnSlotAndIdentifier> extensionKeys =
+                completeBlocks.getFirst().stream()
+                    .filter(id -> id.columnIndex().isGreaterThanOrEqualTo(halfColumns))
+                    .sorted()
+                    .toList();
+
+            final List<Optional<List<KZGProof>>> maybeProofs =
+                extensionKeys.stream()
+                    .map(
+                        key ->
+                            dao.getSidecar(key)
+                                .map(
+                                    sidecar ->
+                                        spec
+                                            .deserializeSidecar(sidecar, slot)
+                                            .getKzgProofs()
+                                            .stream()
+                                            .map(SszKZGProof::getKZGProof)
+                                            .toList()))
+                    .toList();
+            if (!maybeProofs.stream().allMatch(Optional::isPresent)) {
+              LOG.trace("Skipping archival for slot {}: extension columns could not be read", slot);
+              continue;
+            }
+
+            updater.addDataColumnSidecarsProofs(
+                slot, maybeProofs.stream().map(Optional::orElseThrow).toList());
+            extensionKeys.forEach(updater::removeSidecar);
+            ++archivedSlots;
+            LOG.trace(
+                "Pruned {} extension data column sidecars, keeping their proofs, at slot {}",
+                extensionKeys.size(),
+                slot);
           }
           updater.commit();
         }
@@ -1526,7 +1587,7 @@ public class KvStoreDatabase implements Database {
         final List<UInt64> prunedSlots =
             toPrune.keys().stream().map(DataColumnSlotAndIdentifier::slot).distinct().toList();
         LOG.debug(
-            "Removing archived data column sidecar proofs for {} pruned canonical slots ({}..{})",
+            "Removing any archived data column sidecar proofs for {} pruned canonical slots ({}..{})",
             prunedSlots.size(),
             prunedSlots.getFirst(),
             prunedSlots.getLast());

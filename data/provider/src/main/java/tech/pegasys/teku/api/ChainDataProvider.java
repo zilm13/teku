@@ -82,6 +82,7 @@ import tech.pegasys.teku.spec.datastructures.metadata.BlobsAndMetaData;
 import tech.pegasys.teku.spec.datastructures.metadata.BlockAndMetaData;
 import tech.pegasys.teku.spec.datastructures.metadata.DataColumnSidecarsAndMetaData;
 import tech.pegasys.teku.spec.datastructures.metadata.ExecutionPayloadAndMetaData;
+import tech.pegasys.teku.spec.datastructures.metadata.LightClientUpdateWithContext;
 import tech.pegasys.teku.spec.datastructures.metadata.ObjectAndMetaData;
 import tech.pegasys.teku.spec.datastructures.metadata.StateAndMetaData;
 import tech.pegasys.teku.spec.datastructures.operations.Attestation;
@@ -168,9 +169,31 @@ public class ChainDataProvider {
     this.lightClientUpdateStore = lightClientUpdateStore;
   }
 
-  public List<LightClientUpdate> getBestLightClientUpdates(
+  public List<LightClientUpdateWithContext> getBestLightClientUpdates(
       final UInt64 startPeriod, final int count) {
-    return lightClientUpdateStore.getBestUpdatesInRange(startPeriod, count);
+    final List<LightClientUpdate> updates =
+        lightClientUpdateStore.getBestUpdatesInRange(startPeriod, count);
+
+    if (updates.isEmpty()) {
+      return List.of();
+    }
+
+    final Bytes32 genesisValidatorsRoot = getGenesisStateData().getGenesisValidatorsRoot();
+    return updates.stream()
+        .map(
+            update -> {
+              final UInt64 attestedSlot = attestedSlot(update);
+              return new LightClientUpdateWithContext(
+                  spec.computeForkDigest(
+                      genesisValidatorsRoot, spec.computeEpochAtSlot(attestedSlot)),
+                  spec.atSlot(attestedSlot).getMilestone(),
+                  update);
+            })
+        .toList();
+  }
+
+  private static UInt64 attestedSlot(final LightClientUpdate update) {
+    return update.getAttestedHeader().getBeacon().getSlot();
   }
 
   public Optional<LightClientFinalityUpdate> getLatestLightClientFinalityUpdate() {
@@ -337,20 +360,39 @@ public class ChainDataProvider {
 
   private List<ForkChoiceNodeDataV2> getForkChoiceNodeDataV2(
       final ReadOnlyForkChoiceStrategy forkChoiceStrategy) {
-    return forkChoiceStrategy.getBlockData().stream()
+    return forkChoiceStrategy.getBlockDataWithParent().stream()
         .map(
-            node ->
-                new ForkChoiceNodeDataV2(
-                    getForkChoicePayloadStatusV2(node),
-                    node,
-                    forkChoiceStrategy.getPayloadAttesterCount(node.getRoot()),
-                    forkChoiceStrategy.getPayloadAvailabilityYesCount(node.getRoot()),
-                    forkChoiceStrategy.getPayloadDataAvailabilityYesCount(node.getRoot())))
+            nodeWithParent -> {
+              final ProtoNodeData node = nodeWithParent.node();
+              return new ForkChoiceNodeDataV2(
+                  getForkChoicePayloadStatusV2(node),
+                  node,
+                  getParentRootV2(node),
+                  nodeWithParent.parent().map(this::getForkChoicePayloadStatusV2),
+                  forkChoiceStrategy.getPayloadAttesterCount(node.getRoot()),
+                  forkChoiceStrategy.getPayloadAvailabilityYesCount(node.getRoot()),
+                  forkChoiceStrategy.getPayloadDataAvailabilityYesCount(node.getRoot()));
+            })
         .toList();
   }
 
+  /**
+   * From Gloas, a block's {@code EMPTY} and {@code FULL} nodes have the same block's {@code
+   * PENDING} node as parent, so their parent root is the block's own root.
+   */
+  private Bytes32 getParentRootV2(final ProtoNodeData node) {
+    final boolean isGloasEmptyOrFullNode =
+        isGloasOrLater(node.getSlot())
+            && node.getPayloadStatus() != ForkChoicePayloadStatus.PAYLOAD_STATUS_PENDING;
+    return isGloasEmptyOrFullNode ? node.getRoot() : node.getParentRoot();
+  }
+
+  private boolean isGloasOrLater(final UInt64 slot) {
+    return spec.atSlot(slot).getMilestone().isGreaterThanOrEqualTo(SpecMilestone.GLOAS);
+  }
+
   private ForkChoicePayloadStatus getForkChoicePayloadStatusV2(final ProtoNodeData node) {
-    return spec.atSlot(node.getSlot()).getMilestone().isGreaterThanOrEqualTo(SpecMilestone.GLOAS)
+    return isGloasOrLater(node.getSlot())
         ? node.getPayloadStatus()
         : ForkChoicePayloadStatus.PAYLOAD_STATUS_FULL;
   }

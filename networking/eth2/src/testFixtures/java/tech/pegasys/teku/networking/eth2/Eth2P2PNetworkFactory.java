@@ -68,6 +68,7 @@ import tech.pegasys.teku.networking.eth2.gossip.subnets.AttestationSubnetTopicPr
 import tech.pegasys.teku.networking.eth2.gossip.subnets.DataColumnSidecarSubnetTopicProvider;
 import tech.pegasys.teku.networking.eth2.gossip.subnets.NodeIdToDataColumnSidecarSubnetsCalculator;
 import tech.pegasys.teku.networking.eth2.gossip.subnets.PeerSubnetSubscriptions;
+import tech.pegasys.teku.networking.eth2.gossip.subnets.SyncCommitteeSubnetPeerCountLogger;
 import tech.pegasys.teku.networking.eth2.gossip.subnets.SyncCommitteeSubnetTopicProvider;
 import tech.pegasys.teku.networking.eth2.gossip.topics.Eth2GossipTopicFilter;
 import tech.pegasys.teku.networking.eth2.gossip.topics.OperationProcessor;
@@ -107,6 +108,8 @@ import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.SignedExecution
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.SignedExecutionPayloadEnvelope;
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.SignedProposerPreferences;
 import tech.pegasys.teku.spec.datastructures.execution.ExecutionProof;
+import tech.pegasys.teku.spec.datastructures.lightclient.LightClientFinalityUpdate;
+import tech.pegasys.teku.spec.datastructures.lightclient.LightClientOptimisticUpdate;
 import tech.pegasys.teku.spec.datastructures.operations.Attestation;
 import tech.pegasys.teku.spec.datastructures.operations.AttesterSlashing;
 import tech.pegasys.teku.spec.datastructures.operations.ProposerSlashing;
@@ -171,6 +174,10 @@ public class Eth2P2PNetworkFactory {
     protected OperationProcessor<SignedVoluntaryExit> voluntaryExitProcessor;
     protected OperationProcessor<SignedContributionAndProof> signedContributionAndProofProcessor;
     protected OperationProcessor<ValidatableSyncCommitteeMessage> syncCommitteeMessageProcessor;
+    protected Optional<OperationProcessor<LightClientFinalityUpdate>>
+        lightClientFinalityUpdateProcessor = Optional.empty();
+    protected Optional<OperationProcessor<LightClientOptimisticUpdate>>
+        lightClientOptimisticUpdateProcessor = Optional.empty();
     protected OperationProcessor<SignedBlsToExecutionChange> signedBlsToExecutionChangeProcessor;
     protected OperationProcessor<DataColumnSidecar> dataColumnSidecarOperationProcessor;
     protected OperationProcessor<ExecutionProof> executionProofOperationProcessor;
@@ -290,9 +297,7 @@ public class Eth2P2PNetworkFactory {
 
         if (rpcEncoding == null) {
           rpcEncoding =
-              RpcEncoding.createSszSnappyEncoding(
-                  spec.getNetworkingConfig().getMaxPayloadSize(),
-                  config.isRpcSnappyAircompressorEnabled());
+              RpcEncoding.createSszSnappyEncoding(spec.getNetworkingConfig().getMaxPayloadSize());
         }
         final UInt256 discoveryNodeId = DISCOVERY_NODE_ID_GENERATOR.next();
         final int numberOfColumns = spec.getNumberOfDataColumns().orElse(0);
@@ -390,6 +395,9 @@ public class Eth2P2PNetworkFactory {
                 "subnet_peer_count",
                 "Number of currently connected peers subscribed to each subnet",
                 "subnet");
+        final SyncCommitteeSubnetPeerCountLogger syncCommitteeSubnetPeerCountLogger =
+            new SyncCommitteeSubnetPeerCountLogger(
+                timeProvider, config.getTargetSubnetSubscriberCount());
         final DiscoveryNetwork<?> network =
             DiscoveryNetworkBuilder.create()
                 .metricsSystem(metricsSystem)
@@ -428,7 +436,8 @@ public class Eth2P2PNetworkFactory {
                                 dataColumnSidecarSubnetTopicProvider,
                                 dataColumnSidecarSubnetService,
                                 config.getTargetSubnetSubscriberCount(),
-                                subnetPeerCountGauge),
+                                subnetPeerCountGauge,
+                                syncCommitteeSubnetPeerCountLogger),
                         reputationManager,
                         Collections::shuffle))
                 .discoveryConfig(config.getDiscoveryConfig())
@@ -509,6 +518,8 @@ public class Eth2P2PNetworkFactory {
                 voluntaryExitProcessor,
                 signedContributionAndProofProcessor,
                 syncCommitteeMessageProcessor,
+                lightClientFinalityUpdateProcessor,
+                lightClientOptimisticUpdateProcessor,
                 debugDataDumper);
         case BELLATRIX ->
             new GossipForkSubscriptionsBellatrix(
@@ -527,6 +538,8 @@ public class Eth2P2PNetworkFactory {
                 voluntaryExitProcessor,
                 signedContributionAndProofProcessor,
                 syncCommitteeMessageProcessor,
+                lightClientFinalityUpdateProcessor,
+                lightClientOptimisticUpdateProcessor,
                 debugDataDumper);
         case CAPELLA ->
             new GossipForkSubscriptionsCapella(
@@ -545,6 +558,8 @@ public class Eth2P2PNetworkFactory {
                 voluntaryExitProcessor,
                 signedContributionAndProofProcessor,
                 syncCommitteeMessageProcessor,
+                lightClientFinalityUpdateProcessor,
+                lightClientOptimisticUpdateProcessor,
                 signedBlsToExecutionChangeProcessor,
                 debugDataDumper);
         case DENEB ->
@@ -565,6 +580,8 @@ public class Eth2P2PNetworkFactory {
                 voluntaryExitProcessor,
                 signedContributionAndProofProcessor,
                 syncCommitteeMessageProcessor,
+                lightClientFinalityUpdateProcessor,
+                lightClientOptimisticUpdateProcessor,
                 signedBlsToExecutionChangeProcessor,
                 debugDataDumper);
         case ELECTRA ->
@@ -585,6 +602,8 @@ public class Eth2P2PNetworkFactory {
                 voluntaryExitProcessor,
                 signedContributionAndProofProcessor,
                 syncCommitteeMessageProcessor,
+                lightClientFinalityUpdateProcessor,
+                lightClientOptimisticUpdateProcessor,
                 signedBlsToExecutionChangeProcessor,
                 debugDataDumper,
                 executionProofOperationProcessor,
@@ -607,6 +626,8 @@ public class Eth2P2PNetworkFactory {
                 voluntaryExitProcessor,
                 signedContributionAndProofProcessor,
                 syncCommitteeMessageProcessor,
+                lightClientFinalityUpdateProcessor,
+                lightClientOptimisticUpdateProcessor,
                 signedBlsToExecutionChangeProcessor,
                 dataColumnSidecarOperationProcessor,
                 debugDataDumper,
@@ -632,6 +653,8 @@ public class Eth2P2PNetworkFactory {
                 voluntaryExitProcessor,
                 signedContributionAndProofProcessor,
                 syncCommitteeMessageProcessor,
+                lightClientFinalityUpdateProcessor,
+                lightClientOptimisticUpdateProcessor,
                 signedBlsToExecutionChangeProcessor,
                 dataColumnSidecarOperationProcessor,
                 executionPayloadProcessor,
@@ -874,6 +897,20 @@ public class Eth2P2PNetworkFactory {
         final OperationProcessor<ValidatableSyncCommitteeMessage> gossipedSyncCommitteeProcessor) {
       checkNotNull(gossipedSyncCommitteeProcessor);
       this.syncCommitteeMessageProcessor = gossipedSyncCommitteeProcessor;
+      return this;
+    }
+
+    public Eth2P2PNetworkBuilder gossipedLightClientFinalityUpdateProcessor(
+        final OperationProcessor<LightClientFinalityUpdate> processor) {
+      checkNotNull(processor);
+      this.lightClientFinalityUpdateProcessor = Optional.of(processor);
+      return this;
+    }
+
+    public Eth2P2PNetworkBuilder gossipedLightClientOptimisticUpdateProcessor(
+        final OperationProcessor<LightClientOptimisticUpdate> processor) {
+      checkNotNull(processor);
+      this.lightClientOptimisticUpdateProcessor = Optional.of(processor);
       return this;
     }
 

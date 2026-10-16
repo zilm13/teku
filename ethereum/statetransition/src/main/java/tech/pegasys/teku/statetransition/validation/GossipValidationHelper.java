@@ -37,6 +37,7 @@ import tech.pegasys.teku.spec.datastructures.forkchoice.ProtoNodeData;
 import tech.pegasys.teku.spec.datastructures.forkchoice.ReadOnlyForkChoiceStrategy;
 import tech.pegasys.teku.spec.datastructures.forkchoice.ReadOnlyStore;
 import tech.pegasys.teku.spec.datastructures.operations.AttestationData;
+import tech.pegasys.teku.spec.datastructures.state.ForkInfo;
 import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
 import tech.pegasys.teku.spec.logic.common.helpers.BeaconStateAccessors;
 import tech.pegasys.teku.spec.logic.common.util.AttestationUtil;
@@ -44,6 +45,7 @@ import tech.pegasys.teku.spec.logic.common.util.AttestationValidationResult;
 import tech.pegasys.teku.spec.logic.common.util.DataColumnSidecarUtil;
 import tech.pegasys.teku.spec.logic.versions.gloas.helpers.BeaconStateAccessorsGloas;
 import tech.pegasys.teku.spec.logic.versions.gloas.helpers.PredicatesGloas;
+import tech.pegasys.teku.statetransition.util.ShufflingDependentRootUtil;
 import tech.pegasys.teku.storage.client.ChainHead;
 import tech.pegasys.teku.storage.client.RecentChainData;
 
@@ -76,10 +78,38 @@ public class GossipValidationHelper {
   }
 
   public boolean isSlotFromFuture(final UInt64 slot) {
+    return slot.isGreaterThan(getMaxCurrentSlot());
+  }
+
+  /** Returns the current slot with a MAXIMUM_GOSSIP_CLOCK_DISPARITY allowance. */
+  public UInt64 getMaxCurrentSlot() {
     final UInt64 maxTime = getCurrentTimeMillis().plus(maxOffsetTimeInMillis);
-    final UInt64 maxCurrSlot =
-        spec.getCurrentSlotFromTimeMillis(maxTime, recentChainData.getGenesisTimeMillis());
-    return slot.isGreaterThan(maxCurrSlot);
+    return spec.getCurrentSlotFromTimeMillis(maxTime, recentChainData.getGenesisTimeMillis());
+  }
+
+  /**
+   * Returns true when the proposer for {@code proposalSlot} is known, which happens once the
+   * lookahead epoch has started.
+   */
+  public boolean isWithinProposerLookahead(final UInt64 proposalSlot) {
+    final int minSeedLookahead = spec.atSlot(proposalSlot).getConfig().getMinSeedLookahead();
+    final UInt64 lookaheadEpoch =
+        spec.computeEpochAtSlot(proposalSlot).minusMinZero(minSeedLookahead);
+    final UInt64 lookaheadEpochStartSlot = spec.computeStartSlotAtEpoch(lookaheadEpoch);
+    return !isSlotFromFuture(lookaheadEpochStartSlot);
+  }
+
+  /** Returns true when the proposal slot is within the parent block's proposer lookahead. */
+  public boolean isWithinParentProposerLookahead(
+      final UInt64 proposalSlot, final UInt64 parentBlockSlot) {
+    final UInt64 proposalEpoch = spec.computeEpochAtSlot(proposalSlot);
+    final UInt64 parentEpoch = spec.computeEpochAtSlot(parentBlockSlot);
+    final int minSeedLookahead = spec.getSpecConfig(proposalEpoch).getMinSeedLookahead();
+    return proposalEpoch.isLessThanOrEqualTo(parentEpoch.plus(minSeedLookahead));
+  }
+
+  public boolean isEpochFromFuture(final UInt64 epoch) {
+    return epoch.isGreaterThan(spec.computeEpochAtSlot(getMaxCurrentSlot()));
   }
 
   public boolean hasSlotStarted(final UInt64 slot) {
@@ -261,6 +291,22 @@ public class GossipValidationHelper {
     return recentChainData.containsBlock(blockRoot);
   }
 
+  public BeaconState getLatestFinalizedState() {
+    return recentChainData.getStore().getLatestFinalized().getState();
+  }
+
+  public SafeFuture<Optional<BeaconState>> getHeadState() {
+    return recentChainData
+        .getBestState()
+        .map(headState -> headState.thenApply(Optional::of))
+        .orElseGet(() -> SafeFuture.completedFuture(Optional.empty()));
+  }
+
+  /** Returns the fork info for an epoch from the fork schedule, independent of any state. */
+  public Optional<ForkInfo> getForkInfo(final UInt64 epoch) {
+    return recentChainData.getForkInfo(epoch);
+  }
+
   int getMaxOffsetTimeInMillis() {
     return maxOffsetTimeInMillis;
   }
@@ -318,10 +364,6 @@ public class GossipValidationHelper {
    */
   public boolean isPossibleDependentRoot(final Bytes32 root, final UInt64 epochStartSlot) {
     final ReadOnlyForkChoiceStrategy forkChoiceStrategy = getForkChoiceStrategy();
-    final Optional<UInt64> rootSlot = forkChoiceStrategy.blockSlot(root);
-    if (rootSlot.isPresent() && rootSlot.get().isGreaterThanOrEqualTo(epochStartSlot)) {
-      return false;
-    }
     final UInt64 lastSlotBeforeEpoch = epochStartSlot.minusMinZero(ONE);
     // The root already is the latest block before the epoch on any branch where it has a child at
     // or after epochStartSlot. Rather than scanning every block in the store for such a child, walk
@@ -345,6 +387,17 @@ public class GossipValidationHelper {
     // Otherwise the root could still become the latest block before the epoch if it is the head,
     // because the next block to extend it would be at or after epochStartSlot.
     return recentChainData.getBestBlockRoot().filter(root::equals).isPresent();
+  }
+
+  public Optional<Bytes32> getShufflingDependentRoot(
+      final Bytes32 blockRoot, final UInt64 proposalSlot) {
+    final Optional<ReadOnlyForkChoiceStrategy> maybeForkChoiceStrategy =
+        recentChainData.getForkChoiceStrategy();
+    if (maybeForkChoiceStrategy.isEmpty()) {
+      return Optional.empty();
+    }
+    return ShufflingDependentRootUtil.getShufflingDependentRoot(
+        spec, maybeForkChoiceStrategy.get(), blockRoot, proposalSlot);
   }
 
   public boolean builderHasEnoughBalanceForBid(

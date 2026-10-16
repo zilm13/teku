@@ -53,6 +53,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.stubbing.Answer;
 import org.mockito.stubbing.Stubber;
@@ -79,8 +80,10 @@ import tech.pegasys.teku.spec.datastructures.blobs.versions.deneb.BlobSidecar;
 import tech.pegasys.teku.spec.datastructures.blocks.Eth1Data;
 import tech.pegasys.teku.spec.datastructures.blocks.MinimalBeaconBlockSummary;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBlockAndState;
+import tech.pegasys.teku.spec.datastructures.blocks.blockbody.versions.gloas.BeaconBlockBodySchemaGloas;
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.PayloadAttestation;
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.PayloadAttestationData;
+import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.SignedExecutionPayloadEnvelope;
 import tech.pegasys.teku.spec.datastructures.execution.ExecutionPayload;
 import tech.pegasys.teku.spec.datastructures.execution.PowBlock;
 import tech.pegasys.teku.spec.datastructures.forkchoice.FastConfirmationStore;
@@ -114,6 +117,7 @@ import tech.pegasys.teku.spec.logic.common.util.AsyncBLSSignatureVerifier;
 import tech.pegasys.teku.spec.schemas.SchemaDefinitionsGloas;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
 import tech.pegasys.teku.statetransition.datacolumns.DataAvailabilitySampler;
+import tech.pegasys.teku.statetransition.execution.ReceivedExecutionPayloadEventsChannel;
 import tech.pegasys.teku.statetransition.forkchoice.ForkChoice.OptimisticHeadSubscriber;
 import tech.pegasys.teku.statetransition.forkchoice.ForkChoiceUpdatedResultSubscriber.ForkChoiceUpdatedResultNotification;
 import tech.pegasys.teku.statetransition.forkchoice.fastconfirmation.FastConfirmationEventChannel;
@@ -131,6 +135,7 @@ import tech.pegasys.teku.storage.protoarray.ForkChoiceStrategy;
 import tech.pegasys.teku.storage.server.StateStorageMode;
 import tech.pegasys.teku.storage.storageSystem.InMemoryStorageSystemBuilder;
 import tech.pegasys.teku.storage.storageSystem.StorageSystem;
+import tech.pegasys.teku.storage.store.StoreConfig;
 import tech.pegasys.teku.storage.store.UpdatableStore.StoreTransaction;
 
 class ForkChoiceTest {
@@ -169,6 +174,10 @@ class ForkChoiceTest {
   }
 
   private void setupWithSpec(final Spec unmockedSpec) {
+    setupWithSpec(unmockedSpec, StoreConfig.createDefault());
+  }
+
+  private void setupWithSpec(final Spec unmockedSpec, final StoreConfig storeConfig) {
     unmockedSpec.reinitializeForTesting(
         (block) -> blobSidecarsAvailabilityChecker,
         AvailabilityCheckerFactory.NOOP_DATACOLUMN_SIDECAR,
@@ -181,6 +190,7 @@ class ForkChoiceTest {
         InMemoryStorageSystemBuilder.create()
             .storageMode(StateStorageMode.PRUNE)
             .specProvider(spec)
+            .storeConfig(storeConfig)
             .numberOfValidators(16)
             .build();
     this.chainBuilder = storageSystem.chainBuilder();
@@ -717,8 +727,61 @@ class ForkChoiceTest {
 
     assertThat(messages).hasSize(1);
     assertThat(messages.get(0).getValidatorIndex()).isEqualTo(UInt64.valueOf(42));
-    assertThat(messages.get(0).calculatePtcPositions(spec, attestedBlockState))
+    assertThat(
+            messages.get(0).calculatePayloadTimelinessCommitteePositions(spec, attestedBlockState))
         .isEqualTo(IntSet.of(0, 2, 4));
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {2, 3})
+  void payloadAttestationsFromBlock_shouldOnlyCountVotesForParentSlotWhenStateIsEvicted(
+      final int childSlot) {
+    setupWithSpec(
+        TestSpecFactory.createMinimalGloas(
+            builder -> builder.blsSignatureVerifier(BLSSignatureVerifier.NOOP)),
+        StoreConfig.builder().stateCacheSize(1).build());
+    assertThat(forkChoice.applyGenesisExecutionPayloadForGloas()).isCompleted();
+
+    final SignedBlockAndState parent = chainBuilder.generateBlockAtSlot(ONE);
+    importBlock(parent);
+    importPayload(parent);
+
+    final SchemaDefinitionsGloas schemas =
+        SchemaDefinitionsGloas.required(spec.atSlot(ONE).getSchemaDefinitions());
+    final UInt64 attestationSlot = UInt64.valueOf(childSlot - 1);
+    final PayloadAttestation payloadAttestation =
+        schemas
+            .getPayloadAttestationSchema()
+            .create(
+                schemas.getPayloadAttestationSchema().getAggregationBitsSchema().ofBits(0),
+                schemas
+                    .getPayloadAttestationDataSchema()
+                    .create(parent.getRoot(), attestationSlot, true, true),
+                BLSSignature.empty());
+    final SignedBlockAndState child =
+        chainBuilder.generateBlockAtSlot(
+            UInt64.valueOf(childSlot),
+            BlockOptions.create()
+                .setPayloadAttestations(
+                    BeaconBlockBodySchemaGloas.required(
+                            spec.atSlot(UInt64.valueOf(childSlot))
+                                .getSchemaDefinitions()
+                                .getBeaconBlockBodySchema())
+                        .getPayloadAttestationsSchema()
+                        .of(payloadAttestation)));
+
+    importBlock(child);
+
+    assertThat(recentChainData.getStore().getBlockStateIfAvailable(parent.getRoot())).isEmpty();
+    final IntList ptc = spec.getPtc(child.getState(), attestationSlot);
+    final long matchingPositions = ptc.intStream().filter(index -> index == ptc.getInt(0)).count();
+    assertThat(matchingPositions).isPositive();
+    assertThat(
+            recentChainData
+                .getUpdatableForkChoiceStrategy()
+                .orElseThrow()
+                .getPayloadAttesterCount(parent.getRoot()))
+        .isEqualTo(UInt64.valueOf(childSlot == 2 ? matchingPositions : 0));
   }
 
   @Test
@@ -732,7 +795,8 @@ class ForkChoiceTest {
     final int threshold =
         SpecConfigGloas.required(spec.atSlot(parentSlot).getConfig())
             .getDataAvailabilityTimelyThreshold();
-    strategy.onPtcVote(parentBlock.getRoot(), ptcPositions(threshold + 1), true, false);
+    strategy.onPayloadTimelinessCommitteeVote(
+        parentBlock.getRoot(), ptcPositions(threshold + 1), true, false);
     storageSystem.chainUpdater().advanceCurrentSlotToAtLeast(proposalSlot);
 
     final ChainHead blockProductionHead =
@@ -754,7 +818,8 @@ class ForkChoiceTest {
     final ForkChoiceStrategy strategy = recentChainData.getStore().getForkChoiceStrategy();
     final int threshold =
         SpecConfigGloas.required(spec.atSlot(parentSlot).getConfig()).getPayloadTimelyThreshold();
-    strategy.onPtcVote(parentBlock.getRoot(), ptcPositions(threshold + 1), false, true);
+    strategy.onPayloadTimelinessCommitteeVote(
+        parentBlock.getRoot(), ptcPositions(threshold + 1), false, true);
     storageSystem.chainUpdater().advanceCurrentSlotToAtLeast(proposalSlot);
 
     final ChainHead blockProductionHead =
@@ -1446,6 +1511,22 @@ class ForkChoiceTest {
   }
 
   @Test
+  void prepareForBlockProduction_shouldRejectPastSlot() {
+    final UInt64 currentSlot = UInt64.valueOf(2);
+    storageSystem.chainUpdater().setCurrentSlot(currentSlot);
+    final ChainHead originalHead = recentChainData.getChainHead().orElseThrow();
+    final BlockProductionPerformance performance = mock(BlockProductionPerformance.class);
+
+    assertThatSafeFuture(forkChoice.prepareForBlockProduction(ONE, performance))
+        .isCompletedExceptionallyWith(IllegalArgumentException.class)
+        .hasMessageContaining("Cannot prepare block production for past slot 1");
+
+    assertThat(recentChainData.getCurrentSlot()).contains(currentSlot);
+    assertThat(recentChainData.getChainHead()).contains(originalHead);
+    verifyNoInteractions(forkChoiceNotifier, performance);
+  }
+
+  @Test
   void prepareForBlockProduction_NotYetInProposalSlotShouldRunOnTickWhenWithinTolerance() {
     final UInt64 newTime =
         spec.computeTimeMillisAtSlot(ONE, recentChainData.getGenesisTimeMillis())
@@ -1827,13 +1908,18 @@ class ForkChoiceTest {
   }
 
   private void importPayload(final SignedBlockAndState targetBlock) {
+    final ReceivedExecutionPayloadEventsChannel receivedExecutionPayloadEventsChannelPublisher =
+        mock(ReceivedExecutionPayloadEventsChannel.class);
+    final SignedExecutionPayloadEnvelope payload =
+        chainBuilder.getExecutionPayloadAtSlot(targetBlock.getSlot()).orElseThrow();
     final SafeFuture<ExecutionPayloadImportResult> payloadImportResult =
         forkChoice.onExecutionPayloadEnvelope(
-            chainBuilder.getExecutionPayloadAtSlot(targetBlock.getSlot()).orElseThrow(),
-            executionLayer);
+            payload, executionLayer, Optional.of(receivedExecutionPayloadEventsChannelPublisher));
 
     assertThat(payloadImportResult)
         .isCompletedWithValueMatching(ExecutionPayloadImportResult::isSuccessful);
+
+    verify(receivedExecutionPayloadEventsChannelPublisher).onExecutionPayloadAvailable(payload);
   }
 
   private ValidatableAttestation createPrevalidatedFullPayloadAttestation(

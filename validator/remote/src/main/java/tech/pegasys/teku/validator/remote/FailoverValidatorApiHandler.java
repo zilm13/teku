@@ -38,8 +38,8 @@ import tech.pegasys.teku.ethereum.json.types.beacon.StateValidatorData;
 import tech.pegasys.teku.ethereum.json.types.node.PeerCount;
 import tech.pegasys.teku.ethereum.json.types.validator.AttesterDuties;
 import tech.pegasys.teku.ethereum.json.types.validator.BeaconCommitteeSelectionProof;
+import tech.pegasys.teku.ethereum.json.types.validator.PayloadTimelinessCommitteeDuties;
 import tech.pegasys.teku.ethereum.json.types.validator.ProposerDuties;
-import tech.pegasys.teku.ethereum.json.types.validator.PtcDuties;
 import tech.pegasys.teku.ethereum.json.types.validator.SyncCommitteeDuties;
 import tech.pegasys.teku.ethereum.json.types.validator.SyncCommitteeSelectionProof;
 import tech.pegasys.teku.ethereum.json.types.validator.SyncCommitteeSubnetSubscription;
@@ -53,8 +53,8 @@ import tech.pegasys.teku.spec.datastructures.blocks.SignedBlockContainer;
 import tech.pegasys.teku.spec.datastructures.blocks.SlotAndBlockRoot;
 import tech.pegasys.teku.spec.datastructures.builder.SignedValidatorRegistration;
 import tech.pegasys.teku.spec.datastructures.builder.versions.gloas.BuilderConfig;
+import tech.pegasys.teku.spec.datastructures.builder.versions.gloas.BuilderPreferencesEntry;
 import tech.pegasys.teku.spec.datastructures.epbs.BlockRootAndBuilderIndex;
-import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.ExecutionPayloadBid;
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.ExecutionPayloadEnvelope;
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.PayloadAttestationData;
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.PayloadAttestationMessage;
@@ -88,8 +88,6 @@ public class FailoverValidatorApiHandler implements ValidatorApiChannel {
       "remote_beacon_nodes_requests_total";
 
   private final Map<SlotAndBlockRoot, ValidatorApiChannel> blockCreatorCache =
-      LimitedMap.createSynchronizedLRU(2);
-  private final Map<UInt64, ValidatorApiChannel> executionPayloadBidCreatorCache =
       LimitedMap.createSynchronizedLRU(2);
   private final Map<BlockRootAndBuilderIndex, ValidatorApiChannel>
       executionPayloadEnvelopeCreatorCache = LimitedMap.createSynchronizedLRU(2);
@@ -170,10 +168,10 @@ public class FailoverValidatorApiHandler implements ValidatorApiChannel {
   }
 
   @Override
-  public SafeFuture<Optional<PtcDuties>> getPtcDuties(
+  public SafeFuture<Optional<PayloadTimelinessCommitteeDuties>> getPayloadTimelinessCommitteeDuties(
       final UInt64 epoch, final IntCollection validatorIndices) {
     return tryRequestUntilSuccess(
-        apiChannel -> apiChannel.getPtcDuties(epoch, validatorIndices),
+        apiChannel -> apiChannel.getPayloadTimelinessCommitteeDuties(epoch, validatorIndices),
         BeaconNodeRequestLabels.GET_PTC_DUTIES_METHOD);
   }
 
@@ -305,7 +303,8 @@ public class FailoverValidatorApiHandler implements ValidatorApiChannel {
   @Override
   public SafeFuture<SendSignedBlockResult> sendSignedBlock(
       final SignedBlockContainer blockContainer,
-      final BroadcastValidationLevel broadcastValidationLevel) {
+      final BroadcastValidationLevel broadcastValidationLevel,
+      final Optional<String> builderUrl) {
     final SlotAndBlockRoot slotAndBlockRoot = blockContainer.getSignedBlock().getSlotAndBlockRoot();
     // when block is blinded, we need to send it only to the BN which would be able to unblind it
     if (blockContainer.isBlinded() && blockCreatorCache.containsKey(slotAndBlockRoot)) {
@@ -314,10 +313,12 @@ public class FailoverValidatorApiHandler implements ValidatorApiChannel {
           "Block for slot {} and root {} was blinded and will only be sent to the beacon node which created it.",
           slotAndBlockRoot.getSlot(),
           slotAndBlockRoot.getBlockRoot().toHexString());
-      return blockCreatorApiChannel.sendSignedBlock(blockContainer, broadcastValidationLevel);
+      return blockCreatorApiChannel.sendSignedBlock(
+          blockContainer, broadcastValidationLevel, builderUrl);
     }
     return relayRequest(
-        apiChannel -> apiChannel.sendSignedBlock(blockContainer, broadcastValidationLevel),
+        apiChannel ->
+            apiChannel.sendSignedBlock(blockContainer, broadcastValidationLevel, builderUrl),
         BeaconNodeRequestLabels.PUBLISH_BLOCK_METHOD,
         failoversPublishSignedDuties);
   }
@@ -355,6 +356,14 @@ public class FailoverValidatorApiHandler implements ValidatorApiChannel {
     return relayRequest(
         apiChannel -> apiChannel.sendSignedProposerPreferences(signedProposerPreferences),
         BeaconNodeRequestLabels.SEND_PROPOSER_PREFERENCES_METHOD);
+  }
+
+  @Override
+  public SafeFuture<List<SubmitDataError>> sendBuilderPreferences(
+      final SszList<BuilderPreferencesEntry> builderPreferences) {
+    return relayRequest(
+        apiChannel -> apiChannel.sendBuilderPreferences(builderPreferences),
+        BeaconNodeRequestLabels.SEND_BUILDER_PREFERENCES_METHOD);
   }
 
   @Override
@@ -398,22 +407,6 @@ public class FailoverValidatorApiHandler implements ValidatorApiChannel {
   }
 
   @Override
-  public SafeFuture<Optional<ExecutionPayloadBid>> createUnsignedExecutionPayloadBid(
-      final UInt64 slot, final UInt64 builderIndex) {
-    return tryRequestUntilSuccess(
-        apiChannel ->
-            apiChannel
-                .createUnsignedExecutionPayloadBid(slot, builderIndex)
-                .thenPeek(
-                    bid -> {
-                      if (!failoverDelegates.isEmpty() && bid.isPresent()) {
-                        executionPayloadBidCreatorCache.put(slot, apiChannel);
-                      }
-                    }),
-        BeaconNodeRequestLabels.CREATE_UNSIGNED_EXECUTION_PAYLOAD_BID_METHOD);
-  }
-
-  @Override
   public SafeFuture<Void> publishSignedExecutionPayloadBid(
       final SignedExecutionPayloadBid signedExecutionPayloadBid) {
     return relayRequest(
@@ -424,16 +417,6 @@ public class FailoverValidatorApiHandler implements ValidatorApiChannel {
   @Override
   public SafeFuture<Optional<ExecutionPayloadEnvelope>> createUnsignedExecutionPayload(
       final UInt64 slot, final Bytes32 beaconBlockRoot) {
-    // in case one of the BNs have created the bid (when Teku VC is configured to be a builder), we
-    // want to point only to this BN
-    if (executionPayloadBidCreatorCache.containsKey(slot)) {
-      LOG.info(
-          "Execution payload for slot {} and block {} would be created only by the beacon node which created the bid.",
-          slot,
-          beaconBlockRoot);
-      return createUnsignedExecutionPayload(
-          executionPayloadBidCreatorCache.remove(slot), slot, beaconBlockRoot);
-    }
     final SlotAndBlockRoot slotAndBlockRoot = new SlotAndBlockRoot(slot, beaconBlockRoot);
     // in case the payload is self-built, we want to point only to the BN which created the block
     if (blockCreatorCache.containsKey(slotAndBlockRoot)) {

@@ -30,6 +30,7 @@ import static tech.pegasys.teku.statetransition.util.RPCFetchDelayProvider.DEFAU
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Throwables;
+import it.unimi.dsi.fastutil.ints.IntSet;
 import java.io.IOException;
 import java.net.BindException;
 import java.nio.file.Path;
@@ -40,6 +41,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
@@ -63,6 +65,7 @@ import tech.pegasys.teku.beacon.sync.gossip.blocks.RecentBlocksFetcher;
 import tech.pegasys.teku.beacon.sync.gossip.executionpayloads.RecentExecutionPayloadsFetcher;
 import tech.pegasys.teku.beaconrestapi.BeaconRestApi;
 import tech.pegasys.teku.beaconrestapi.JsonTypeDefinitionBeaconRestApi;
+import tech.pegasys.teku.builder.rest.OkHttpStakedBuilderClientProvider;
 import tech.pegasys.teku.builder.rest.StakedBuilderClientProvider;
 import tech.pegasys.teku.dataproviders.lookup.BlindedExecutionPayloadProvider;
 import tech.pegasys.teku.dataproviders.lookup.ExecutionPayloadProvider;
@@ -172,6 +175,7 @@ import tech.pegasys.teku.statetransition.block.BlockImportMetrics;
 import tech.pegasys.teku.statetransition.block.BlockImporter;
 import tech.pegasys.teku.statetransition.block.BlockManager;
 import tech.pegasys.teku.statetransition.block.FailedExecutionPool;
+import tech.pegasys.teku.statetransition.block.FutureBlockPool;
 import tech.pegasys.teku.statetransition.block.ReceivedBlockEventsChannel;
 import tech.pegasys.teku.statetransition.datacolumns.BlobKzgCommitmentsProvider;
 import tech.pegasys.teku.statetransition.datacolumns.CanonicalBlockResolver;
@@ -208,6 +212,7 @@ import tech.pegasys.teku.statetransition.datacolumns.retriever.SimpleSidecarRetr
 import tech.pegasys.teku.statetransition.datacolumns.retriever.recovering.SidecarRetriever;
 import tech.pegasys.teku.statetransition.datacolumns.util.SuperNodeSupplier;
 import tech.pegasys.teku.statetransition.execution.BuilderBidFetcher;
+import tech.pegasys.teku.statetransition.execution.BuilderBidValidator;
 import tech.pegasys.teku.statetransition.execution.DefaultExecutionPayloadBidManager;
 import tech.pegasys.teku.statetransition.execution.DefaultExecutionPayloadManager;
 import tech.pegasys.teku.statetransition.execution.DefaultProposerPreferencesManager;
@@ -271,6 +276,8 @@ import tech.pegasys.teku.statetransition.validation.ProposerPreferencesGossipVal
 import tech.pegasys.teku.statetransition.validation.ProposerSlashingValidator;
 import tech.pegasys.teku.statetransition.validation.SignedBlsToExecutionChangeValidator;
 import tech.pegasys.teku.statetransition.validation.VoluntaryExitValidator;
+import tech.pegasys.teku.statetransition.validation.lightclient.LightClientFinalityUpdateGossipValidator;
+import tech.pegasys.teku.statetransition.validation.lightclient.LightClientOptimisticUpdateGossipValidator;
 import tech.pegasys.teku.statetransition.validation.signatures.AggregatingSignatureVerificationService;
 import tech.pegasys.teku.statetransition.validation.signatures.SignatureVerificationService;
 import tech.pegasys.teku.statetransition.validatorcache.ActiveValidatorCache;
@@ -280,6 +287,7 @@ import tech.pegasys.teku.storage.api.CombinedStorageChannel;
 import tech.pegasys.teku.storage.api.DataColumnSidecarNetworkRetriever;
 import tech.pegasys.teku.storage.api.Eth1DepositStorageChannel;
 import tech.pegasys.teku.storage.api.FinalizedCheckpointChannel;
+import tech.pegasys.teku.storage.api.LightClientUpdateChannel;
 import tech.pegasys.teku.storage.api.SidecarArchivePrunableChannel;
 import tech.pegasys.teku.storage.api.SidecarUpdateChannel;
 import tech.pegasys.teku.storage.api.StorageQueryChannel;
@@ -410,12 +418,14 @@ public class BeaconChainController extends Service implements BeaconChainControl
   protected volatile DasReqRespLogger dasReqRespLogger;
   protected volatile LightClientUpdateStore lightClientUpdateStore;
   protected volatile LightClientServerService lightClientServerService;
+  protected volatile SyncCommitteeSubscriptionManager syncCommitteeSubscriptionManager;
   protected volatile KZG kzg;
   protected volatile BlobSidecarManager blobSidecarManager;
   protected volatile BlobSidecarGossipValidator blobSidecarValidator;
   protected volatile DataColumnSidecarGossipValidator dataColumnSidecarGossipValidator;
   protected volatile DataColumnSidecarManager dataColumnSidecarManager;
   protected volatile ProposerPreferencesManager proposerPreferencesManager;
+  protected volatile StakedBuilderClientProvider stakedBuilderClientProvider;
   protected volatile ExecutionPayloadBidManager executionPayloadBidManager;
   protected volatile ExecutionPayloadManager executionPayloadManager;
   protected volatile ExecutionProofManager executionProofManager;
@@ -712,6 +722,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
             })
         // Init other services
         .thenRun(this::initAll)
+        .thenCompose(__ -> loadLightClientUpdates())
         .thenRun(
             () -> {
               // complete spec initialization
@@ -1025,10 +1036,12 @@ public class BeaconChainController extends Service implements BeaconChainControl
           beaconConfig
               .executionPayloadBidCircuitBreakerFactory()
               .create(recentChainData::getForkChoiceStrategy);
-      final StakedBuilderClientProvider stakedBuilderClientProvider =
-          new StakedBuilderClientProvider(spec, beaconAsyncRunner);
+      stakedBuilderClientProvider = new OkHttpStakedBuilderClientProvider(spec);
+      final BuilderBidValidator bidValidator =
+          new BuilderBidValidator(
+              spec, proposerPreferencesManager, recentChainData, gossipValidationHelper);
       final BuilderBidFetcher builderBidFetcher =
-          new BuilderBidFetcher(spec, stakedBuilderClientProvider);
+          new BuilderBidFetcher(spec, stakedBuilderClientProvider, bidValidator);
       final ExecutionPayloadBidSelector executionPayloadBidSelector =
           new ExecutionPayloadBidSelector(
               beaconConfig.executionLayerConfig().getUseShouldOverrideBuilderFlag(),
@@ -1041,7 +1054,9 @@ public class BeaconChainController extends Service implements BeaconChainControl
               receivedExecutionPayloadBidEventsChannelPublisher,
               poolFactory.createPendingPoolForExecutionPayloadBids(spec),
               builderBidFetcher,
-              executionPayloadBidSelector);
+              executionPayloadBidSelector,
+              recentChainData::getForkChoiceStrategy,
+              beaconConfig.executionLayerConfig().getConsiderP2PBidsDuringBlockProduction());
       proposerPreferencesManager.subscribeOperationAdded(defaultExecutionPayloadBidManager);
       eventChannels.subscribe(SlotEventsChannel.class, defaultExecutionPayloadBidManager);
       eventChannels.subscribe(ReceivedBlockEventsChannel.class, defaultExecutionPayloadBidManager);
@@ -1049,6 +1064,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
           ReceivedExecutionPayloadEventsChannel.class, defaultExecutionPayloadBidManager);
       executionPayloadBidManager = defaultExecutionPayloadBidManager;
     } else {
+      stakedBuilderClientProvider = StakedBuilderClientProvider.NOOP;
       executionPayloadBidManager = ExecutionPayloadBidManager.NOOP;
     }
   }
@@ -1539,7 +1555,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
   protected void initVoluntaryExitPool() {
     LOG.debug("BeaconChainController.initVoluntaryExitPool()");
     final VoluntaryExitValidator validator =
-        new VoluntaryExitValidator(spec, recentChainData, timeProvider);
+        new VoluntaryExitValidator(spec, recentChainData, timeProvider, gossipValidationHelper);
     voluntaryExitPool =
         new MappedOperationPool<>(
             "VoluntaryExitPool",
@@ -1689,7 +1705,27 @@ public class BeaconChainController extends Service implements BeaconChainControl
 
   protected void initLightClientUpdateStore() {
     LOG.debug("BeaconChainController.initLightClientUpdateStore()");
-    lightClientUpdateStore = new LightClientUpdateStore(spec);
+    lightClientUpdateStore =
+        new LightClientUpdateStore(
+            spec, eventChannels.getPublisher(LightClientUpdateChannel.class, beaconAsyncRunner));
+  }
+
+  protected SafeFuture<Void> loadLightClientUpdates() {
+    if (!beaconConfig.eth2NetworkConfig().isLightClientServerEnabled()) {
+      return SafeFuture.COMPLETE;
+    }
+    return combinedChainDataClient
+        .getBestLightClientUpdates()
+        .thenAccept(
+            updates -> {
+              lightClientServerService.loadUpdates(updates);
+              LOG.debug("Loaded {} light client updates from storage", updates.size());
+            })
+        .exceptionally(
+            error -> {
+              LOG.warn("Failed to load light client updates from storage", error);
+              return null;
+            });
   }
 
   protected void initLightClientServerService() {
@@ -1699,7 +1735,8 @@ public class BeaconChainController extends Service implements BeaconChainControl
     }
     LOG.debug("BeaconChainController.initLightClientServerService()");
     lightClientServerService =
-        new LightClientServerService(spec, lightClientUpdateStore, combinedChainDataClient);
+        new LightClientServerService(
+            spec, lightClientUpdateStore, combinedChainDataClient, beaconAsyncRunner, timeProvider);
     eventChannels
         .subscribe(ReceivedBlockEventsChannel.class, lightClientServerService)
         .subscribe(FinalizedCheckpointChannel.class, lightClientServerService)
@@ -1881,7 +1918,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
                 executionPayloadManager,
                 metricsSystem,
                 timeProvider));
-    SyncCommitteeSubscriptionManager syncCommitteeSubscriptionManager =
+    syncCommitteeSubscriptionManager =
         beaconConfig.p2pConfig().isSubscribeAllSubnetsEnabled()
             ? new AllSyncCommitteeSubscriptions(p2pNetwork, spec)
             : new SyncCommitteeSubscriptionManager(p2pNetwork);
@@ -1936,7 +1973,8 @@ public class BeaconChainController extends Service implements BeaconChainControl
             dutyMetrics,
             custodyGroupCountManager,
             beaconConfig.p2pConfig().getDasPublishWithholdColumnsEverySlots(),
-            beaconConfig.p2pConfig().isGossipBlobsAfterBlockEnabled());
+            beaconConfig.p2pConfig().isGossipBlobsAfterBlockEnabled(),
+            stakedBuilderClientProvider);
 
     final ExecutionPayloadFactory executionPayloadFactory;
     final ExecutionPayloadPublisher executionPayloadPublisher;
@@ -1986,7 +2024,8 @@ public class BeaconChainController extends Service implements BeaconChainControl
             executionPayloadPublisher,
             executionPayloadBidManager,
             proposerPreferencesManager,
-            executionProofManager);
+            executionProofManager,
+            stakedBuilderClientProvider);
 
     eventChannels
         .subscribe(SlotEventsChannel.class, activeValidatorTracker)
@@ -1997,12 +2036,10 @@ public class BeaconChainController extends Service implements BeaconChainControl
             validatorApiHandler,
             beaconConfig.beaconRestApiConfig().getValidatorThreads());
 
-    // if subscribeAllSubnets is set, the slot events in these handlers are empty,
-    // so don't subscribe.
+    eventChannels.subscribe(SlotEventsChannel.class, syncCommitteeSubscriptionManager);
+
     if (!beaconConfig.p2pConfig().isSubscribeAllSubnetsEnabled()) {
-      eventChannels
-          .subscribe(SlotEventsChannel.class, attestationTopicSubscriber)
-          .subscribe(SlotEventsChannel.class, syncCommitteeSubscriptionManager);
+      eventChannels.subscribe(SlotEventsChannel.class, attestationTopicSubscriber);
     }
   }
 
@@ -2158,7 +2195,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
       dataColumnSidecarArchiveReconstructor = DataColumnSidecarArchiveReconstructor.NOOP;
     }
 
-    this.p2pNetwork =
+    final Eth2P2PNetworkBuilder p2pNetworkBuilder =
         createEth2P2PNetworkBuilder()
             .config(beaconConfig.p2pConfig())
             .eventChannels(eventChannels)
@@ -2202,8 +2239,35 @@ public class BeaconChainController extends Service implements BeaconChainControl
             .requiredCheckpoint(weakSubjectivityValidator.getWSCheckpoint())
             .specProvider(spec)
             .recordMessageArrival(true)
-            .p2pDebugDataDumper(debugDataDumper)
-            .build();
+            .p2pDebugDataDumper(debugDataDumper);
+
+    if (lightClientServerService != null) {
+      final LightClientFinalityUpdateGossipValidator finalityValidator =
+          new LightClientFinalityUpdateGossipValidator(
+              spec, recentChainData, lightClientUpdateStore, timeProvider);
+      final LightClientOptimisticUpdateGossipValidator optimisticValidator =
+          new LightClientOptimisticUpdateGossipValidator(
+              spec, recentChainData, lightClientUpdateStore, timeProvider);
+      p2pNetworkBuilder
+          .gossipedLightClientFinalityUpdateProcessor(
+              (update, arrivalTimestamp) -> finalityValidator.validate(update))
+          .gossipedLightClientOptimisticUpdateProcessor(
+              (update, arrivalTimestamp) -> optimisticValidator.validate(update));
+      lightClientServerService.subscribeToFinalityUpdatesToPublish(
+          update ->
+              publishLightClientUpdate(
+                  update.getSignatureSlot().get(),
+                  () -> finalityValidator.markForwarded(update),
+                  () -> p2pNetwork.publishLightClientFinalityUpdate(update)));
+      lightClientServerService.subscribeToOptimisticUpdatesToPublish(
+          update ->
+              publishLightClientUpdate(
+                  update.getSignatureSlot().get(),
+                  () -> optimisticValidator.markForwarded(update),
+                  () -> p2pNetwork.publishLightClientOptimisticUpdate(update)));
+    }
+
+    this.p2pNetwork = p2pNetworkBuilder.build();
 
     syncCommitteeMessagePool.subscribeOperationAdded(
         new LocalOperationAcceptedFilter<>(p2pNetwork::publishSyncCommitteeMessage));
@@ -2223,7 +2287,6 @@ public class BeaconChainController extends Service implements BeaconChainControl
         new LocalOperationAcceptedFilter<>(p2pNetwork::publishProposerPreferences));
     executionPayloadBidManager.subscribeOperationAdded(
         new LocalOperationAcceptedFilter<>(p2pNetwork::publishExecutionPayloadBid));
-
     eventChannels.subscribe(
         CustodyGroupCountChannel.class,
         CustodyGroupCountChannel.createCustodyGroupCountSubscriber(
@@ -2240,6 +2303,47 @@ public class BeaconChainController extends Service implements BeaconChainControl
                 () ->
                     new InvalidConfigurationException(
                         "Failed to get NodeId from Discovery System"));
+  }
+
+  private void publishLightClientUpdate(
+      final UInt64 signatureSlot, final BooleanSupplier markForwarded, final Runnable publish) {
+    hasLocalSyncCommitteeDutyAt(signatureSlot)
+        .thenAccept(
+            hasDuty -> {
+              if (hasDuty && markForwarded.getAsBoolean()) {
+                publish.run();
+              }
+            })
+        .finish(error -> LOG.error("Failed to publish light client update", error));
+  }
+
+  private SafeFuture<Boolean> hasLocalSyncCommitteeDutyAt(final UInt64 slot) {
+    final SyncCommitteeSubscriptionManager subscriptionManager = syncCommitteeSubscriptionManager;
+    if (subscriptionManager == null) {
+      return SafeFuture.completedFuture(false);
+    }
+    final IntSet validators = subscriptionManager.getValidatorsWithDuty();
+    if (validators.isEmpty()) {
+      return SafeFuture.completedFuture(false);
+    }
+    return recentChainData
+        .getBestState()
+        .map(state -> state.thenApply(s -> isInSyncCommitteeAt(s, slot, validators)))
+        .orElse(SafeFuture.completedFuture(false));
+  }
+
+  private boolean isInSyncCommitteeAt(
+      final BeaconState state, final UInt64 slot, final IntSet validators) {
+    final UInt64 epoch = spec.computeEpochAtSlot(slot);
+    return spec.getSyncCommitteeUtil(slot)
+        .filter(util -> util.isStateUsableForCommitteeCalculationAtEpoch(state, epoch))
+        .map(util -> util.getSyncSubcommittees(state, epoch))
+        .map(
+            assignments ->
+                validators
+                    .intStream()
+                    .anyMatch(index -> assignments.containsKey(UInt64.valueOf(index))))
+        .orElse(false);
   }
 
   protected Eth2P2PNetworkBuilder createEth2P2PNetworkBuilder() {
@@ -2348,8 +2452,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
 
   public void initBlockManager() {
     LOG.debug("BeaconChainController.initBlockManager()");
-    final FutureItems<SignedBeaconBlock> futureBlocks =
-        FutureItems.create(SignedBeaconBlock::getSlot, futureItemsMetric, "blocks");
+    final FutureBlockPool futureBlocks = poolFactory.createFutureBlockPool(spec, futureItemsMetric);
     blockGossipValidator =
         new BlockGossipValidator(spec, gossipValidationHelper, receivedBlockEventsChannelPublisher);
     final BlockValidator blockValidator = new BlockValidator(blockGossipValidator);

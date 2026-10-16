@@ -37,11 +37,6 @@ public class GloasBuilder extends BaseForkBuilder
   private Integer attestationDueBpsGloas;
   private Integer contributionDueBpsGloas;
   private Integer maxRequestPayloads;
-  private Integer maxSignedAggregateAndProofSize;
-  private Integer maxAttesterSlashingSize;
-  private Integer maxDataColumnSidecarSize;
-  private Integer maxPartialDataColumnSidecarSize;
-  private Integer maxSignedExecutionPayloadBidSize;
   private Integer minBuilderWithdrawabilityDelay;
   private Integer payloadAttestationDueBps;
   private Integer payloadDueBps;
@@ -91,11 +86,6 @@ public class GloasBuilder extends BaseForkBuilder
             churnLimitQuotientGloas,
             consolidationChurnLimitQuotient,
             maxPerEpochActivationChurnLimitGloas,
-            maxSignedAggregateAndProofSize,
-            maxAttesterSlashingSize,
-            maxDataColumnSidecarSize,
-            maxPartialDataColumnSidecarSize,
-            maxSignedExecutionPayloadBidSize,
             gasLimitSchedule),
         specConfigAndParent);
   }
@@ -121,38 +111,6 @@ public class GloasBuilder extends BaseForkBuilder
   public GloasBuilder maxRequestPayloads(final Integer maxRequestPayloads) {
     checkNotNull(maxRequestPayloads);
     this.maxRequestPayloads = maxRequestPayloads;
-    return this;
-  }
-
-  public GloasBuilder maxSignedAggregateAndProofSize(final Integer maxSignedAggregateAndProofSize) {
-    checkNotNull(maxSignedAggregateAndProofSize);
-    this.maxSignedAggregateAndProofSize = maxSignedAggregateAndProofSize;
-    return this;
-  }
-
-  public GloasBuilder maxAttesterSlashingSize(final Integer maxAttesterSlashingSize) {
-    checkNotNull(maxAttesterSlashingSize);
-    this.maxAttesterSlashingSize = maxAttesterSlashingSize;
-    return this;
-  }
-
-  public GloasBuilder maxDataColumnSidecarSize(final Integer maxDataColumnSidecarSize) {
-    checkNotNull(maxDataColumnSidecarSize);
-    this.maxDataColumnSidecarSize = maxDataColumnSidecarSize;
-    return this;
-  }
-
-  public GloasBuilder maxPartialDataColumnSidecarSize(
-      final Integer maxPartialDataColumnSidecarSize) {
-    checkNotNull(maxPartialDataColumnSidecarSize);
-    this.maxPartialDataColumnSidecarSize = maxPartialDataColumnSidecarSize;
-    return this;
-  }
-
-  public GloasBuilder maxSignedExecutionPayloadBidSize(
-      final Integer maxSignedExecutionPayloadBidSize) {
-    checkNotNull(maxSignedExecutionPayloadBidSize);
-    this.maxSignedExecutionPayloadBidSize = maxSignedExecutionPayloadBidSize;
     return this;
   }
 
@@ -293,11 +251,6 @@ public class GloasBuilder extends BaseForkBuilder
     constants.put("attestationDueBpsGloas", attestationDueBpsGloas);
     constants.put("contributionDueBpsGloas", contributionDueBpsGloas);
     constants.put("maxRequestPayloads", maxRequestPayloads);
-    constants.put("maxSignedAggregateAndProofSize", maxSignedAggregateAndProofSize);
-    constants.put("maxAttesterSlashingSize", maxAttesterSlashingSize);
-    constants.put("maxDataColumnSidecarSize", maxDataColumnSidecarSize);
-    constants.put("maxPartialDataColumnSidecarSize", maxPartialDataColumnSidecarSize);
-    constants.put("maxSignedExecutionPayloadBidSize", maxSignedExecutionPayloadBidSize);
     constants.put("minBuilderWithdrawabilityDelay", minBuilderWithdrawabilityDelay);
     constants.put("payloadAttestationDueBps", payloadAttestationDueBps);
     constants.put("payloadDueBps", payloadDueBps);
@@ -318,11 +271,5 @@ public class GloasBuilder extends BaseForkBuilder
   }
 
   @Override
-  public void addOverridableItemsToRawConfig(final BiConsumer<String, Object> rawConfig) {
-    rawConfig.accept("MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE", maxSignedAggregateAndProofSize);
-    rawConfig.accept("MAX_ATTESTER_SLASHING_SIZE", maxAttesterSlashingSize);
-    rawConfig.accept("MAX_DATA_COLUMN_SIDECAR_SIZE", maxDataColumnSidecarSize);
-    rawConfig.accept("MAX_PARTIAL_DATA_COLUMN_SIDECAR_SIZE", maxPartialDataColumnSidecarSize);
-    rawConfig.accept("MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE", maxSignedExecutionPayloadBidSize);
-  }
+  public void addOverridableItemsToRawConfig(final BiConsumer<String, Object> rawConfig) {}
 }

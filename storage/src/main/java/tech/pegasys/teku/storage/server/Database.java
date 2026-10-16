@@ -34,6 +34,7 @@ import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
 import tech.pegasys.teku.spec.datastructures.blocks.SlotAndBlockRoot;
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.SignedBlindedExecutionPayloadEnvelope;
 import tech.pegasys.teku.spec.datastructures.forkchoice.VoteTracker;
+import tech.pegasys.teku.spec.datastructures.lightclient.LightClientUpdate;
 import tech.pegasys.teku.spec.datastructures.state.AnchorPoint;
 import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
 import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
@@ -315,6 +316,18 @@ public interface Database extends AutoCloseable {
 
   Optional<List<List<KZGProof>>> getDataColumnSidecarsProofs(UInt64 slot);
 
+  void storeBestLightClientUpdate(
+      UInt64 period, LightClientUpdate update, Bytes32 signatureBlockRoot);
+
+  @MustBeClosed
+  Stream<Map.Entry<UInt64, LightClientUpdate>> streamBestLightClientUpdates();
+
+  Optional<Bytes32> getBestLightClientUpdateSignatureBlockRoot(UInt64 period);
+
+  void removeBestLightClientUpdates(Collection<UInt64> periods);
+
+  void pruneBestLightClientUpdatesBefore(UInt64 period);
+
   void setEarliestAvailableDataColumnSlot(UInt64 slot);
 
   void setFirstCustodyIncompleteSlot(UInt64 slot);
@@ -338,10 +351,10 @@ public interface Database extends AutoCloseable {
    * persists their KZG proofs and drops the sidecars themselves, retaining only enough data to
    * reconstruct them on demand.
    *
-   * <p><b>Callers must submit small ranges.</b> There is no internal limit; the entire range is
-   * scanned in a single pass. Use {@link
-   * tech.pegasys.teku.storage.server.pruner.DataColumnSidecarPruner} which breaks the work into
-   * fixed-size chunks.
+   * <p><b>Callers must submit small ranges.</b> There is no internal limit: the entire range is
+   * scanned in a single pass and archived in a single write batch, so batching is up to the caller.
+   * Incomplete slots are skipped and may be completed later (e.g. by backfill), so a caller must
+   * not resume strictly after the last archived slot.
    */
   void archiveSidecarsProofs(UInt64 startSlot, UInt64 tillSlotInclusive);
 }

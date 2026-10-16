@@ -24,9 +24,14 @@ import static tech.pegasys.teku.infrastructure.async.SafeFutureAssert.assertThat
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 import org.apache.tuweni.bytes.Bytes32;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import tech.pegasys.infrastructure.logging.LogCaptor;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.StubAsyncRunner;
@@ -209,7 +214,7 @@ class FastConfirmationTrackerTest {
   }
 
   @Test
-  void shouldIncrementFallbackCounterWhenStatesAreUnavailable() {
+  void shouldNotCountFallbackDuringWarmUpWhenStatesAreUnavailable() {
     final StubAsyncRunner asyncRunner = new StubAsyncRunner();
     when(store.getFinalizedCheckpoint()).thenReturn(finalizedCheckpoint);
     final FastConfirmationTracker tracker =
@@ -219,14 +224,31 @@ class FastConfirmationTrackerTest {
 
     applyUpdate(tracker, asyncRunner, UInt64.valueOf(13), Bytes32.random());
 
-    assertThat(
-            metricsSystem.getCounterValue(
-                TekuMetricCategory.BEACON, "fast_confirmation_fallbacks_total"))
-        .isEqualTo(1);
-    assertThat(
-            metricsSystem.getCounterValue(
-                TekuMetricCategory.BEACON, "fast_confirmation_restarts_total"))
-        .isZero();
+    // The store is seeded from the finalized checkpoint, so being pinned to finality right after
+    // initialization is the warm-up state rather than a fallback away from a real confirmation.
+    assertThat(fallbacks()).isZero();
+    assertThat(restarts()).isZero();
+  }
+
+  @Test
+  void shouldCountFallbackWhenStatesBecomeUnavailableAfterAConfirmation() {
+    final StubAsyncRunner asyncRunner = new StubAsyncRunner();
+    when(store.getFinalizedCheckpoint()).thenReturn(finalizedCheckpoint);
+    final FastConfirmationTracker tracker =
+        FastConfirmationTracker.create(
+            spec, Optional.of(asyncRunner), eventChannel, metricsSystem, timeProvider);
+    tracker.initialize(store);
+    // A confirmation beyond finality ends the warm-up, so the next pin to finality is a real
+    // fallback.
+    tracker.recordConfirmationOutcome(
+        tracker.getFastConfirmationStore().orElseThrow(),
+        Bytes32.random(),
+        finalizedCheckpoint.getRoot());
+
+    applyUpdate(tracker, asyncRunner, UInt64.valueOf(13), Bytes32.random());
+
+    assertThat(fallbacks()).isEqualTo(1);
+    assertThat(restarts()).isZero();
   }
 
   @Test
@@ -261,19 +283,77 @@ class FastConfirmationTrackerTest {
   }
 
   @Test
+  void shouldPrefetchNextEpochBalanceSourceOnLastSlotOfEpoch() {
+    final StubAsyncRunner asyncRunner = new StubAsyncRunner();
+    when(store.getFinalizedCheckpoint()).thenReturn(finalizedCheckpoint);
+    // Reconstructing the greatest unrealized justified checkpoint starts from the justified
+    // checkpoint and scans the (empty here) block data.
+    final Checkpoint justified = new Checkpoint(UInt64.valueOf(13), Bytes32.random());
+    when(store.getJustifiedCheckpoint()).thenReturn(justified);
+    when(forkChoice.getBlockData()).thenReturn(List.of());
+    final FastConfirmationTracker tracker =
+        FastConfirmationTracker.create(
+            spec, Optional.of(asyncRunner), eventChannel, metricsSystem, timeProvider);
+    tracker.initialize(store);
+
+    // Slot 15 is the last slot of epoch 1 (minimal SLOTS_PER_EPOCH == 8): the checkpoint that
+    // rotates into the next epoch's current balance source is prefetched.
+    applyUpdate(tracker, asyncRunner, UInt64.valueOf(15), Bytes32.random());
+
+    verify(store).retrieveCheckpointState(justified);
+  }
+
+  @Test
+  void shouldNotFailTheSharedRegenerationWhenTheBalancePrefetchIsBounded() {
+    final StubAsyncRunner asyncRunner = new StubAsyncRunner();
+    when(store.getFinalizedCheckpoint()).thenReturn(finalizedCheckpoint);
+    final Checkpoint justified = new Checkpoint(UInt64.valueOf(13), Bytes32.random());
+    when(store.getJustifiedCheckpoint()).thenReturn(justified);
+    when(forkChoice.getBlockData()).thenReturn(List.of());
+    // The checkpoint-state regeneration is still in flight. CachingTaskQueue hands this very future
+    // to every consumer of the checkpoint, so the prefetch's one-slot bound must complete a derived
+    // copy, never this one: the epoch-start slot awaits it for its own balance source, and failing
+    // it here would drop that slot to the finalized fallback.
+    final SafeFuture<Optional<BeaconState>> sharedRegeneration = new SafeFuture<>();
+    when(store.retrieveCheckpointState(justified)).thenReturn(sharedRegeneration);
+    final FastConfirmationTracker tracker =
+        FastConfirmationTracker.create(
+            spec, Optional.of(asyncRunner), eventChannel, metricsSystem, timeProvider);
+    tracker.initialize(store);
+
+    // Slot 15 is the last slot of epoch 1 (minimal SLOTS_PER_EPOCH == 8), so the prefetch fires.
+    // Its retrieval never resolves, so the bound is scheduled and nothing else is left queued.
+    applyUpdate(tracker, asyncRunner, UInt64.valueOf(15), Bytes32.random());
+    assertThat(asyncRunner.countDelayedActions()).isEqualTo(1);
+
+    // Fire the bound: it abandons the balance build without touching the shared regeneration.
+    asyncRunner.executeQueuedActions();
+
+    // Not merely "not completed normally" (an exceptionally completed future would satisfy that,
+    // and is exactly the regression): the shared future must still be pending, and still usable by
+    // the epoch-start slot when the regeneration lands.
+    assertThat(sharedRegeneration.isDone()).isFalse();
+    final BeaconState regeneratedState = mock(BeaconState.class);
+    sharedRegeneration.complete(Optional.of(regeneratedState));
+    assertThatSafeFuture(sharedRegeneration).isCompletedWithValue(Optional.of(regeneratedState));
+  }
+
+  @Test
   void shouldNotBlockRunnerWhileSourceStateLoadIsPending() {
     final StubAsyncRunner asyncRunner = new StubAsyncRunner();
     when(store.getFinalizedCheckpoint()).thenReturn(finalizedCheckpoint);
-    // The head-state load hangs; the checkpoint-state loads resolve immediately (empty, from
-    // setUp). A blocking join() on this would monopolize the single-thread runner; composing does
-    // not.
-    final SafeFuture<Optional<BeaconState>> pendingHeadState = new SafeFuture<>();
-    when(store.retrieveBlockState(any(Bytes32.class))).thenReturn(pendingHeadState);
     final FastConfirmationTracker tracker =
         FastConfirmationTracker.create(
             spec, Optional.of(asyncRunner), eventChannel, metricsSystem, timeProvider);
     tracker.initialize(store);
     final Bytes32 headRoot = Bytes32.random();
+    // The pulled-up-head-state load hangs (the head lags the current epoch, so it is fetched as
+    // the (current epoch, head) checkpoint state); the balance-source loads resolve immediately
+    // (empty, from setUp). A blocking join() on this would monopolize the single-thread runner;
+    // composing does not.
+    final SafeFuture<Optional<BeaconState>> pendingHeadState = new SafeFuture<>();
+    when(store.retrieveCheckpointState(new Checkpoint(UInt64.valueOf(2), headRoot)))
+        .thenReturn(pendingHeadState);
 
     // Head block slot 12 (epoch 1); slot 17 is epoch 2 — one epoch behind, so the full rule runs.
     final SafeFuture<Void> result = tracker.onSlot(UInt64.valueOf(17), headRoot);
@@ -291,27 +371,26 @@ class FastConfirmationTrackerTest {
     assertThatSafeFuture(result).isCompleted();
     assertThat(tracker.getFastConfirmationStore().orElseThrow().currentSlotHead())
         .isEqualTo(headRoot);
-    assertThat(
-            metricsSystem.getCounterValue(
-                TekuMetricCategory.BEACON, "fast_confirmation_fallbacks_total"))
-        .isEqualTo(1);
+    // Still the seeded warm-up pin to finality, so no fallback event is counted.
+    assertThat(fallbacks()).isZero();
   }
 
   @Test
   void shouldCommitRotationButAbandonConfirmationWhenSourceStateLoadFails() {
     final StubAsyncRunner asyncRunner = new StubAsyncRunner();
     when(store.getFinalizedCheckpoint()).thenReturn(finalizedCheckpoint);
-    // The head-state load fails, which takes the same abandon branch as a load timeout. The slot's
-    // rotation must still be committed in order (so the next slot reads correctly rotated FCR
-    // variables), while the confirmation is abandoned: confirmed_root is left unchanged and no
-    // event is emitted for this slot.
-    when(store.retrieveBlockState(any(Bytes32.class)))
-        .thenReturn(SafeFuture.failedFuture(new IllegalStateException("boom")));
     final FastConfirmationTracker tracker =
         FastConfirmationTracker.create(
             spec, Optional.of(asyncRunner), eventChannel, metricsSystem, timeProvider);
     tracker.initialize(store);
     final Bytes32 headRoot = Bytes32.random();
+    // The pulled-up-head-state load fails (the head lags the current epoch, so it is fetched as
+    // the (current epoch, head) checkpoint state), which takes the same abandon branch as a load
+    // timeout. The slot's rotation must still be committed in order (so the next slot reads
+    // correctly rotated FCR variables), while the confirmation is abandoned: confirmed_root is
+    // left unchanged and no event is emitted for this slot.
+    when(store.retrieveCheckpointState(new Checkpoint(UInt64.valueOf(2), headRoot)))
+        .thenReturn(SafeFuture.failedFuture(new IllegalStateException("boom")));
 
     // Head block slot 12 (epoch 1); slot 17 is epoch 2 — one epoch behind, so the full rule runs.
     applyUpdate(tracker, asyncRunner, UInt64.valueOf(17), headRoot);
@@ -404,6 +483,161 @@ class FastConfirmationTrackerTest {
         .isTrue();
   }
 
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("specs")
+  void shouldCountAFallbackHeldOverConsecutiveSlotsOnce(final Spec trackerSpec) {
+    final FastConfirmationTracker tracker = createTrackerAfterWarmUp(trackerSpec);
+
+    fallBackToFinality(tracker, finalizedCheckpoint.getRoot());
+    fallBackToFinality(tracker, finalizedCheckpoint.getRoot());
+    fallBackToFinality(tracker, finalizedCheckpoint.getRoot());
+
+    // One fallback episode, not one event per slot spent in it.
+    assertThat(fallbacks()).isEqualTo(1);
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("specs")
+  void shouldNotCountANewFallbackWhenFinalizationAdvancesDuringOne(final Spec trackerSpec) {
+    final FastConfirmationTracker tracker = createTrackerAfterWarmUp(trackerSpec);
+
+    fallBackToFinality(tracker, finalizedCheckpoint.getRoot());
+    // Finalization advances while the rule is still pinned to finality: confirmed_root moves to the
+    // new finalized root, but this is the same fallback episode continuing.
+    final Bytes32 advancedFinalizedRoot = Bytes32.random();
+    fallBackToFinality(tracker, advancedFinalizedRoot);
+    fallBackToFinality(tracker, advancedFinalizedRoot);
+
+    assertThat(fallbacks()).isEqualTo(1);
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("specs")
+  void shouldCountFallbackAgainAfterAConfirmationInBetween(final Spec trackerSpec) {
+    final FastConfirmationTracker tracker = createTrackerAfterWarmUp(trackerSpec);
+
+    fallBackToFinality(tracker, finalizedCheckpoint.getRoot());
+    fallBackToFinality(tracker, finalizedCheckpoint.getRoot());
+    // A confirmation beyond finality closes the episode, so falling back again is a new event.
+    confirmBeyondFinality(tracker);
+    fallBackToFinality(tracker, finalizedCheckpoint.getRoot());
+    fallBackToFinality(tracker, finalizedCheckpoint.getRoot());
+
+    assertThat(fallbacks()).isEqualTo(2);
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("specs")
+  void shouldCountARestartHeldOverConsecutiveSlotsOnce(final Spec trackerSpec) {
+    final FastConfirmationTracker tracker = createTrackerAfterWarmUp(trackerSpec);
+    final Checkpoint observedJustifiedCheckpoint =
+        new Checkpoint(UInt64.valueOf(2), Bytes32.random());
+
+    restartFrom(tracker, observedJustifiedCheckpoint);
+    restartFrom(tracker, observedJustifiedCheckpoint);
+    restartFrom(tracker, observedJustifiedCheckpoint);
+
+    assertThat(restarts()).isEqualTo(1);
+    assertThat(fallbacks()).isZero();
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("specs")
+  void shouldCountANewRestartAfterTheObservedJustifiedCheckpointRotates(final Spec trackerSpec) {
+    final FastConfirmationTracker tracker = createTrackerAfterWarmUp(trackerSpec);
+    final Checkpoint firstObservedJustifiedCheckpoint =
+        new Checkpoint(UInt64.valueOf(2), Bytes32.random());
+    final Checkpoint rotatedObservedJustifiedCheckpoint =
+        new Checkpoint(UInt64.valueOf(3), Bytes32.random());
+
+    restartFrom(tracker, firstObservedJustifiedCheckpoint);
+    restartFrom(tracker, firstObservedJustifiedCheckpoint);
+    // The variables rotated at the epoch boundary, so restarting from the newly observed justified
+    // checkpoint is a genuinely new restart.
+    restartFrom(tracker, rotatedObservedJustifiedCheckpoint);
+    restartFrom(tracker, rotatedObservedJustifiedCheckpoint);
+
+    assertThat(restarts()).isEqualTo(2);
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("specs")
+  void shouldCollapseConsecutiveConfirmedRootChainSwitchesIntoOneReorg(final Spec trackerSpec) {
+    final FastConfirmationTracker tracker = createTracker(trackerSpec);
+    // Chain A and chain B fork off a common ancestor; the confirmed root flaps between them on
+    // consecutive slots before settling on chain B.
+    final Bytes32 chainA1 = knownRoot(UInt64.valueOf(10));
+    final Bytes32 chainB1 = knownRoot(UInt64.valueOf(11));
+    final Bytes32 chainA2 = knownRoot(UInt64.valueOf(12));
+    final Bytes32 chainB2 = knownRoot(UInt64.valueOf(13));
+    final Bytes32 chainB3 = knownRoot(UInt64.valueOf(14));
+    onSameChain(chainB2, chainB3);
+
+    tracker.recordReorgOutcome(UInt64.valueOf(11), forkChoice, chainA1, chainB1);
+    tracker.recordReorgOutcome(UInt64.valueOf(12), forkChoice, chainB1, chainA2);
+    tracker.recordReorgOutcome(UInt64.valueOf(13), forkChoice, chainA2, chainB2);
+    tracker.recordReorgOutcome(UInt64.valueOf(14), forkChoice, chainB2, chainB3);
+
+    assertThat(reorgs()).isEqualTo(1);
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("specs")
+  void shouldCountAReorgAgainAfterTheConfirmedRootStabilises(final Spec trackerSpec) {
+    final FastConfirmationTracker tracker = createTracker(trackerSpec);
+    final Bytes32 chainA1 = knownRoot(UInt64.valueOf(10));
+    final Bytes32 chainB1 = knownRoot(UInt64.valueOf(11));
+    final Bytes32 chainB2 = knownRoot(UInt64.valueOf(12));
+    final Bytes32 chainA3 = knownRoot(UInt64.valueOf(13));
+    onSameChain(chainB1, chainB2);
+
+    tracker.recordReorgOutcome(UInt64.valueOf(11), forkChoice, chainA1, chainB1);
+    // Advancing along chain B closes the reorg episode.
+    tracker.recordReorgOutcome(UInt64.valueOf(12), forkChoice, chainB1, chainB2);
+    tracker.recordReorgOutcome(UInt64.valueOf(13), forkChoice, chainB2, chainA3);
+
+    assertThat(reorgs()).isEqualTo(2);
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("specs")
+  void shouldNotCountAReorgWhenAConfirmedRootIsNotInForkChoice(final Spec trackerSpec) {
+    final FastConfirmationTracker tracker = createTracker(trackerSpec);
+    // The previous confirmed root has been pruned now that finalization has advanced past it, so it
+    // cannot be placed on a chain — a pruning artifact, not a reorg.
+    final Bytes32 prunedConfirmedRoot = Bytes32.random();
+    final Bytes32 confirmedRoot = knownRoot(UInt64.valueOf(12));
+    when(forkChoice.blockSlot(prunedConfirmedRoot)).thenReturn(Optional.empty());
+
+    tracker.recordReorgOutcome(UInt64.valueOf(13), forkChoice, prunedConfirmedRoot, confirmedRoot);
+
+    assertThat(reorgs()).isZero();
+  }
+
+  @Test
+  void shouldNotSplitAFallbackEpisodeWhenASlotIsAbandoned() {
+    final StubAsyncRunner asyncRunner = new StubAsyncRunner();
+    when(store.getFinalizedCheckpoint()).thenReturn(finalizedCheckpoint);
+    final FastConfirmationTracker tracker =
+        FastConfirmationTracker.create(
+            spec, Optional.of(asyncRunner), eventChannel, metricsSystem, timeProvider);
+    tracker.initialize(store);
+    confirmBeyondFinality(tracker);
+
+    // Slot 13 opens the fallback episode (source states unavailable).
+    applyUpdate(tracker, asyncRunner, UInt64.valueOf(13), Bytes32.random());
+    // Slot 14's state load fails, so its confirmation is abandoned: it produces no outcome and must
+    // neither close nor reopen the episode.
+    when(store.retrieveBlockState(any(Bytes32.class)))
+        .thenReturn(SafeFuture.failedFuture(new IllegalStateException("boom")));
+    applyUpdate(tracker, asyncRunner, UInt64.valueOf(14), Bytes32.random());
+    when(store.retrieveBlockState(any(Bytes32.class)))
+        .thenReturn(SafeFuture.completedFuture(Optional.empty()));
+    applyUpdate(tracker, asyncRunner, UInt64.valueOf(15), Bytes32.random());
+
+    assertThat(fallbacks()).isEqualTo(1);
+  }
+
   @Test
   void shouldMarkEverySlotAsWarmingUpWhileConfirmationFallsBackToFinality() {
     // Minimal SLOTS_PER_EPOCH == 8: slot 15 is the last slot of epoch 1 and 16 starts epoch 2, so
@@ -481,6 +715,93 @@ class FastConfirmationTrackerTest {
           .hasSize(1)
           .allMatch(log -> log.contains("(warmup stage)"));
     }
+  }
+
+  private static Stream<Arguments> specs() {
+    return Stream.of(
+        Arguments.of(Named.of("fulu", TestSpecFactory.createMinimalFulu())),
+        Arguments.of(Named.of("gloas", TestSpecFactory.createMinimalGloas())));
+  }
+
+  private FastConfirmationTracker createTracker(final Spec trackerSpec) {
+    return FastConfirmationTracker.create(
+        trackerSpec, Optional.empty(), eventChannel, metricsSystem, timeProvider);
+  }
+
+  /**
+   * A tracker whose warm-up has already ended, so a pin to finality counts as a real fallback (see
+   * {@link #shouldNotCountFallbackDuringWarmUpWhenStatesAreUnavailable}).
+   */
+  private FastConfirmationTracker createTrackerAfterWarmUp(final Spec trackerSpec) {
+    when(store.getFinalizedCheckpoint()).thenReturn(finalizedCheckpoint);
+    final FastConfirmationTracker tracker = createTracker(trackerSpec);
+    tracker.initialize(store);
+    confirmBeyondFinality(tracker);
+    return tracker;
+  }
+
+  /**
+   * Records a slot whose confirmed root advanced beyond both finality and the observed justified.
+   */
+  private void confirmBeyondFinality(final FastConfirmationTracker tracker) {
+    tracker.recordConfirmationOutcome(
+        tracker.getFastConfirmationStore().orElseThrow(),
+        Bytes32.random(),
+        finalizedCheckpoint.getRoot());
+  }
+
+  /** Records a slot whose confirmed root reverted to the given finalized block. */
+  private void fallBackToFinality(
+      final FastConfirmationTracker tracker, final Bytes32 finalizedRoot) {
+    tracker.recordConfirmationOutcome(
+        tracker.getFastConfirmationStore().orElseThrow(), finalizedRoot, finalizedRoot);
+  }
+
+  /** Records a slot whose confirmed root restarted from the given observed justified checkpoint. */
+  private void restartFrom(
+      final FastConfirmationTracker tracker, final Checkpoint observedJustifiedCheckpoint) {
+    final FastConfirmationStore fastConfirmationStore =
+        new FastConfirmationStore(
+            store,
+            finalizedCheckpoint.getRoot(),
+            finalizedCheckpoint,
+            observedJustifiedCheckpoint,
+            finalizedCheckpoint,
+            finalizedCheckpoint.getRoot(),
+            finalizedCheckpoint.getRoot());
+    tracker.recordConfirmationOutcome(
+        fastConfirmationStore,
+        observedJustifiedCheckpoint.getRoot(),
+        finalizedCheckpoint.getRoot());
+  }
+
+  /** A root fork choice knows, at the given slot, with no ancestry stubbed (so: its own chain). */
+  private Bytes32 knownRoot(final UInt64 slot) {
+    final Bytes32 root = Bytes32.random();
+    when(forkChoice.blockSlot(root)).thenReturn(Optional.of(slot));
+    return root;
+  }
+
+  /** Makes {@code descendantRoot} resolve to {@code ancestorRoot} on the same chain. */
+  private void onSameChain(final Bytes32 ancestorRoot, final Bytes32 descendantRoot) {
+    final UInt64 ancestorSlot = forkChoice.blockSlot(ancestorRoot).orElseThrow();
+    when(forkChoice.getAncestorNode(ForkChoiceNode.createBase(descendantRoot), ancestorSlot))
+        .thenReturn(Optional.of(ForkChoiceNode.createBase(ancestorRoot)));
+  }
+
+  private long fallbacks() {
+    return metricsSystem.getCounterValue(
+        TekuMetricCategory.BEACON, "fast_confirmation_fallbacks_total");
+  }
+
+  private long restarts() {
+    return metricsSystem.getCounterValue(
+        TekuMetricCategory.BEACON, "fast_confirmation_restarts_total");
+  }
+
+  private long reorgs() {
+    return metricsSystem.getCounterValue(
+        TekuMetricCategory.BEACON, "fast_confirmation_reorgs_total");
   }
 
   private List<String> perSlotUpdateLogs(final LogCaptor logCaptor) {
