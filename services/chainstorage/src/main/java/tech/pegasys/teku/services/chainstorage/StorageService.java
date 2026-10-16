@@ -89,6 +89,8 @@ public class StorageService extends Service implements StorageServiceFacade {
   protected SafeFuture<?> doStart() {
     return SafeFuture.fromRunnable(
             () -> {
+              // Must stay single-threaded: this guarantees data column sidecar pruning and
+              // archiving never run concurrently.
               final AsyncRunner storagePrunerAsyncRunner =
                   serviceConfig.createAsyncRunner(
                       "storagePrunerAsyncRunner",

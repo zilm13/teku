@@ -122,6 +122,8 @@ public class DataColumnSidecarPruner extends Service implements SidecarArchivePr
                 Duration.ZERO,
                 pruneInterval,
                 error -> LOG.error("Failed to prune old data column sidecars", error)));
+    // Pruning and archiving must never run concurrently; the single-threaded asyncRunner
+    // (storagePrunerAsyncRunner) guarantees they execute one at a time.
     scheduledArchiver =
         Optional.of(
             asyncRunner.runWithFixedDelay(
