@@ -15,12 +15,14 @@ package tech.pegasys.teku.validator.eventadapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
+import org.apache.tuweni.bytes.Bytes32;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.events.EventChannels;
@@ -56,13 +58,35 @@ class IndependentTimerEventChannelEventAdapterTest {
   }
 
   @Test
-  void shouldRequestPayloadAttestationWhenTheExecutionPayloadBecomesAvailable() {
+  void shouldRequestPayloadAttestationWhenTheHeadPayloadBecomesAvailable() {
     final SignedExecutionPayloadEnvelope executionPayload =
         dataStructureUtil.randomSignedExecutionPayloadEnvelope(10);
+    headUpdatedTo(executionPayload.getBeaconBlockRoot());
 
     adapter.onExecutionPayloadAvailable(executionPayload);
 
     verify(validatorTimingChannel).onPayloadAttestationCreationDue(executionPayload.getSlot());
+  }
+
+  @Test
+  void shouldNotRequestPayloadAttestationForAPayloadOfAnotherBlock() {
+    final SignedExecutionPayloadEnvelope executionPayload =
+        dataStructureUtil.randomSignedExecutionPayloadEnvelope(10);
+    // the payload belongs to a block which is not the head, so it says nothing about the block the
+    // payload timeliness attestation will be about
+    headUpdatedTo(dataStructureUtil.randomBytes32());
+    clearInvocations(validatorTimingChannel);
+
+    adapter.onExecutionPayloadAvailable(executionPayload);
+
+    verifyNoInteractions(validatorTimingChannel);
+  }
+
+  @Test
+  void shouldNotRequestPayloadAttestationBeforeAnyHeadIsKnown() {
+    adapter.onExecutionPayloadAvailable(dataStructureUtil.randomSignedExecutionPayloadEnvelope(10));
+
+    verifyNoInteractions(validatorTimingChannel);
   }
 
   @Test
@@ -82,18 +106,22 @@ class IndependentTimerEventChannelEventAdapterTest {
   void shouldIgnoreThePayloadStatusOfAHeadUpdate() {
     // payload status is decided by the beacon node when each duty is produced, the validator
     // client only needs the head to know whether its duties are still valid
+    headUpdatedTo(dataStructureUtil.randomBytes32());
+
+    verify(validatorTimingChannel).onHeadUpdate(any(), any(), any(), any());
+    verify(validatorTimingChannel).onAttestationCreationDue(any());
+  }
+
+  private void headUpdatedTo(final Bytes32 blockRoot) {
     adapter.chainHeadUpdated(
         dataStructureUtil.randomUInt64(),
         dataStructureUtil.randomBytes32(),
-        dataStructureUtil.randomBytes32(),
+        blockRoot,
         false,
         false,
         dataStructureUtil.randomBytes32(),
         dataStructureUtil.randomBytes32(),
         Optional.empty(),
         Optional.empty());
-
-    verify(validatorTimingChannel).onHeadUpdate(any(), any(), any(), any());
-    verify(validatorTimingChannel).onAttestationCreationDue(any());
   }
 }

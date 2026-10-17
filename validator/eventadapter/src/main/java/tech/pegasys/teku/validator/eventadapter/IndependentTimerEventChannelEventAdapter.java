@@ -34,6 +34,13 @@ public class IndependentTimerEventChannelEventAdapter
   private final ValidatorTimingChannel validatorTimingChannel;
   private final EventChannels eventChannels;
 
+  /**
+   * The block of the head last reported by fork choice, which the payload timeliness attestation
+   * will be about. An execution payload for any other block says nothing about it, so it must not
+   * bring the duty forward.
+   */
+  private volatile Optional<Bytes32> lastReportedHead = Optional.empty();
+
   public IndependentTimerEventChannelEventAdapter(
       final EventChannels eventChannels,
       final boolean generateEarlyAttestations,
@@ -72,6 +79,7 @@ public class IndependentTimerEventChannelEventAdapter
       final Bytes32 currentDutyDependentRoot,
       final Optional<ForkChoicePayloadStatus> payloadStatus,
       final Optional<ReorgContext> optionalReorgContext) {
+    lastReportedHead = Optional.of(bestBlockRoot);
     validatorTimingChannel.onHeadUpdate(
         slot, previousDutyDependentRoot, currentDutyDependentRoot, bestBlockRoot);
     if (generateEarlyAttestations) {
@@ -84,11 +92,15 @@ public class IndependentTimerEventChannelEventAdapter
 
   /**
    * Payload timeliness attestations should be sent as soon as the execution payload and its data
-   * are available, rather than waiting for the deadline which the time based adapter schedules.
+   * are available, rather than waiting for the deadline which the time based adapter schedules. A
+   * payload for any block other than the head is ignored, so that the duty is not performed early
+   * against a block which is not the one being attested to.
    */
   @Override
   public void onExecutionPayloadAvailable(final SignedExecutionPayloadEnvelope executionPayload) {
-    validatorTimingChannel.onPayloadAttestationCreationDue(executionPayload.getSlot());
+    if (lastReportedHead.map(executionPayload.getBeaconBlockRoot()::equals).orElse(false)) {
+      validatorTimingChannel.onPayloadAttestationCreationDue(executionPayload.getSlot());
+    }
   }
 
   @Override
