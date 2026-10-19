@@ -116,6 +116,9 @@ class EventSourceHandler implements BackgroundEventHandler {
   public void onOpen() {
     connected = true;
     headEventReceivedSinceConnected = false;
+    // the head may have moved on while the stream was down, so what it was before says nothing
+    // about the block the next payload timeliness attestation will be about
+    lastReportedHead = Optional.empty();
     validatorLogger.connectedToBeaconNodeEventStream();
     // We might have missed some events while connecting or reconnected so ensure the duties are
     // recalculated

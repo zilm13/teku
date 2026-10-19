@@ -412,6 +412,22 @@ class EventSourceHandlerTest {
   }
 
   @Test
+  void onMessage_shouldNotRequestPayloadAttestationForTheHeadReportedBeforeAReconnect()
+      throws Exception {
+    handler.onMessage(EventType.head_v2.name(), new MessageEvent(SPEC_HEAD_V2_EVENT));
+    // the head may have moved on while the stream was down, so the beacon node has to report it
+    // again before a payload can be matched against it
+    handler.onOpen();
+    clearInvocations(validatorTimingChannel);
+
+    handler.onMessage(
+        EventType.execution_payload_available.name(),
+        new MessageEvent(SPEC_EXECUTION_PAYLOAD_AVAILABLE_EVENT));
+
+    verifyNoInteractions(validatorTimingChannel);
+  }
+
+  @Test
   void onMessage_shouldNotRequestPayloadAttestationBeforeAnyHeadIsKnown() throws Exception {
     handler.onMessage(
         EventType.execution_payload_available.name(),
