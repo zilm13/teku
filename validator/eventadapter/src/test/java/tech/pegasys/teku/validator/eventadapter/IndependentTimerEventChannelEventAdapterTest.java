@@ -93,6 +93,10 @@ class IndependentTimerEventChannelEventAdapterTest {
   void shouldNotRequestPayloadAttestationBeforeTheDataIsAvailable() {
     final SignedExecutionPayloadEnvelope executionPayload =
         dataStructureUtil.randomSignedExecutionPayloadEnvelope(10);
+    // the payload is for the head, so only the availability of its data is left to decide whether
+    // the duty is brought forward
+    headUpdatedTo(executionPayload.getBeaconBlockRoot());
+    clearInvocations(validatorTimingChannel);
 
     // the payload passed gossip validation, but its data has not been checked yet
     adapter.onExecutionPayloadValidated(executionPayload);
