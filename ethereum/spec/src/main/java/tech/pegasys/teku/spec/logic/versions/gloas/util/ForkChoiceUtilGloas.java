@@ -191,11 +191,23 @@ public class ForkChoiceUtilGloas extends ForkChoiceUtilFulu {
       final UInt64 slot,
       final BeaconBlock block,
       final int committeeIndex,
-      final ReadOnlyStore store) {
+      final Optional<ForkChoiceNode> selectedNode) {
     if (slot.equals(block.getSlot())) {
       return 0;
     }
-    return isPayloadVerified(store, block.getRoot()) ? 1 : 0;
+    final ForkChoiceNode node =
+        selectedNode.orElseThrow(
+            () -> new IllegalArgumentException("Canonical payload status is unavailable"));
+    if (node.payloadStatus() == PAYLOAD_STATUS_PENDING
+        && block.getBody().toVersionGloas().isPresent()) {
+      // get_head never returns PENDING for a Gloas block. A pre-Gloas block at the fork boundary
+      // has no payload status and signals 0; anything else is unexpected, so fall back to EMPTY.
+      LOG.warn(
+          "Fork choice head {} has pending payload status when attesting at slot {}, using 0",
+          block.getRoot(),
+          slot);
+    }
+    return node.payloadStatus() == PAYLOAD_STATUS_FULL ? 1 : 0;
   }
 
   @Override
@@ -220,6 +232,9 @@ public class ForkChoiceUtilGloas extends ForkChoiceUtilFulu {
   /**
    * Return whether the execution payload envelope for the beacon block with root ``root`` has been
    * locally delivered and verified via ``on_execution_payload_envelope``.
+   *
+   * <p>Kept as the {@code is_payload_verified} spec mapping; fork choice uses its own check in
+   * {@code ForkChoiceModelGloas}.
    */
   public boolean isPayloadVerified(final ReadOnlyStore store, final Bytes32 root) {
     return store.getExecutionPayloadIfAvailable(root).isPresent();
