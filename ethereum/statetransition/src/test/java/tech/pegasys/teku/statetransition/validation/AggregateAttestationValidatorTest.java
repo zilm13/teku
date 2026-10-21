@@ -351,9 +351,50 @@ class AggregateAttestationValidatorTest {
   public void shouldRejectFutureSlotAggregateWithInvalidAttestationSignature() {
     useRealAttestationValidator();
     chainUpdater.setCurrentSlot(ONE);
-    final UInt64 futureSlot = UInt64.valueOf(2);
+    final SignedAggregateAndProof aggregate =
+        aggregateWithInvalidAttestationSignature(bestBlock.toUnsigned(), UInt64.valueOf(2));
+
+    assertThat(validator.validate(ValidatableAttestation.aggregateFromNetwork(spec, aggregate)))
+        .isCompletedWithValueMatching(InternalValidationResult::isReject);
+  }
+
+  @TestTemplate
+  public void shouldVerifyAggregateForUnknownBlockBeforeSavingItForFuture() {
+    useRealAttestationValidator();
+    final SignedBlockAndState unknownBlock =
+        storageSystem.chainBuilder().generateBlockAtSlot(UInt64.valueOf(2));
+    chainUpdater.setCurrentSlot(unknownBlock.getSlot());
+    final ValidatableAttestation attestation =
+        ValidatableAttestation.aggregateFromNetwork(
+            spec, generator.validAggregateAndProof(unknownBlock.toUnsigned()));
+
+    assertThat(validator.validate(attestation))
+        .isCompletedWithValue(InternalValidationResult.SAVE_FOR_FUTURE);
+    // Verified against the target checkpoint state and cached, so fork choice doesn't verify it
+    // again once the block is imported
+    assertThat(attestation.isValidIndexedAttestation()).isTrue();
+  }
+
+  @TestTemplate
+  public void shouldRejectAggregateForUnknownBlockWithInvalidAttestationSignature() {
+    useRealAttestationValidator();
+    final SignedBlockAndState unknownBlock =
+        storageSystem.chainBuilder().generateBlockAtSlot(UInt64.valueOf(2));
+    chainUpdater.setCurrentSlot(unknownBlock.getSlot());
+    final SignedAggregateAndProof aggregate =
+        aggregateWithInvalidAttestationSignature(unknownBlock.toUnsigned(), unknownBlock.getSlot());
+
+    assertThat(validator.validate(ValidatableAttestation.aggregateFromNetwork(spec, aggregate)))
+        .isCompletedWithValueMatching(InternalValidationResult::isReject);
+  }
+
+  /**
+   * The selection proof and aggregator signature are valid, only the aggregate signature is not.
+   */
+  private SignedAggregateAndProof aggregateWithInvalidAttestationSignature(
+      final StateAndBlockSummary blockAndState, final UInt64 slot) {
     final Attestation validAttestation =
-        generator.getAttestationGenerator().validAttestation(bestBlock.toUnsigned(), futureSlot);
+        generator.getAttestationGenerator().validAttestation(blockAndState, slot);
     final AttestationSchema<?> attestationSchema = aggregateAndProofSchema.getAttestationSchema();
     final Attestation invalidAttestation =
         attestationSchema.create(
@@ -361,16 +402,11 @@ class AggregateAttestationValidatorTest {
             validAttestation.getData(),
             dataStructureUtil.randomSignature(),
             getCommitteeBitsSupplier(attestationSchema, validAttestation.getFirstCommitteeIndex()));
-    // The selection proof and aggregator signature are valid, only the aggregate signature is not
-    final SignedAggregateAndProof aggregate =
-        generator
-            .generator()
-            .blockAndState(bestBlock.toUnsigned(), futureSlot)
-            .aggregate(invalidAttestation)
-            .generate();
-
-    assertThat(validator.validate(ValidatableAttestation.aggregateFromNetwork(spec, aggregate)))
-        .isCompletedWithValueMatching(InternalValidationResult::isReject);
+    return generator
+        .generator()
+        .blockAndState(blockAndState, slot)
+        .aggregate(invalidAttestation)
+        .generate();
   }
 
   @TestTemplate

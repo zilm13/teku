@@ -37,6 +37,7 @@ import tech.pegasys.teku.spec.datastructures.forkchoice.ProtoNodeData;
 import tech.pegasys.teku.spec.datastructures.forkchoice.ReadOnlyForkChoiceStrategy;
 import tech.pegasys.teku.spec.datastructures.forkchoice.ReadOnlyStore;
 import tech.pegasys.teku.spec.datastructures.operations.AttestationData;
+import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
 import tech.pegasys.teku.spec.datastructures.state.ForkInfo;
 import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
 import tech.pegasys.teku.spec.logic.common.helpers.BeaconStateAccessors;
@@ -314,6 +315,10 @@ public class GossipValidationHelper {
   public SafeFuture<Optional<BeaconState>> getStateForAttestationValidation(
       final AttestationData attestationData) {
     return attestationStateSelector.getStateToValidate(attestationData);
+  }
+
+  public SafeFuture<Optional<BeaconState>> getCheckpointState(final Checkpoint checkpoint) {
+    return recentChainData.retrieveCheckpointState(checkpoint);
   }
 
   public UInt64 getGenesisTime() {

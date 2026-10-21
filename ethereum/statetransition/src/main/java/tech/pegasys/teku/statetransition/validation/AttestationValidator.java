@@ -29,6 +29,7 @@ import tech.pegasys.teku.spec.Spec;
 import tech.pegasys.teku.spec.datastructures.attestation.ValidatableAttestation;
 import tech.pegasys.teku.spec.datastructures.operations.Attestation;
 import tech.pegasys.teku.spec.datastructures.operations.AttestationData;
+import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
 import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
 import tech.pegasys.teku.spec.logic.common.helpers.StateTooOldException;
 import tech.pegasys.teku.spec.logic.common.statetransition.results.BlockImportResult;
@@ -244,9 +245,11 @@ public class AttestationValidator {
     }
 
     // The block being voted for must pass validation to be in the store.
-    // If it's not in the store, it may not have been processed yet so save for future.
+    // If it's not in the store, it may not have been processed yet so save for future. Like any
+    // other deferred attestation its signature is verified first (where its target is known), so
+    // that bogus ones aren't all verified for free in fork choice once the block is imported.
     if (!gossipValidationHelper.isBlockAvailable(data.getBeaconBlockRoot())) {
-      return completedFuture(InternalValidationResultWithState.saveForFuture());
+      return verifySignatureAndSaveForFuture(validatableAttestation, signatureVerifier);
     }
 
     // Deferred like a future-slot attestation, and for the same reason its signature is verified
@@ -410,13 +413,15 @@ public class AttestationValidator {
 
   /**
    * Verifies the signature of an attestation that can't be processed yet and always defers it
-   * (SAVE_FOR_FUTURE), rejecting only when the committee index or the signature is invalid. Such an
-   * attestation is either from a future slot or, from Gloas, a full payload vote whose payload
-   * hasn't been processed. The remaining gossip checks are intentionally skipped here: they either
-   * only apply to attestations eligible for immediate propagation, or are re-validated by fork
-   * choice when the attestation is processed. Rejecting solely on provably-invalid messages keeps
-   * the peer penalty in line with how other clients score deferred attestations, while still
-   * avoiding a penalty-free BLS verification in the fork choice path.
+   * (SAVE_FOR_FUTURE), rejecting only when it is provably invalid: an out-of-range committee index,
+   * a target block from after the start of the target epoch, or an invalid signature. Such an
+   * attestation is from a future slot, votes for a block that hasn't been seen yet or, from Gloas,
+   * is a full payload vote whose payload hasn't been processed. The remaining gossip checks are
+   * intentionally skipped here: they either only apply to attestations eligible for immediate
+   * propagation, or are re-validated by fork choice when the attestation is processed. Rejecting
+   * solely on provably-invalid messages keeps the peer penalty in line with how other clients score
+   * deferred attestations, while still avoiding a penalty-free BLS verification in the fork choice
+   * path.
    *
    * <p>A verified deferral carries the state, so that the aggregate path can run its own checks
    * against it straight away; the state is dropped right after those checks and is not kept while
@@ -428,34 +433,50 @@ public class AttestationValidator {
       final AsyncBLSSignatureVerifier signatureVerifier) {
     final Attestation attestation = validatableAttestation.getAttestation();
     final AttestationData data = attestation.getData();
-    // The signature can't be verified without the block being voted for and its state; defer.
-    if (!gossipValidationHelper.isBlockAvailable(data.getBeaconBlockRoot())) {
-      return completedFuture(InternalValidationResultWithState.saveForFuture());
+    final SafeFuture<Optional<BeaconState>> stateToVerifyAgainst;
+    if (gossipValidationHelper.isBlockAvailable(data.getBeaconBlockRoot())) {
+      stateToVerifyAgainst = gossipValidationHelper.getStateForAttestationValidation(data);
+    } else {
+      // The block being voted for hasn't been seen yet, but the committees only depend on the
+      // target checkpoint, so the signature can still be verified against the target checkpoint
+      // state, as on_attestation does in fork choice.
+      final Checkpoint target = data.getTarget();
+      final Optional<UInt64> targetBlockSlot =
+          gossipValidationHelper.getSlotForBlockRoot(target.getRoot());
+      if (targetBlockSlot.isEmpty()) {
+        // Neither block is known, so the signature can't be verified yet
+        return completedFuture(InternalValidationResultWithState.saveForFuture());
+      }
+      // [REJECT] The target block must be the ancestor of the block voted for at the start of the
+      // target epoch, which it can never be if it's from after that slot
+      if (targetBlockSlot.get().isGreaterThan(target.getEpochStartSlot(spec))) {
+        return completedFuture(
+            InternalValidationResultWithState.reject(
+                "Attestation target block %s is from after the start of target epoch %s",
+                target.getRoot(), target.getEpoch()));
+      }
+      stateToVerifyAgainst = gossipValidationHelper.getCheckpointState(target);
     }
-    return gossipValidationHelper
-        .getStateForAttestationValidation(data)
-        .thenCompose(
-            maybeState -> {
-              if (maybeState.isEmpty()) {
-                return completedFuture(InternalValidationResultWithState.saveForFuture());
-              }
-              final BeaconState state = maybeState.get();
-              // The committee index selects the committee the signature is checked against
-              if (isCommitteeIndexOutOfRange(state, attestation)) {
-                return completedFuture(
-                    InternalValidationResultWithState.reject(
-                        "Committee index %s is out of range",
-                        attestation.getFirstCommitteeIndex()));
-              }
-              return spec.isValidIndexedAttestation(
-                      state, validatableAttestation, signatureVerifier)
-                  .thenApply(
-                      signatureResult ->
-                          signatureResult.isSuccessful()
-                              ? InternalValidationResultWithState.saveForFuture(state)
-                              : InternalValidationResultWithState.reject(
-                                  "Attestation is not a valid indexed attestation: %s",
-                                  signatureResult.getInvalidReason()));
-            });
+    return stateToVerifyAgainst.thenCompose(
+        maybeState -> {
+          if (maybeState.isEmpty()) {
+            return completedFuture(InternalValidationResultWithState.saveForFuture());
+          }
+          final BeaconState state = maybeState.get();
+          // The committee index selects the committee the signature is checked against
+          if (isCommitteeIndexOutOfRange(state, attestation)) {
+            return completedFuture(
+                InternalValidationResultWithState.reject(
+                    "Committee index %s is out of range", attestation.getFirstCommitteeIndex()));
+          }
+          return spec.isValidIndexedAttestation(state, validatableAttestation, signatureVerifier)
+              .thenApply(
+                  signatureResult ->
+                      signatureResult.isSuccessful()
+                          ? InternalValidationResultWithState.saveForFuture(state)
+                          : InternalValidationResultWithState.reject(
+                              "Attestation is not a valid indexed attestation: %s",
+                              signatureResult.getInvalidReason()));
+        });
   }
 }
