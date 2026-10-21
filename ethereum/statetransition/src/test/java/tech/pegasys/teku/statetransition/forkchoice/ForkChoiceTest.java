@@ -87,6 +87,7 @@ import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.PayloadAttestat
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.PayloadAttestationData;
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.SignedExecutionPayloadEnvelope;
 import tech.pegasys.teku.spec.datastructures.execution.ExecutionPayload;
+import tech.pegasys.teku.spec.datastructures.execution.ExecutionPayloadHeader;
 import tech.pegasys.teku.spec.datastructures.execution.PowBlock;
 import tech.pegasys.teku.spec.datastructures.forkchoice.FastConfirmationStore;
 import tech.pegasys.teku.spec.datastructures.forkchoice.ForkChoiceNode;
@@ -1915,13 +1916,26 @@ class ForkChoiceTest {
         .contains(ForkChoiceNode.createFull(anchor.getRoot()));
   }
 
-  @Test
-  void onBlock_gloasGenesisChildShouldBuildOnEmptyGenesisWithoutGenesisPayload() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void onBlock_gloasGenesisChildShouldBuildOnEmptyGenesisWithoutGenesisPayload(
+      final boolean withPayloadHeader) {
     setupWithSpec(
         TestSpecFactory.createMinimalGloas(
-            builder -> builder.blsSignatureVerifier(BLSSignatureVerifier.NOOP)));
+            builder -> builder.blsSignatureVerifier(BLSSignatureVerifier.NOOP)),
+        false);
+    final Optional<ExecutionPayloadHeader> payloadHeader =
+        withPayloadHeader
+            ? Optional.of(dataStructureUtil.randomExecutionPayloadHeader())
+            : Optional.empty();
+    chainBuilder = ChainBuilder.create(spec, chainBuilder.getValidatorKeys());
+    genesis = chainBuilder.generateGenesis(UInt64.ZERO, true, payloadHeader);
+    recentChainData.initializeFromGenesis(genesis.getState(), UInt64.ZERO);
     final BeaconStateGloas genesisState = BeaconStateGloas.required(genesis.getState());
     final Bytes32 genesisExecutionBlockHash = genesisState.getLatestBlockHash();
+    assertThat(genesisExecutionBlockHash).isNotEqualTo(Bytes32.ZERO);
+    payloadHeader.ifPresent(
+        header -> assertThat(genesisExecutionBlockHash).isEqualTo(header.getBlockHash()));
     // The genesis bid names the EL genesis block as its parent and commits to no payload, so the
     // genesis block is EMPTY and no payload is ever known for it
     assertThat(genesisState.getLatestExecutionPayloadBid().getParentBlockHash())
@@ -1938,6 +1952,11 @@ class ForkChoiceTest {
             strategy
                 .getBlockData(genesis.getRoot(), ForkChoicePayloadStatus.PAYLOAD_STATUS_EMPTY)
                 .map(ProtoNodeData::getExecutionBlockHash))
+        .contains(genesisExecutionBlockHash);
+    processHead(ONE);
+    final ForkChoiceNode head = recentChainData.getChainHead().orElseThrow().getForkChoiceNode();
+    assertThat(head).isEqualTo(ForkChoiceNode.createEmpty(genesis.getRoot()));
+    assertThat(recentChainData.getExecutionBlockHashForBlock(head))
         .contains(genesisExecutionBlockHash);
 
     final SignedBlockAndState child = chainBuilder.generateBlockAtSlot(ONE);

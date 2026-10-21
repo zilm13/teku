@@ -25,6 +25,8 @@ import java.util.Optional;
 import org.apache.tuweni.bytes.Bytes32;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tech.pegasys.teku.bls.BLSKeyGenerator;
 import tech.pegasys.teku.bls.BLSKeyPair;
 import tech.pegasys.teku.bls.BLSSignature;
@@ -200,17 +202,26 @@ class GenesisGeneratorTest {
         .hasValue(payloadHeader);
   }
 
-  @Test
-  public void shouldEmbedLatestExecutionPayloadBidInGloasGenesisBlockBody() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void shouldEmbedLatestExecutionPayloadBidInGloasGenesisBlockBody(
+      final boolean withPayloadHeader) {
     final Spec gloasSpec = TestSpecFactory.createMinimalGloas();
-    final Bytes32 eth1BlockHash = dataStructureUtil.randomBytes32();
+    final Optional<ExecutionPayloadHeader> payloadHeader =
+        withPayloadHeader
+            ? Optional.of(new DataStructureUtil(gloasSpec).randomExecutionPayloadHeader())
+            : Optional.empty();
+    final Bytes32 eth1BlockHash =
+        payloadHeader
+            .map(ExecutionPayloadHeader::getBlockHash)
+            .orElseGet(dataStructureUtil::randomBytes32);
     final List<Deposit> deposits =
         new MockStartDepositGenerator(gloasSpec, new DepositGenerator(gloasSpec, true))
             .createDeposits(VALIDATOR_KEYS).stream().map(Deposit::new).toList();
 
     final BeaconState genesisState =
         gloasSpec.initializeBeaconStateFromEth1(
-            eth1BlockHash, UInt64.ZERO, deposits, Optional.empty());
+            eth1BlockHash, UInt64.ZERO, deposits, payloadHeader);
 
     final BeaconStateGloas genesisStateGloas = BeaconStateGloas.required(genesisState);
     // The genesis block is EMPTY, as in the consensus-specs genesis helper and eth-beacon-genesis:
