@@ -417,8 +417,8 @@ public class Phase0AttestationValidatorTest extends AbstractAttestationValidator
 
   @Test
   public void shouldDeferFutureSlotAttestationOnWrongSubnetWhenSignatureIsValid() {
-    // A future-slot attestation is only rejected for an invalid signature; other gossip failures
-    // (here, the wrong subnet) defer rather than penalise the sender. Contrast with
+    // A future-slot attestation is only rejected for an invalid committee index or signature; other
+    // gossip failures (here, the wrong subnet) defer rather than penalise the sender. Contrast with
     // shouldRejectAttestationsSentOnTheWrongSubnet, which rejects an in-window attestation.
     final StateAndBlockSummary blockAndState = storageSystem.getChainHead();
     final Attestation attestation = attestationGenerator.validAttestation(blockAndState, ONE);
@@ -432,5 +432,31 @@ public class Phase0AttestationValidatorTest extends AbstractAttestationValidator
                 .join()
                 .code())
         .isEqualTo(SAVE_FOR_FUTURE);
+  }
+
+  @Test
+  public void shouldRejectFutureSlotAttestationWithCommitteeIndexNotInTheExpectedRange() {
+    final StateAndBlockSummary blockAndState = storageSystem.getChainHead();
+    final Attestation attestation = attestationGenerator.validAttestation(blockAndState, ONE);
+    final AttestationData data = attestation.getData();
+    final int subnetId = spec.computeSubnetForAttestation(blockAndState.getState(), attestation);
+    chainUpdater.setCurrentSlot(ZERO);
+
+    assertThat(
+            validator.validate(
+                ValidatableAttestation.fromNetwork(
+                    spec,
+                    attestationSchema.create(
+                        attestation.getAggregationBits(),
+                        new AttestationData(
+                            data.getSlot(),
+                            spec.getCommitteeCountPerSlot(
+                                blockAndState.getState(), data.getTarget().getEpoch()),
+                            data.getBeaconBlockRoot(),
+                            data.getSource(),
+                            data.getTarget()),
+                        attestation.getAggregateSignature()),
+                    subnetId)))
+        .matches(rejected("Committee index 2 is out of range"), "Rejected committee out of range");
   }
 }

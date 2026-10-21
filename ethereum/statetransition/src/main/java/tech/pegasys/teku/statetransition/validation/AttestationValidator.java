@@ -104,7 +104,6 @@ public class AttestationValidator {
             signatureVerifier,
             validatableAttestation,
             validatableAttestation.getReceivedSubnetId(),
-            true,
             true)
         .thenApply(InternalValidationResultWithState::getResult)
         .thenPeek(
@@ -134,21 +133,19 @@ public class AttestationValidator {
       final AsyncBLSSignatureVerifier signatureVerifier,
       final ValidatableAttestation validatableAttestation,
       final OptionalInt receivedOnSubnetId) {
-    // Aggregate validation path: preserve legacy behaviour where a future-slot attestation is
-    // deferred without running signature verification here. The aggregate wrapper uses a batch
-    // verifier that is flushed separately, so verifying (and optimistically caching) the signature
-    // here would leave an unverified signature cached if the deferral short-circuits the flush.
-    // The per-validator duplicate check is also skipped: aggregates are deduplicated by aggregator
+    // Aggregate validation path. The aggregate wrapper uses a batch verifier that is flushed
+    // separately, so a future-slot attestation is returned as SAVE_FOR_FUTURE together with its
+    // state: the wrapper then runs the aggregate checks and flushes the batch before deferring it.
+    // The per-validator duplicate check is skipped: aggregates are deduplicated by aggregator
     // index and epoch by AggregateAttestationValidator, which is a distinct spec rule.
     return singleOrAggregateAttestationChecks(
-        signatureVerifier, validatableAttestation, receivedOnSubnetId, false, false);
+        signatureVerifier, validatableAttestation, receivedOnSubnetId, false);
   }
 
-  SafeFuture<InternalValidationResultWithState> singleOrAggregateAttestationChecks(
+  private SafeFuture<InternalValidationResultWithState> singleOrAggregateAttestationChecks(
       final AsyncBLSSignatureVerifier signatureVerifier,
       final ValidatableAttestation validatableAttestation,
       final OptionalInt receivedOnSubnetId,
-      final boolean verifyFutureSlotAttestationSignature,
       final boolean checkForDuplicateUnaggregatedAttestation) {
 
     Attestation attestation = validatableAttestation.getAttestation();
@@ -225,15 +222,12 @@ public class AttestationValidator {
         return completedFuture(InternalValidationResultWithState.ignore());
       }
       // SAVE_FOR_FUTURE: a future-slot attestation is deferred rather than accepted for gossip.
-      // When requested, we still verify its signature so that a bogus signature is rejected and its
-      // sender penalised, rather than being deferred with a penalty-free Ignore verdict and later
-      // forcing a BLS verification in the fork choice path for free. Only an invalid signature
-      // rejects here; every other gossip check simply defers (fork choice re-validates the rest
-      // once the attestation's slot arrives). A verified signature is cached so fork choice does
-      // not re-verify it.
-      if (!verifyFutureSlotAttestationSignature) {
-        return completedFuture(InternalValidationResultWithState.saveForFuture());
-      }
+      // We still verify its signature so that a bogus signature is rejected and its sender
+      // penalised, rather than being deferred with a penalty-free Ignore verdict and later forcing
+      // a BLS verification in the fork choice path for free. Only an invalid committee index or
+      // signature rejects here; every other gossip check simply defers (fork choice re-validates
+      // the rest once the attestation's slot arrives). A verified signature is cached so fork
+      // choice does not re-verify it.
       return checkFutureSlotAttestationSignature(validatableAttestation, signatureVerifier);
     }
 
@@ -265,10 +259,7 @@ public class AttestationValidator {
               final BeaconState state = maybeState.get();
 
               // The committee index is within the expected range
-              if (attestation
-                  .getFirstCommitteeIndex()
-                  .isGreaterThanOrEqualTo(
-                      spec.getCommitteeCountPerSlot(state, data.getTarget().getEpoch()))) {
+              if (isCommitteeIndexOutOfRange(state, attestation)) {
                 return completedFuture(
                     InternalValidationResultWithState.reject(
                         "Committee index %s is out of range", data.getIndex()));
@@ -401,19 +392,33 @@ public class AttestationValidator {
         : OptionalInt.empty();
   }
 
+  private boolean isCommitteeIndexOutOfRange(
+      final BeaconState state, final Attestation attestation) {
+    return attestation
+        .getFirstCommitteeIndex()
+        .isGreaterThanOrEqualTo(
+            spec.getCommitteeCountPerSlot(state, attestation.getData().getTarget().getEpoch()));
+  }
+
   /**
    * Verifies the signature of a future-slot attestation and always defers it (SAVE_FOR_FUTURE),
-   * rejecting only when the signature is invalid. The remaining gossip checks are intentionally
-   * skipped here: they either only apply to attestations eligible for immediate propagation, or are
-   * re-validated by fork choice when the attestation's slot arrives. Rejecting solely on an invalid
-   * signature keeps the peer penalty limited to provably-invalid messages, matching how other
+   * rejecting only when the committee index or the signature is invalid. The remaining gossip
+   * checks are intentionally skipped here: they either only apply to attestations eligible for
+   * immediate propagation, or are re-validated by fork choice when the attestation's slot arrives.
+   * Rejecting solely on provably-invalid messages keeps the peer penalty in line with how other
    * clients score future-slot attestations, while still avoiding a penalty-free BLS verification in
    * the fork choice path.
+   *
+   * <p>A verified deferral carries the state, so that the aggregate path can run its own checks
+   * against it straight away; the state is dropped right after those checks and is not kept while
+   * the attestation is deferred. With a batch verifier the signature is only checked once the batch
+   * is flushed, so the caller must flush it before relying on the result.
    */
   private SafeFuture<InternalValidationResultWithState> checkFutureSlotAttestationSignature(
       final ValidatableAttestation validatableAttestation,
       final AsyncBLSSignatureVerifier signatureVerifier) {
-    final AttestationData data = validatableAttestation.getAttestation().getData();
+    final Attestation attestation = validatableAttestation.getAttestation();
+    final AttestationData data = attestation.getData();
     // The signature can't be verified without the block being voted for and its state; defer.
     if (!gossipValidationHelper.isBlockAvailable(data.getBeaconBlockRoot())) {
       return completedFuture(InternalValidationResultWithState.saveForFuture());
@@ -425,12 +430,20 @@ public class AttestationValidator {
               if (maybeState.isEmpty()) {
                 return completedFuture(InternalValidationResultWithState.saveForFuture());
               }
+              final BeaconState state = maybeState.get();
+              // The committee index selects the committee the signature is checked against
+              if (isCommitteeIndexOutOfRange(state, attestation)) {
+                return completedFuture(
+                    InternalValidationResultWithState.reject(
+                        "Committee index %s is out of range",
+                        attestation.getFirstCommitteeIndex()));
+              }
               return spec.isValidIndexedAttestation(
-                      maybeState.get(), validatableAttestation, signatureVerifier)
+                      state, validatableAttestation, signatureVerifier)
                   .thenApply(
                       signatureResult ->
                           signatureResult.isSuccessful()
-                              ? InternalValidationResultWithState.saveForFuture()
+                              ? InternalValidationResultWithState.saveForFuture(state)
                               : InternalValidationResultWithState.reject(
                                   "Attestation is not a valid indexed attestation: %s",
                                   signatureResult.getInvalidReason()));
