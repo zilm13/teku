@@ -44,7 +44,7 @@ public class InternalValidationResultWithState {
 
   /**
    * A deferral that carries the state the attestation was validated against, so that the caller can
-   * immediately run follow-up checks against it (e.g. the aggregate checks for a future-slot
+   * immediately run follow-up checks against it (e.g. the aggregate checks for a deferred
    * aggregate). The result is short-lived: the caller reads the state synchronously and drops this
    * result before awaiting anything (such as batch signature verification). It must not be retained
    * beyond that -- what is deferred is the attestation itself, which doesn't reference the state.

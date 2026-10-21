@@ -134,8 +134,9 @@ public class AttestationValidator {
       final ValidatableAttestation validatableAttestation,
       final OptionalInt receivedOnSubnetId) {
     // Aggregate validation path. The aggregate wrapper uses a batch verifier that is flushed
-    // separately, so a future-slot attestation is returned as SAVE_FOR_FUTURE together with its
-    // state: the wrapper then runs the aggregate checks and flushes the batch before deferring it.
+    // separately, so a deferred attestation whose signature was queued is returned as
+    // SAVE_FOR_FUTURE together with its state: the wrapper then runs the aggregate checks and
+    // flushes the batch before deferring it.
     // The per-validator duplicate check is skipped: aggregates are deduplicated by aggregator
     // index and epoch by AggregateAttestationValidator, which is a distinct spec rule.
     return singleOrAggregateAttestationChecks(
@@ -207,9 +208,10 @@ public class AttestationValidator {
           InternalValidationResultWithState.reject(
               payloadStatusValidationResult.getDescription().orElse("Invalid payload status")));
     }
-    if (payloadStatusValidationResult.isSaveForFuture()) {
-      return completedFuture(InternalValidationResultWithState.saveForFuture());
-    }
+    // [IGNORE] A full payload vote whose payload hasn't been seen, or is optimistic, is queued
+    // until the payload is processed. It still goes through the slot and block checks below, and
+    // has its signature verified before being deferred.
+    final boolean deferUntilPayloadIsProcessed = payloadStatusValidationResult.isSaveForFuture();
 
     final Optional<SlotInclusionGossipValidationResult> slotInclusionGossipValidationResult =
         attestationUtil.performSlotInclusionGossipValidation(
@@ -228,7 +230,7 @@ public class AttestationValidator {
       // signature rejects here; every other gossip check simply defers (fork choice re-validates
       // the rest once the attestation's slot arrives). A verified signature is cached so fork
       // choice does not re-verify it.
-      return checkFutureSlotAttestationSignature(validatableAttestation, signatureVerifier);
+      return verifySignatureAndSaveForFuture(validatableAttestation, signatureVerifier);
     }
 
     // [REJECT] The block being voted for (attestation.data.beacon_block_root) passes validation.
@@ -245,6 +247,12 @@ public class AttestationValidator {
     // If it's not in the store, it may not have been processed yet so save for future.
     if (!gossipValidationHelper.isBlockAvailable(data.getBeaconBlockRoot())) {
       return completedFuture(InternalValidationResultWithState.saveForFuture());
+    }
+
+    // Deferred like a future-slot attestation, and for the same reason its signature is verified
+    // first: fork choice re-validates the rest once the payload has been processed.
+    if (deferUntilPayloadIsProcessed) {
+      return verifySignatureAndSaveForFuture(validatableAttestation, signatureVerifier);
     }
 
     return gossipValidationHelper
@@ -401,20 +409,21 @@ public class AttestationValidator {
   }
 
   /**
-   * Verifies the signature of a future-slot attestation and always defers it (SAVE_FOR_FUTURE),
-   * rejecting only when the committee index or the signature is invalid. The remaining gossip
-   * checks are intentionally skipped here: they either only apply to attestations eligible for
-   * immediate propagation, or are re-validated by fork choice when the attestation's slot arrives.
-   * Rejecting solely on provably-invalid messages keeps the peer penalty in line with how other
-   * clients score future-slot attestations, while still avoiding a penalty-free BLS verification in
-   * the fork choice path.
+   * Verifies the signature of an attestation that can't be processed yet and always defers it
+   * (SAVE_FOR_FUTURE), rejecting only when the committee index or the signature is invalid. Such an
+   * attestation is either from a future slot or, from Gloas, a full payload vote whose payload
+   * hasn't been processed. The remaining gossip checks are intentionally skipped here: they either
+   * only apply to attestations eligible for immediate propagation, or are re-validated by fork
+   * choice when the attestation is processed. Rejecting solely on provably-invalid messages keeps
+   * the peer penalty in line with how other clients score deferred attestations, while still
+   * avoiding a penalty-free BLS verification in the fork choice path.
    *
    * <p>A verified deferral carries the state, so that the aggregate path can run its own checks
    * against it straight away; the state is dropped right after those checks and is not kept while
    * the attestation is deferred. With a batch verifier the signature is only checked once the batch
    * is flushed, so the caller must flush it before relying on the result.
    */
-  private SafeFuture<InternalValidationResultWithState> checkFutureSlotAttestationSignature(
+  private SafeFuture<InternalValidationResultWithState> verifySignatureAndSaveForFuture(
       final ValidatableAttestation validatableAttestation,
       final AsyncBLSSignatureVerifier signatureVerifier) {
     final Attestation attestation = validatableAttestation.getAttestation();

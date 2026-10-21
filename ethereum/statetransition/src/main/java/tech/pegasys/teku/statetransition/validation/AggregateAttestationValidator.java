@@ -228,8 +228,8 @@ public class AggregateAttestationValidator {
                         // attestation so that fork choice won't verify it again. Such an aggregate
                         // can only be deferred once the batch has been verified. It is deferred
                         // rather than accepted, so it isn't marked as seen: the same aggregate
-                        // received again once its slot arrives must still be accepted and
-                        // propagated.
+                        // received again once it can be processed (its slot has arrived or its
+                        // payload has been seen) must still be accepted and propagated.
                         if (attestationResult.isSaveForFuture()) {
                           return attestationResult;
                         }
