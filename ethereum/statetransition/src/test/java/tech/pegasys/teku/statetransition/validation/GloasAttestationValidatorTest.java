@@ -15,7 +15,9 @@ package tech.pegasys.teku.statetransition.validation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ONE;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ZERO;
 
@@ -41,6 +43,7 @@ import tech.pegasys.teku.spec.datastructures.operations.SignedAggregateAndProof;
 import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
 import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
 import tech.pegasys.teku.spec.generator.AggregateGenerator;
+import tech.pegasys.teku.spec.logic.common.util.AsyncBLSSignatureVerifier;
 import tech.pegasys.teku.spec.signatures.LocalSigner;
 
 public class GloasAttestationValidatorTest extends ElectraAttestationValidatorTest {
@@ -192,6 +195,24 @@ public class GloasAttestationValidatorTest extends ElectraAttestationValidatorTe
   }
 
   @Test
+  public void shouldRejectFullPayloadAttestationOnWrongSubnetWithoutVerifyingSignature() {
+    // A valid vote replayed on other subnets is rejected before its signature is verified, so the
+    // copies don't each cost a BLS verification
+    final StateAndBlockSummary blockAndState = storageSystem.getChainHead();
+    final Attestation attestation = signedFullPayloadVoteForPastBlock(blockAndState);
+    final AsyncBLSSignatureVerifier signatureVerifier = mock(AsyncBLSSignatureVerifier.class);
+    final AttestationValidator validator =
+        validatorWithPayloadNotSeen(blockAndState.getRoot(), signatureVerifier);
+    chainUpdater.setCurrentSlot(attestation.getData().getSlot());
+    final int subnetId = spec.computeSubnetForAttestation(blockAndState.getState(), attestation);
+
+    assertThat(
+            validator.validate(ValidatableAttestation.fromNetwork(spec, attestation, subnetId + 1)))
+        .matches(rejected("Attestation received on incorrect subnet"), "Rejected incorrect subnet");
+    verifyNoInteractions(signatureVerifier);
+  }
+
+  @Test
   public void shouldIgnoreFullPayloadAttestationOutsidePropagationRangeWhenPayloadHasNotBeenSeen() {
     final StateAndBlockSummary blockAndState = storageSystem.getChainHead();
     final Attestation attestation = signedFullPayloadVoteForPastBlock(blockAndState);
@@ -338,6 +359,11 @@ public class GloasAttestationValidatorTest extends ElectraAttestationValidatorTe
   }
 
   private AttestationValidator validatorWithPayloadNotSeen(final Bytes32 blockRoot) {
+    return validatorWithPayloadNotSeen(blockRoot, signatureVerifier);
+  }
+
+  private AttestationValidator validatorWithPayloadNotSeen(
+      final Bytes32 blockRoot, final AsyncBLSSignatureVerifier signatureVerifier) {
     final GossipValidationHelper gossipValidationHelper =
         spy(new GossipValidationHelper(spec, recentChainData, new StubMetricsSystem()));
     doReturn(Optional.empty())

@@ -226,10 +226,11 @@ public class AggregateAttestationValidator {
                         // SAVE_FOR_FUTURE with a state means the attestation signature was queued
                         // in the batch, and the attestation already marked as a valid indexed
                         // attestation so that fork choice won't verify it again. Such an aggregate
-                        // can only be deferred once the batch has been verified. It is deferred
-                        // rather than accepted, so it isn't marked as seen: the same aggregate
-                        // received again once it can be processed (its slot has arrived or its
-                        // payload has been seen) must still be accepted and propagated.
+                        // can only be deferred once the batch has been verified. As before, a
+                        // deferred aggregate isn't marked as seen, since only accepted ones are. It
+                        // isn't propagated either: gossip ignores it, and identical copies received
+                        // later are dropped by the gossip seen cache before reaching this
+                        // validator.
                         if (attestationResult.isSaveForFuture()) {
                           return attestationResult;
                         }

@@ -207,6 +207,51 @@ abstract class AbstractAttestationValidatorTest {
             "Rejected target block from after the target epoch start");
   }
 
+  @Test
+  public void shouldVerifyAttestationForUnknownBlockAgainstCachedTargetCheckpointState() {
+    final Attestation attestation = attestationForUnknownBlockWithTargetBeforeEpochStart();
+    // Precomputed, as the epoch transition of the head is
+    assertThat(safeJoin(recentChainData.retrieveCheckpointState(attestation.getData().getTarget())))
+        .isPresent();
+    final ValidatableAttestation validatableAttestation = fromNetwork(attestation);
+
+    assertThat(validator.validate(validatableAttestation))
+        .isCompletedWithValue(InternalValidationResult.SAVE_FOR_FUTURE);
+    assertThat(validatableAttestation.isValidIndexedAttestation()).isTrue();
+  }
+
+  @Test
+  public void shouldDeferAttestationForUnknownBlockWithoutRegeneratingTargetCheckpointState() {
+    final Attestation attestation = attestationForUnknownBlockWithTargetBeforeEpochStart();
+    final Checkpoint target = attestation.getData().getTarget();
+    assertThat(recentChainData.getStore().getCheckpointStateIfAvailable(target)).isEmpty();
+    final ValidatableAttestation validatableAttestation = fromNetwork(attestation);
+
+    assertThat(validator.validate(validatableAttestation))
+        .isCompletedWithValue(InternalValidationResult.SAVE_FOR_FUTURE);
+    // The target is chosen by the sender, so its state isn't regenerated just to verify the
+    // signature, which is left to fork choice instead
+    assertThat(validatableAttestation.isValidIndexedAttestation()).isFalse();
+    assertThat(recentChainData.getStore().getCheckpointStateIfAvailable(target)).isEmpty();
+  }
+
+  /**
+   * An attestation for a block that isn't imported, whose target is the last block of the previous
+   * epoch: unlike a block from the start of the epoch, its state isn't the checkpoint state.
+   */
+  private Attestation attestationForUnknownBlockWithTargetBeforeEpochStart() {
+    final UInt64 epochStartSlot = spec.computeStartSlotAtEpoch(ONE);
+    final StateAndBlockSummary targetBlock = chainUpdater.advanceChain(epochStartSlot.minus(ONE));
+    final StateAndBlockSummary unknownBlock =
+        chainBuilder.generateBlockAtSlot(epochStartSlot.plus(ONE)).toUnsigned();
+    chainUpdater.setCurrentSlot(unknownBlock.getSlot());
+    final Attestation attestation = attestationGenerator.validAttestation(unknownBlock);
+    // Sanity check
+    assertThat(attestation.getData().getTarget())
+        .isEqualTo(new Checkpoint(ONE, targetBlock.getRoot()));
+    return attestation;
+  }
+
   protected Predicate<? super CompletableFuture<InternalValidationResult>> rejected(
       final String messageContents) {
     return result -> {

@@ -317,8 +317,21 @@ public class GossipValidationHelper {
     return attestationStateSelector.getStateToValidate(attestationData);
   }
 
-  public SafeFuture<Optional<BeaconState>> getCheckpointState(final Checkpoint checkpoint) {
-    return recentChainData.retrieveCheckpointState(checkpoint);
+  /**
+   * Returns the checkpoint state only if it's already available, never regenerating it, so that a
+   * checkpoint chosen by a gossip sender can't make us do expensive state work. The canonical
+   * checkpoint states are normally cached, as the epoch transition of the head is precomputed.
+   */
+  public Optional<BeaconState> getCheckpointStateIfAvailable(final Checkpoint checkpoint) {
+    final ReadOnlyStore store = recentChainData.getStore();
+    return store
+        .getCheckpointStateIfAvailable(checkpoint)
+        // The state of a block from the start of the epoch is also the checkpoint state
+        .or(
+            () ->
+                store
+                    .getBlockStateIfAvailable(checkpoint.getRoot())
+                    .filter(state -> state.getSlot().equals(checkpoint.getEpochStartSlot(spec))));
   }
 
   public UInt64 getGenesisTime() {
