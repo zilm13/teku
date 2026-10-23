@@ -15,13 +15,19 @@ package tech.pegasys.teku.statetransition.datacolumns;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
+import com.google.common.annotations.VisibleForTesting;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -33,6 +39,8 @@ import org.hyperledger.besu.plugin.services.metrics.Counter;
 import tech.pegasys.teku.infrastructure.async.AsyncRunner;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
 import tech.pegasys.teku.infrastructure.async.ThrottlingTaskQueue;
+import tech.pegasys.teku.infrastructure.async.ThrottlingTaskQueue.QueueIsFullException;
+import tech.pegasys.teku.infrastructure.exceptions.ExceptionUtil;
 import tech.pegasys.teku.infrastructure.metrics.MetricsHistogram;
 import tech.pegasys.teku.infrastructure.metrics.TekuMetricCategory;
 import tech.pegasys.teku.infrastructure.time.TimeProvider;
@@ -64,9 +72,13 @@ public class DataColumnSidecarArchiveReconstructorImpl
   // Hard bound on the reconstruction backlog: once this many are already queued, further requests
   // are rejected immediately (served as empty) rather than growing the queue unboundedly.
   private static final int MAX_QUEUED_RECONSTRUCTIONS = 1024;
-  // Per-request deadline: a caller waiting longer than this gets empty, while the shared
-  // reconstruction keeps running so later requests join it instead of starting another.
-  private static final Duration RECONSTRUCTION_TIMEOUT = Duration.ofSeconds(10);
+  // Per-request deadline: a request that has waited this long for a reconstruction gets empty and,
+  // for the rest of the request, is served only reconstructions that have already completed (see
+  // requestsPastDeadline). Kept well below the 10s requesters allow between response chunks
+  // (Eth2OutgoingRequestHandler.RESPONSE_CHUNK_ARRIVAL_TIMEOUT), so the request moves on while the
+  // peer is still listening. The shared reconstruction keeps running, so later requests join it
+  // instead of starting another.
+  private static final Duration RECONSTRUCTION_TIMEOUT = Duration.ofSeconds(5);
   // Backstop for a reconstruction that never completes, counted from when it starts running: it is
   // failed, freeing its throttling slot so the next request retries. Far above normal
   // reconstruction times, so a merely slow reconstruction is not duplicated.
@@ -74,13 +86,25 @@ public class DataColumnSidecarArchiveReconstructorImpl
   // How long a successful result is kept after its last request before the per-slot prune drops
   // it. A flat wall-clock window, intentionally not derived from network/slot timing since a
   // peer's by-root re-request pattern varies by client; kept generous so successive request waves
-  // reuse the result rather than re-reconstructing.
+  // reuse the result rather than re-reconstructing. A queued reconstruction left unrequested for
+  // this long is skipped instead of run, as its result would be pruned straight away.
   private static final Duration RESULT_RETENTION = Duration.ofSeconds(30);
+  // Bound on the successful results kept for reuse, each holding all extension sidecars of a block
+  // (about 1-2 MB on mainnet). Past it the least recently requested results are evicted as new ones
+  // complete, so memory stays bounded however fast reconstructions complete.
+  private static final int MAX_RETAINED_RESULTS = 64;
+  // Unexpected reconstruction failures recur on every request for the affected block, so at most
+  // one per interval is logged at warn and the rest at debug.
+  private static final Duration FAILURE_WARN_INTERVAL = Duration.ofMinutes(1);
 
   private final CombinedChainDataClient chainDataClient;
   private final AsyncRunner reconstructionAsyncRunner;
+  // Fires the per-request and hung-reconstruction deadlines. Kept apart from
+  // reconstructionAsyncRunner, whose workers are busy reconstructing exactly when deadlines matter.
+  private final AsyncRunner timeoutAsyncRunner;
   private final TimeProvider timeProvider;
   private final AtomicInteger nextTaskId = new AtomicInteger(0);
+  private final AtomicLong nextFailureWarnAtMillis = new AtomicLong(0);
   // Caps concurrent reconstructions at MAX_CONCURRENT_RECONSTRUCTIONS and queues the overflow, so a
   // burst of requests can't launch an unbounded number of parallel KZG reconstructions.
   private final ThrottlingTaskQueue reconstructionQueue;
@@ -88,10 +112,17 @@ public class DataColumnSidecarArchiveReconstructorImpl
   // completed reconstructions are shared across all ReqResp requests keyed by block. In-flight
   // entries deduplicate any number of concurrent/overlapping requests onto a single reconstruction
   // (not capacity-bounded); successful entries are reused regardless of age and pruned on each slot
-  // once unrequested for RESULT_RETENTION. Failed entries are replaced by the next
-  // request, so it retries.
+  // once unrequested for RESULT_RETENTION, or evicted least recently requested first to keep at
+  // most maxRetainedResults of them. Failed entries are replaced by the next request, so it
+  // retries.
   private final Map<SlotAndBlockRoot, ReconstructionCacheEntry> reconstructions =
       new ConcurrentHashMap<>();
+  private final int maxRetainedResults;
+  // Requests that have already waited out RECONSTRUCTION_TIMEOUT once. An empty result writes
+  // nothing to the stream, so further waits within the same request would add up against the
+  // peer's per-chunk timeout; such a request is served only completed reconstructions and starts no
+  // new ones. Cleared by onRequestCompleted.
+  private final Set<Integer> requestsPastDeadline = ConcurrentHashMap.newKeySet();
   private final int halfColumns;
 
   private final Supplier<Boolean> isSuperNodeSupplier;
@@ -106,15 +137,47 @@ public class DataColumnSidecarArchiveReconstructorImpl
   public DataColumnSidecarArchiveReconstructorImpl(
       final CombinedChainDataClient chainDataClient,
       final AsyncRunner reconstructionAsyncRunner,
+      final AsyncRunner timeoutAsyncRunner,
       final Supplier<Boolean> isSuperNodeSupplier,
       final Spec spec,
       final int dataColumnSidecarExtensionRetentionEpochs,
       final SidecarArchivePrunableChannel sidecarArchivePrunableChannel,
       final MetricsSystem metricsSystem,
       final TimeProvider timeProvider) {
+    this(
+        chainDataClient,
+        reconstructionAsyncRunner,
+        timeoutAsyncRunner,
+        isSuperNodeSupplier,
+        spec,
+        dataColumnSidecarExtensionRetentionEpochs,
+        sidecarArchivePrunableChannel,
+        metricsSystem,
+        timeProvider,
+        MAX_CONCURRENT_RECONSTRUCTIONS,
+        MAX_QUEUED_RECONSTRUCTIONS,
+        MAX_RETAINED_RESULTS);
+  }
+
+  @VisibleForTesting
+  DataColumnSidecarArchiveReconstructorImpl(
+      final CombinedChainDataClient chainDataClient,
+      final AsyncRunner reconstructionAsyncRunner,
+      final AsyncRunner timeoutAsyncRunner,
+      final Supplier<Boolean> isSuperNodeSupplier,
+      final Spec spec,
+      final int dataColumnSidecarExtensionRetentionEpochs,
+      final SidecarArchivePrunableChannel sidecarArchivePrunableChannel,
+      final MetricsSystem metricsSystem,
+      final TimeProvider timeProvider,
+      final int maxConcurrentReconstructions,
+      final int maxQueuedReconstructions,
+      final int maxRetainedResults) {
     this.chainDataClient = chainDataClient;
     this.reconstructionAsyncRunner = reconstructionAsyncRunner;
+    this.timeoutAsyncRunner = timeoutAsyncRunner;
     this.timeProvider = timeProvider;
+    this.maxRetainedResults = maxRetainedResults;
     this.isSuperNodeSupplier = isSuperNodeSupplier;
     this.spec = spec;
     this.dataColumnSidecarExtensionRetentionEpochs =
@@ -128,7 +191,7 @@ public class DataColumnSidecarArchiveReconstructorImpl
     // queue's own metrics are omitted here to keep a single reconstructor per node metric-free of
     // duplicates.
     this.reconstructionQueue =
-        ThrottlingTaskQueue.create(MAX_CONCURRENT_RECONSTRUCTIONS, MAX_QUEUED_RECONSTRUCTIONS);
+        ThrottlingTaskQueue.create(maxConcurrentReconstructions, maxQueuedReconstructions);
     this.reconstructionTimeSeconds =
         new MetricsHistogram(
             metricsSystem,
@@ -164,26 +227,38 @@ public class DataColumnSidecarArchiveReconstructorImpl
         block.getRoot(),
         requestId);
     final long now = timeProvider.getTimeInMillis().longValue();
+    if (requestsPastDeadline.contains(requestId)) {
+      return getCompletedReconstruction(block.getSlotAndBlockRoot(), index, now);
+    }
     final ReconstructionCacheEntry entry =
         reconstructions.compute(
             block.getSlotAndBlockRoot(),
             (__, existing) -> {
               final ReconstructionCacheEntry maybeReused =
-                  existing != null && !existing.hasFailed() ? existing : startReconstruction(block);
+                  existing != null && !existing.hasFailed()
+                      ? existing
+                      : new ReconstructionCacheEntry(RESULT_RETENTION, now);
               maybeReused.lastRequestedAtMillis = now;
               return maybeReused;
             });
+    // started only once compute has returned: completing a reconstruction can evict other entries,
+    // which must not happen inside compute
+    if (entry.claimStart()) {
+      startReconstruction(block, entry);
+    }
     // the deadline applies to this caller's own future only, never to the shared reconstruction
     return entry
         .future
         .thenApply(result -> result.get(index))
-        .orTimeout(reconstructionAsyncRunner, RECONSTRUCTION_TIMEOUT)
+        .orTimeout(timeoutAsyncRunner, RECONSTRUCTION_TIMEOUT)
         .exceptionally(
             error -> {
+              requestsPastDeadline.add(requestId);
               LOG.debug(
-                  "Reconstruction request for {} index {} timed out: {}",
+                  "Reconstruction request for {} index {} timed out (requestId {}): {}",
                   block.getSlotAndBlockRoot(),
                   index,
+                  requestId,
                   error.toString());
               return Optional.empty();
             });
@@ -200,37 +275,99 @@ public class DataColumnSidecarArchiveReconstructorImpl
     reconstructions.values().removeIf(entry -> entry.isEvictable(now));
   }
 
-  private ReconstructionCacheEntry startReconstruction(final SignedBeaconBlock block) {
-    final ReconstructionCacheEntry entry = new ReconstructionCacheEntry(RESULT_RETENTION);
-    entry.future =
-        reconstructionQueue
-            .queueTask(
-                () ->
-                    createTask(block)
-                        .orTimeout(reconstructionAsyncRunner, RECONSTRUCTION_HUNG_TIMEOUT))
-            .whenComplete(
-                (result, error) -> {
-                  final boolean reconstructed =
-                      error == null
-                          && result.sidecars().values().stream().anyMatch(Optional::isPresent);
-                  // a single write publishes the outcome, so a successful entry is never observed
-                  // as completed-but-failed
-                  entry.state = reconstructed ? State.SUCCEEDED : State.FAILED;
-                  if (reconstructed) {
-                    reconstructionSuccessCounter.inc();
-                  } else {
-                    reconstructionFailureCounter.inc();
-                    if (error != null) {
-                      LOG.debug(
-                          "Reconstruction failed for {}: {}",
-                          block.getSlotAndBlockRoot(),
-                          error.toString());
-                    }
-                  }
-                })
-            // never propagate the error to callers - an unavailable column is Optional.empty()
-            .exceptionally(__ -> emptyResult());
-    return entry;
+  private SafeFuture<Optional<DataColumnSidecar>> getCompletedReconstruction(
+      final SlotAndBlockRoot slotAndBlockRoot, final UInt64 index, final long now) {
+    final ReconstructionCacheEntry entry = reconstructions.get(slotAndBlockRoot);
+    if (entry == null || !entry.future.isDone()) {
+      return SafeFuture.completedFuture(Optional.empty());
+    }
+    entry.lastRequestedAtMillis = now;
+    return entry.future.thenApply(result -> result.get(index));
+  }
+
+  private void startReconstruction(
+      final SignedBeaconBlock block, final ReconstructionCacheEntry entry) {
+    reconstructionQueue
+        .queueTask(() -> runReconstruction(block, entry))
+        .whenComplete(
+            (result, error) -> {
+              final boolean reconstructed =
+                  error == null
+                      && result.sidecars().values().stream().anyMatch(Optional::isPresent);
+              // a single write publishes the outcome, so a successful entry is never observed
+              // as completed-but-failed
+              entry.state = reconstructed ? State.SUCCEEDED : State.FAILED;
+              if (reconstructed) {
+                reconstructionSuccessCounter.inc();
+                evictExcessResults();
+              } else {
+                reconstructionFailureCounter.inc();
+                if (error != null) {
+                  logReconstructionFailure(block, error);
+                }
+              }
+            })
+        // never propagate the error to callers - an unavailable column is Optional.empty()
+        .exceptionally(__ -> emptyResult())
+        .propagateTo(entry.future);
+  }
+
+  private void evictExcessResults() {
+    // request times keep changing, so they are snapshotted for a consistent sort
+    final List<RetainedResult> retainedResults =
+        reconstructions.entrySet().stream()
+            .filter(mapping -> mapping.getValue().state == State.SUCCEEDED)
+            .map(
+                mapping ->
+                    new RetainedResult(
+                        mapping.getKey(),
+                        mapping.getValue(),
+                        mapping.getValue().lastRequestedAtMillis))
+            .toList();
+    final int excess = retainedResults.size() - maxRetainedResults;
+    if (excess <= 0) {
+      return;
+    }
+    retainedResults.stream()
+        .sorted(Comparator.comparingLong(RetainedResult::lastRequestedAtMillis))
+        .limit(excess)
+        .forEach(result -> reconstructions.remove(result.slotAndBlockRoot(), result.entry()));
+  }
+
+  private SafeFuture<ReconstructionResult> runReconstruction(
+      final SignedBeaconBlock block, final ReconstructionCacheEntry entry) {
+    if (entry.isUnrequestedForRetention(timeProvider.getTimeInMillis().longValue())) {
+      // nobody asked for it while it was queued, so its result would be pruned on the next slot:
+      // skip the work (counted as a failure, like a full-queue rejection) and let the next request
+      // retry
+      LOG.debug(
+          "Skipping reconstruction for {}: unrequested for over {} while queued",
+          block.getSlotAndBlockRoot(),
+          RESULT_RETENTION);
+      return SafeFuture.completedFuture(emptyResult());
+    }
+    // the backstop fails a copy of the task rather than the task itself, so the task still
+    // completes, and records its duration, once the work eventually finishes
+    final SafeFuture<ReconstructionResult> taskCopy = new SafeFuture<>();
+    createTask(block).propagateTo(taskCopy);
+    return taskCopy.orTimeout(timeoutAsyncRunner, RECONSTRUCTION_HUNG_TIMEOUT);
+  }
+
+  private void logReconstructionFailure(final SignedBeaconBlock block, final Throwable error) {
+    // timeouts and full-queue rejections are expected under load
+    if (ExceptionUtil.hasCause(error, TimeoutException.class, QueueIsFullException.class)) {
+      LOG.debug("Reconstruction failed for {}: {}", block.getSlotAndBlockRoot(), error.toString());
+      return;
+    }
+    final long now = timeProvider.getTimeInMillis().longValue();
+    final long nextWarnAtMillis = nextFailureWarnAtMillis.get();
+    if (now >= nextWarnAtMillis
+        && nextFailureWarnAtMillis.compareAndSet(
+            nextWarnAtMillis, now + FAILURE_WARN_INTERVAL.toMillis())) {
+      LOG.warn("Reconstruction failed for {}", block.getSlotAndBlockRoot(), error);
+    } else {
+      LOG.debug("Reconstruction failed for {}", block.getSlotAndBlockRoot(), error);
+    }
   }
 
   private SafeFuture<ReconstructionResult> createTask(final SignedBeaconBlock block) {
@@ -363,9 +500,7 @@ public class DataColumnSidecarArchiveReconstructorImpl
 
   @Override
   public void onRequestCompleted(final int requestId) {
-    // No per-request cleanup needed: reconstructions are shared across requests and pruned on each
-    // slot once unrequested for RESULT_RETENTION, or replaced on failure. Kept for the
-    // DataColumnSidecarArchiveReconstructor contract.
+    requestsPastDeadline.remove(requestId);
   }
 
   @Override
@@ -411,25 +546,44 @@ public class DataColumnSidecarArchiveReconstructorImpl
     FAILED
   }
 
+  private record RetainedResult(
+      SlotAndBlockRoot slotAndBlockRoot,
+      ReconstructionCacheEntry entry,
+      long lastRequestedAtMillis) {}
+
   /**
    * A shared reconstruction for a single block. While running it deduplicates concurrent and
    * overlapping requests; once successful it is reused by every later request until the per-slot
-   * prune finds it unrequested for {@code retentionMillis}. A reconstruction that completed without
-   * producing sidecars (failed, hung past RECONSTRUCTION_HUNG_TIMEOUT, or rejected by a full queue)
-   * is replaced by the next request, so it retries.
+   * prune finds it unrequested for {@code retentionMillis}, or it is evicted to keep within the
+   * retained results limit. A reconstruction that completed without producing sidecars (failed,
+   * hung past RECONSTRUCTION_HUNG_TIMEOUT, rejected by a full queue, or skipped after waiting in
+   * the queue unrequested for {@code retentionMillis}) is replaced by the next request, so it
+   * retries.
    */
   private static final class ReconstructionCacheEntry {
     private final long retentionMillis;
-    private SafeFuture<ReconstructionResult> future;
+    private final SafeFuture<ReconstructionResult> future = new SafeFuture<>();
+    private final AtomicBoolean started = new AtomicBoolean(false);
     private volatile State state = State.RUNNING;
     private volatile long lastRequestedAtMillis;
 
-    private ReconstructionCacheEntry(final Duration retention) {
+    private ReconstructionCacheEntry(final Duration retention, final long requestedAtMillis) {
       this.retentionMillis = retention.toMillis();
+      // set before the entry is queued, as a free slot runs it straight away
+      this.lastRequestedAtMillis = requestedAtMillis;
+    }
+
+    /** Returns true for exactly one caller, which then starts the reconstruction. */
+    private boolean claimStart() {
+      return started.compareAndSet(false, true);
     }
 
     private boolean hasFailed() {
       return state == State.FAILED;
+    }
+
+    private boolean isUnrequestedForRetention(final long nowMillis) {
+      return nowMillis - lastRequestedAtMillis > retentionMillis;
     }
 
     private boolean isEvictable(final long nowMillis) {
@@ -437,7 +591,7 @@ public class DataColumnSidecarArchiveReconstructorImpl
         // still running - keep so concurrent requests share it
         case RUNNING -> false;
         case FAILED -> true;
-        case SUCCEEDED -> nowMillis - lastRequestedAtMillis > retentionMillis;
+        case SUCCEEDED -> isUnrequestedForRetention(nowMillis);
       };
     }
   }

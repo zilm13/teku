@@ -66,5 +66,6 @@ public interface DataColumnSidecarArchiveReconstructor
 
   boolean isSidecarPruned(UInt64 slot, UInt64 index);
 
+  /** Should be called on request completion, releasing any state kept for the request */
   void onRequestCompleted(int requestId);
 }
