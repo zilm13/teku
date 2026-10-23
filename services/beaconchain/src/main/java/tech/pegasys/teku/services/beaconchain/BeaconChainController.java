@@ -1,5 +1,5 @@
 /*
- * Copyright Consensys Software Inc., 2026
+ * Copyright (c) 2026 Consensys Incorporated. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -39,7 +39,6 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
@@ -714,6 +713,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
                 if (isUsingCustomInitialState()) {
                   STATUS_LOG.warnInitialStateIgnored();
                 }
+                wsInitializer.validateGloasGenesisAnchor(client.getStore().getLatestFinalized());
                 if (!isAllowSyncOutsideWeakSubjectivityPeriod()) {
                   validateWeakSubjectivityPeriod(client);
                 }
@@ -1593,7 +1593,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
     if (spec.isMilestoneSupported(SpecMilestone.GLOAS)) {
       final PayloadAttestationMessageGossipValidator validator =
           new PayloadAttestationMessageGossipValidator(
-              spec, gossipValidationHelper, invalidBlockRoots);
+              spec, gossipValidationHelper, signatureVerificationService, invalidBlockRoots);
       pendingPayloadAttestations =
           poolFactory.createPendingPoolForPayloadAttestations(
               spec, beaconConfig.eth2NetworkConfig().getPendingPayloadAttestationsMaxQueue());
@@ -1776,15 +1776,6 @@ public class BeaconChainController extends Service implements BeaconChainControl
             forkChoice,
             beaconConfig.eth2NetworkConfig().getAttestationWaitLimitMillis(),
             timeProvider);
-    // Only required for Gloas genesis, so skip it fast in all other cases
-    if (spec.getGenesisSpecConfig().getMilestone().isGreaterThanOrEqualTo(SpecMilestone.GLOAS)) {
-      try {
-        forkChoice.applyGenesisExecutionPayloadForGloas().get(1, TimeUnit.MINUTES);
-      } catch (Exception e) {
-        throw new InvalidConfigurationException(
-            "Failed to apply genesis execution payload for Gloas", e);
-      }
-    }
   }
 
   public void initMetrics() {
@@ -2064,7 +2055,9 @@ public class BeaconChainController extends Service implements BeaconChainControl
             p2PConfig.getBatchVerifyMaxThreads(),
             p2PConfig.getBatchVerifyQueueCapacity(),
             p2PConfig.getBatchVerifyMaxBatchSize(),
-            p2PConfig.isBatchVerifyStrictThreadLimitEnabled());
+            p2PConfig.isBatchVerifyStrictThreadLimitEnabled(),
+            p2PConfig.getBatchVerifyMode(),
+            p2PConfig.getBatchVerifyGatherTimeout());
   }
 
   protected void initAttestationManager() {
@@ -2249,6 +2242,7 @@ public class BeaconChainController extends Service implements BeaconChainControl
           new LightClientOptimisticUpdateGossipValidator(
               spec, recentChainData, lightClientUpdateStore, timeProvider);
       p2pNetworkBuilder
+          .lightClientUpdateStore(lightClientUpdateStore)
           .gossipedLightClientFinalityUpdateProcessor(
               (update, arrivalTimestamp) -> finalityValidator.validate(update))
           .gossipedLightClientOptimisticUpdateProcessor(
@@ -2609,6 +2603,10 @@ public class BeaconChainController extends Service implements BeaconChainControl
             beaconConfig.eth2NetworkConfig().isForkChoiceUpdatedAlwaysSendPayloadAttributes(),
             proposerPreferencesManager);
     eventChannels.subscribe(SlotEventsChannel.class, proposersDataManager);
+    // the fee recipient is only cached once our own proposer preferences have been accepted
+    proposerPreferencesManager.subscribeOperationAdded(
+        new LocalOperationAcceptedFilter<>(
+            proposersDataManager::updatePreparedProposerFromAcceptedProposerPreferences));
     forkChoiceNotifier =
         new ForkChoiceNotifierImpl(
             eventThread,

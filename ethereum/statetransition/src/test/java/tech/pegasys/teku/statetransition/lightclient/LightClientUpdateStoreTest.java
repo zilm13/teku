@@ -1,5 +1,5 @@
 /*
- * Copyright Consensys Software Inc., 2026
+ * Copyright (c) 2026 Consensys Incorporated. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -370,13 +370,15 @@ public class LightClientUpdateStoreTest {
   }
 
   @TestTemplate
-  public void getBestUpdatesInRange_shouldStartAtEarliestKnownPeriodInRange() {
+  public void getBestUpdatesInRange_shouldReturnEmptyWhenStartPeriodIsMissing() {
     final LightClientUpdate periodTwo = createLightClientUpdateAtPeriod(2);
     final LightClientUpdate periodThree = createLightClientUpdateAtPeriod(3);
     store.addUpdate(periodTwo, dataStructureUtil.randomBytes32(), CANONICAL);
     store.addUpdate(periodThree, dataStructureUtil.randomBytes32(), CANONICAL);
 
-    assertThat(store.getBestUpdatesInRange(UInt64.ONE, 3)).containsExactly(periodTwo, periodThree);
+    assertThat(store.getBestUpdatesInRange(UInt64.ONE, 3)).isEmpty();
+    assertThat(store.getBestUpdatesInRange(UInt64.valueOf(2), 3))
+        .containsExactly(periodTwo, periodThree);
   }
 
   @TestTemplate
@@ -485,7 +487,8 @@ public class LightClientUpdateStoreTest {
         .containsExactly(periodZero, periodOne, periodTwo);
 
     store.pruneUpdatesBefore(UInt64.ONE);
-    assertThat(store.getBestUpdatesInRange(UInt64.ZERO, 500)).containsExactly(periodOne, periodTwo);
+    assertThat(store.getBestUpdatesInRange(UInt64.ZERO, 500)).isEmpty();
+    assertThat(store.getBestUpdatesInRange(UInt64.ONE, 500)).containsExactly(periodOne, periodTwo);
   }
 
   @TestTemplate
