@@ -1,5 +1,5 @@
 /*
- * Copyright Consensys Software Inc., 2026
+ * Copyright (c) 2026 Consensys Incorporated. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -187,16 +187,11 @@ public class LightClientUpdateStore {
   public List<LightClientUpdate> getBestUpdatesInRange(final UInt64 startPeriod, final int count) {
     final ConcurrentNavigableMap<UInt64, StoredUpdate<LightClientUpdate>> updatesInRange =
         bestUpdatesByPeriod.subMap(startPeriod, true, startPeriod.plus(count), false);
-    if (updatesInRange.isEmpty()) {
-      return List.of();
-    }
-
-    final UInt64 earliestPeriod = updatesInRange.firstKey();
     final List<LightClientUpdate> consecutiveUpdates = new ArrayList<>();
 
     for (final Map.Entry<UInt64, StoredUpdate<LightClientUpdate>> entry :
         updatesInRange.entrySet()) {
-      if (!entry.getKey().equals(earliestPeriod.plus(consecutiveUpdates.size()))) {
+      if (!entry.getKey().equals(startPeriod.plus(consecutiveUpdates.size()))) {
         break;
       }
       consecutiveUpdates.add(entry.getValue().update());

@@ -1,5 +1,5 @@
 /*
- * Copyright Consensys Software Inc., 2025
+ * Copyright (c) 2025 Consensys Incorporated. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -66,5 +66,6 @@ public interface DataColumnSidecarArchiveReconstructor
 
   boolean isSidecarPruned(UInt64 slot, UInt64 index);
 
+  /** Should be called on request completion, releasing any state kept for the request */
   void onRequestCompleted(int requestId);
 }

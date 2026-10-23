@@ -1,5 +1,5 @@
 /*
- * Copyright Consensys Software Inc., 2026
+ * Copyright (c) 2026 Consensys Incorporated. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -242,7 +242,7 @@ public class ForkChoiceTestExecutor implements TestExecutor {
             64,
             (block, level, origin) -> new SafeFuture<>());
     final StubDataColumnSidecarManager dataColumnSidecarManager =
-        new StubDataColumnSidecarManager(spec, recentChainData, dasSampler);
+        new StubDataColumnSidecarManager(spec, storageSystem.combinedChainDataClient(), dasSampler);
     spec.reinitializeForTesting(blobSidecarManager, dataColumnSidecarManager, kzg);
     final AsyncBLSSignatureVerifier signatureVerifier =
         AsyncBLSSignatureVerifier.wrap(
