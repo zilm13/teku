@@ -91,6 +91,8 @@ public abstract class V6SchemaCombined implements SchemaCombined {
       KvStoreVariable.create(11, BYTES32_SERIALIZER);
   private static final KvStoreVariable<UInt64> CUSTODY_GROUP_COUNT =
       KvStoreVariable.create(12, UINT64_SERIALIZER);
+  private static final KvStoreVariable<Bytes32> FAST_CONFIRMED_ROOT =
+      KvStoreVariable.create(13, BYTES32_SERIALIZER);
 
   private final KvStoreVariable<UInt64> optimisticTransitionBlockSlot;
   private final KvStoreVariable<UInt64> earliestBlobSidecarSlot;
@@ -256,6 +258,11 @@ public abstract class V6SchemaCombined implements SchemaCombined {
   }
 
   @Override
+  public KvStoreVariable<Bytes32> getVariableFastConfirmedRoot() {
+    return FAST_CONFIRMED_ROOT;
+  }
+
+  @Override
   public KvStoreVariable<UInt64> getVariableEarliestBlockSlot() {
     return earliestBlockSlot;
   }
@@ -310,6 +317,7 @@ public abstract class V6SchemaCombined implements SchemaCombined {
         .put("EARLIEST_BLOCK_SLOT_AVAILABLE", getVariableEarliestBlockSlot())
         .put("LATEST_CANONICAL_BLOCK_ROOT", getVariableLatestCanonicalBlockRoot())
         .put("CUSTODY_GROUP_COUNT", getVariableCustodyGroupCount())
+        .put("FAST_CONFIRMED_ROOT", getVariableFastConfirmedRoot())
         .put("FIRST_CUSTODY_INCOMPLETE_SLOT", getVariableFirstCustodyIncompleteSlot())
         .put("EARLIEST_AVAILABLE_DATA_COLUMN_SLOT", getVariableEarliestAvailableDataColumnSlot())
         .put("LAST_DATA_COLUMN_SLOT_PRUNED", getVariableLastDataColumnSidecarPrunedSlot())
