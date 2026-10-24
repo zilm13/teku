@@ -220,15 +220,9 @@ public class DataColumnSidecarArchiveReconstructorImpl
         "Only second-half column indices (>= %s) can be reconstructed, got %s",
         halfColumns,
         index);
-    LOG.trace(
-        "Reconstruction requested for slot {} index {} blockRoot {} (requestId {})",
-        block.getSlot(),
-        index,
-        block.getRoot(),
-        requestId);
     final long now = timeProvider.getTimeInMillis().longValue();
     if (requestsPastDeadline.contains(requestId)) {
-      return getCompletedReconstruction(block.getSlotAndBlockRoot(), index, now);
+      return getCompletedReconstruction(block, index, requestId, now);
     }
     final ReconstructionCacheEntry entry =
         reconstructions.compute(
@@ -243,7 +237,17 @@ public class DataColumnSidecarArchiveReconstructorImpl
             });
     // started only once compute has returned: completing a reconstruction can evict other entries,
     // which must not happen inside compute
-    if (entry.claimStart()) {
+    final boolean started = entry.claimStart();
+    traceRequest(
+        block,
+        index,
+        requestId,
+        started
+            ? "starting a new reconstruction"
+            : entry.future.isDone()
+                ? "reusing the completed result"
+                : "joining the running reconstruction");
+    if (started) {
       startReconstruction(block, entry);
     }
     // the deadline applies to this caller's own future only, never to the shared reconstruction
@@ -272,17 +276,55 @@ public class DataColumnSidecarArchiveReconstructorImpl
   @Override
   public void onSlot(final UInt64 slot) {
     final long now = timeProvider.getTimeInMillis().longValue();
-    reconstructions.values().removeIf(entry -> entry.isEvictable(now));
+    final AtomicInteger prunedResults = new AtomicInteger();
+    final AtomicInteger prunedFailures = new AtomicInteger();
+    reconstructions
+        .values()
+        .removeIf(
+            entry -> {
+              if (!entry.isEvictable(now)) {
+                return false;
+              }
+              (entry.hasFailed() ? prunedFailures : prunedResults).incrementAndGet();
+              return true;
+            });
+    if (prunedResults.get() > 0 || prunedFailures.get() > 0) {
+      LOG.debug(
+          "Pruned {} reconstructed results unrequested for over {}s and {} failed reconstructions "
+              + "at slot {}",
+          prunedResults.get(),
+          RESULT_RETENTION.toSeconds(),
+          prunedFailures.get(),
+          slot);
+    }
   }
 
   private SafeFuture<Optional<DataColumnSidecar>> getCompletedReconstruction(
-      final SlotAndBlockRoot slotAndBlockRoot, final UInt64 index, final long now) {
-    final ReconstructionCacheEntry entry = reconstructions.get(slotAndBlockRoot);
-    if (entry == null || !entry.future.isDone()) {
+      final SignedBeaconBlock block, final UInt64 index, final int requestId, final long now) {
+    final ReconstructionCacheEntry entry = reconstructions.get(block.getSlotAndBlockRoot());
+    if (entry == null || !entry.future.isDone() || entry.hasFailed()) {
+      traceRequest(
+          block, index, requestId, "past the request deadline, no completed result to serve");
       return SafeFuture.completedFuture(Optional.empty());
     }
+    traceRequest(
+        block, index, requestId, "past the request deadline, reusing the completed result");
     entry.lastRequestedAtMillis = now;
     return entry.future.thenApply(result -> result.get(index));
+  }
+
+  private void traceRequest(
+      final SignedBeaconBlock block,
+      final UInt64 index,
+      final int requestId,
+      final String outcome) {
+    LOG.trace(
+        "Reconstruction requested for slot {} index {} blockRoot {} (requestId {}): {}",
+        block.getSlot(),
+        index,
+        block.getRoot(),
+        requestId,
+        outcome);
   }
 
   private void startReconstruction(
@@ -328,10 +370,22 @@ public class DataColumnSidecarArchiveReconstructorImpl
     if (excess <= 0) {
       return;
     }
+    final long now = timeProvider.getTimeInMillis().longValue();
     retainedResults.stream()
         .sorted(Comparator.comparingLong(RetainedResult::lastRequestedAtMillis))
         .limit(excess)
-        .forEach(result -> reconstructions.remove(result.slotAndBlockRoot(), result.entry()));
+        .forEach(
+            result -> {
+              if (reconstructions.remove(result.slotAndBlockRoot(), result.entry())) {
+                LOG.debug(
+                    "Evicted reconstructed sidecars for slot {} blockRoot {} (last requested {} ms "
+                        + "ago) to keep at most {} results",
+                    result.slotAndBlockRoot().getSlot(),
+                    result.slotAndBlockRoot().getBlockRoot(),
+                    now - result.lastRequestedAtMillis(),
+                    maxRetainedResults);
+              }
+            });
   }
 
   private SafeFuture<ReconstructionResult> runReconstruction(
@@ -341,9 +395,9 @@ public class DataColumnSidecarArchiveReconstructorImpl
       // skip the work (counted as a failure, like a full-queue rejection) and let the next request
       // retry
       LOG.debug(
-          "Skipping reconstruction for {}: unrequested for over {} while queued",
+          "Skipping reconstruction for {}: unrequested for over {}s while queued",
           block.getSlotAndBlockRoot(),
-          RESULT_RETENTION);
+          RESULT_RETENTION.toSeconds());
       return SafeFuture.completedFuture(emptyResult());
     }
     // the backstop fails a copy of the task rather than the task itself, so the task still
@@ -394,6 +448,15 @@ public class DataColumnSidecarArchiveReconstructorImpl
       final List<DataColumnSidecar> sidecars,
       final List<List<KZGProof>> proofs) {
     if (sidecars.size() != halfColumns || proofs.size() != halfColumns) {
+      LOG.debug(
+          "Cannot reconstruct extension data column sidecars for slot {} blockRoot {}: found {} of "
+              + "{} first-half sidecars and {} of {} extension proofs",
+          block.getSlot(),
+          block.getRoot(),
+          sidecars.size(),
+          halfColumns,
+          proofs.size(),
+          halfColumns);
       return emptyResult();
     }
     final SlotAndBlockRoot slotAndBlockRoot = block.getSlotAndBlockRoot();
@@ -401,6 +464,14 @@ public class DataColumnSidecarArchiveReconstructorImpl
       final DataColumnSidecar sidecar = sidecars.get(i);
       if (!sidecar.getSlotAndBlockRoot().equals(slotAndBlockRoot)
           || !sidecar.getIndex().equals(UInt64.valueOf(i))) {
+        LOG.debug(
+            "Cannot reconstruct extension data column sidecars for slot {} blockRoot {}: stored "
+                + "sidecar {} is index {} of {}",
+            block.getSlot(),
+            block.getRoot(),
+            i,
+            sidecar.getIndex(),
+            sidecar.getSlotAndBlockRoot());
         return emptyResult();
       }
     }

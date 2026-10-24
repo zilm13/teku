@@ -106,12 +106,22 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
         .thenReturn(SafeFuture.completedFuture(List.of()));
 
     final int requestId = reconstructor.onRequest();
-    final Optional<DataColumnSidecar> result =
-        reconstructor
-            .reconstructDataColumnSidecar(block, UInt64.valueOf(halfColumns), requestId)
-            .join();
+    try (final LogCaptor logCaptor =
+        LogCaptor.forClass(DataColumnSidecarArchiveReconstructorImpl.class, Level.DEBUG)) {
+      final Optional<DataColumnSidecar> result =
+          reconstructor
+              .reconstructDataColumnSidecar(block, UInt64.valueOf(halfColumns), requestId)
+              .join();
 
-    assertThat(result).isEmpty();
+      assertThat(result).isEmpty();
+      // not an error, so the reason is logged at debug
+      assertThat(logCaptor.getDebugLogs())
+          .contains(
+              String.format(
+                  "Cannot reconstruct extension data column sidecars for slot %s blockRoot %s: "
+                      + "found 0 of %s first-half sidecars and 0 of %s extension proofs",
+                  block.getSlot(), block.getRoot(), halfColumns, halfColumns));
+    }
     // an unsuccessful reconstruction is recorded as a failure and never as a success
     assertThat(
             metricsSystem.getCounterValue(
@@ -139,12 +149,21 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
         .thenReturn(SafeFuture.completedFuture(secondHalfProofs));
 
     final int requestId = reconstructor.onRequest();
-    final Optional<DataColumnSidecar> result =
-        reconstructor
-            .reconstructDataColumnSidecar(block, UInt64.valueOf(halfColumns), requestId)
-            .join();
+    try (final LogCaptor logCaptor =
+        LogCaptor.forClass(DataColumnSidecarArchiveReconstructorImpl.class, Level.DEBUG)) {
+      final Optional<DataColumnSidecar> result =
+          reconstructor
+              .reconstructDataColumnSidecar(block, UInt64.valueOf(halfColumns), requestId)
+              .join();
 
-    assertThat(result).isEmpty();
+      assertThat(result).isEmpty();
+      assertThat(logCaptor.getDebugLogs())
+          .contains(
+              String.format(
+                  "Cannot reconstruct extension data column sidecars for slot %s blockRoot %s: "
+                      + "stored sidecar 0 is index 0 of %s",
+                  slot, block.getRoot(), competingBlock.getSlotAndBlockRoot()));
+    }
   }
 
   @TestTemplate
@@ -214,17 +233,22 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
         .thenReturn(SafeFuture.completedFuture(secondHalfProofs));
 
     final int requestId = reconstructor.onRequest();
-    final Optional<DataColumnSidecar> result1 =
-        reconstructor
-            .reconstructDataColumnSidecar(block, UInt64.valueOf(halfColumns), requestId)
-            .join();
-    final Optional<DataColumnSidecar> result2 =
-        reconstructor
-            .reconstructDataColumnSidecar(block, UInt64.valueOf(halfColumns + 1), requestId)
-            .join();
+    final UInt64 firstIndex = UInt64.valueOf(halfColumns);
+    final UInt64 secondIndex = UInt64.valueOf(halfColumns + 1);
+    try (final LogCaptor logCaptor =
+        LogCaptor.forClass(DataColumnSidecarArchiveReconstructorImpl.class, Level.TRACE)) {
+      final Optional<DataColumnSidecar> result1 =
+          reconstructor.reconstructDataColumnSidecar(block, firstIndex, requestId).join();
+      final Optional<DataColumnSidecar> result2 =
+          reconstructor.reconstructDataColumnSidecar(block, secondIndex, requestId).join();
 
-    assertThat(result1).isPresent();
-    assertThat(result2).isPresent();
+      assertThat(result1).isPresent();
+      assertThat(result2).isPresent();
+      assertThat(logCaptor.getTraceLogs())
+          .containsExactly(
+              requestLog(block, firstIndex, requestId, "starting a new reconstruction"),
+              requestLog(block, secondIndex, requestId, "reusing the completed result"));
+    }
     // Should have only called getDataColumnSidecars once (same task reused)
     verify(chainDataClient).getDataColumnSidecars(any(UInt64.class), anyList());
   }
@@ -282,8 +306,15 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     assertThat(timedOut).isCompletedWithValue(Optional.empty());
 
     // a later caller joins the running reconstruction instead of starting an overlapping one
-    final SafeFuture<Optional<DataColumnSidecar>> joined =
-        slowReconstructor.reconstructDataColumnSidecar(block, index, slowReconstructor.onRequest());
+    final int joiningRequestId = slowReconstructor.onRequest();
+    final SafeFuture<Optional<DataColumnSidecar>> joined;
+    try (final LogCaptor logCaptor =
+        LogCaptor.forClass(DataColumnSidecarArchiveReconstructorImpl.class, Level.TRACE)) {
+      joined = slowReconstructor.reconstructDataColumnSidecar(block, index, joiningRequestId);
+      assertThat(logCaptor.getTraceLogs())
+          .containsExactly(
+              requestLog(block, index, joiningRequestId, "joining the running reconstruction"));
+    }
     firstHalfSidecars.complete(createFirstHalfSidecars(block));
     stubAsyncRunner.executeDueActions();
 
@@ -358,14 +389,29 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
 
     // from then on it waits for nothing: the stalled block's next column and a block not yet
     // reconstructed resolve empty at once, while a completed reconstruction is still served
-    assertThat(
-            slowReconstructor.reconstructDataColumnSidecar(stalledBlock, index.plus(1), requestId))
-        .isCompletedWithValue(Optional.empty());
-    assertThat(
-            slowReconstructor.reconstructDataColumnSidecar(unreconstructedBlock, index, requestId))
-        .isCompletedWithValue(Optional.empty());
-    assertThat(slowReconstructor.reconstructDataColumnSidecar(completedBlock, index, requestId))
-        .isCompletedWithValueMatching(Optional::isPresent);
+    try (final LogCaptor logCaptor =
+        LogCaptor.forClass(DataColumnSidecarArchiveReconstructorImpl.class, Level.TRACE)) {
+      assertThat(
+              slowReconstructor.reconstructDataColumnSidecar(
+                  stalledBlock, index.plus(1), requestId))
+          .isCompletedWithValue(Optional.empty());
+      assertThat(
+              slowReconstructor.reconstructDataColumnSidecar(
+                  unreconstructedBlock, index, requestId))
+          .isCompletedWithValue(Optional.empty());
+      assertThat(slowReconstructor.reconstructDataColumnSidecar(completedBlock, index, requestId))
+          .isCompletedWithValueMatching(Optional::isPresent);
+      final String noResult = "past the request deadline, no completed result to serve";
+      assertThat(logCaptor.getTraceLogs())
+          .containsExactly(
+              requestLog(stalledBlock, index.plus(1), requestId, noResult),
+              requestLog(unreconstructedBlock, index, requestId, noResult),
+              requestLog(
+                  completedBlock,
+                  index,
+                  requestId,
+                  "past the request deadline, reusing the completed result"));
+    }
     // and it starts no new reconstruction
     stubAsyncRunner.executeDueActionsRepeatedly();
     verify(chainDataClient, never())
@@ -518,12 +564,24 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
 
     // firstBlock is requested again after secondBlock, so secondBlock is the least recently
     // requested result once thirdBlock's completes
-    for (final SignedBeaconBlock block : List.of(firstBlock, secondBlock, firstBlock, thirdBlock)) {
-      timeProvider.advanceTimeBySeconds(1);
-      assertThat(
-              limitedReconstructor.reconstructDataColumnSidecar(
-                  block, index, limitedReconstructor.onRequest()))
-          .isCompletedWithValueMatching(Optional::isPresent);
+    try (final LogCaptor logCaptor =
+        LogCaptor.forClass(DataColumnSidecarArchiveReconstructorImpl.class, Level.DEBUG)) {
+      for (final SignedBeaconBlock block :
+          List.of(firstBlock, secondBlock, firstBlock, thirdBlock)) {
+        timeProvider.advanceTimeBySeconds(1);
+        assertThat(
+                limitedReconstructor.reconstructDataColumnSidecar(
+                    block, index, limitedReconstructor.onRequest()))
+            .isCompletedWithValueMatching(Optional::isPresent);
+      }
+      // secondBlock was last requested at 2s and evicted at 4s
+      assertThat(logCaptor.getDebugLogs())
+          .filteredOn(log -> log.startsWith("Evicted"))
+          .containsExactly(
+              String.format(
+                  "Evicted reconstructed sidecars for slot %s blockRoot %s (last requested 2000 ms "
+                      + "ago) to keep at most 2 results",
+                  secondBlock.getSlot(), secondBlock.getRoot()));
     }
 
     // firstBlock and thirdBlock are still served from the cache, secondBlock is rebuilt
@@ -731,7 +789,14 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
 
     // unrequested for 35s: the per-slot prune drops it and the next request reconstructs again
     timeProvider.advanceTimeBySeconds(35);
-    reconstructor.onSlot(UInt64.valueOf(2));
+    try (final LogCaptor logCaptor =
+        LogCaptor.forClass(DataColumnSidecarArchiveReconstructorImpl.class, Level.DEBUG)) {
+      reconstructor.onSlot(UInt64.valueOf(2));
+      assertThat(logCaptor.getDebugLogs())
+          .containsExactly(
+              "Pruned 1 reconstructed results unrequested for over 30s and 0 failed "
+                  + "reconstructions at slot 2");
+    }
     reconstructor.reconstructDataColumnSidecar(block, index, reconstructor.onRequest()).join();
     verify(chainDataClient, times(2)).getDataColumnSidecars(any(UInt64.class), anyList());
   }
@@ -933,6 +998,16 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
         .thenReturn(firstHalfSidecars);
     when(chainDataClient.getDataColumnSidecarProofs(block.getSlot()))
         .thenReturn(SafeFuture.completedFuture(createSecondHalfProofs(block)));
+  }
+
+  private String requestLog(
+      final SignedBeaconBlock block,
+      final UInt64 index,
+      final int requestId,
+      final String outcome) {
+    return String.format(
+        "Reconstruction requested for slot %s index %s blockRoot %s (requestId %s): %s",
+        block.getSlot(), index, block.getRoot(), requestId, outcome);
   }
 
   private List<UInt64> firstHalfIndices() {
