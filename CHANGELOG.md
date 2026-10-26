@@ -19,6 +19,7 @@
  - Added the `GET /eth/v1/beacon/proposer_preferences` Gloas Beacon API endpoint, which returns the signed proposer preferences known by the node, optionally filtered by `slot` and `dependent_root`. [#11548](https://github.com/Consensys-Incorporated/teku/pull/11548)
 
 ### Bug Fixes
+ - Close an inbound RPC stream when its response cannot be written, instead of half-closing it. Over QUIC a peer that cancelled its request (STOP_SENDING) refuses our FIN, so such streams stayed open until the peer disconnected and could exhaust the node-wide limit of 128 inbound RPC streams, after which every other peer's requests were rejected.
  - The fee recipient of a Gloas block now comes from signed proposer preferences, so preferences that fail validation no longer change where the block pays, and `prepare_beacon_proposer` is ignored once Gloas is active. [#11518](https://github.com/Consensys-Incorporated/teku/issues/11518)
  - Reduced the memory held by gossip blocks waiting for validation, limited their total size, and blocks too far in the future are now ignored before they are decoded. [#11503](https://github.com/Consensys-Incorporated/teku/pull/11503)
  - The node's ENR no longer advertises a TCP port when the TCP transport is disabled (`--Xp2p-tcp-enabled=false`), so peers stop dialing a port nothing listens on. [#11454](https://github.com/Consensys-Incorporated/teku/issues/11454)
