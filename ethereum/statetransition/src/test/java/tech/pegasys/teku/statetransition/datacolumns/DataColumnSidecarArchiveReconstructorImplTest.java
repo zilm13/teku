@@ -1038,6 +1038,21 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
   }
 
   @TestTemplate
+  public void isSidecarPruned_falseWithDefaultRetentionEpochs() {
+    final Spec spiedSpec = spy(spec);
+    doReturn(true).when(spiedSpec).isAvailabilityOfDataColumnSidecarsRequiredAtEpoch(any(), any());
+    final UInt64 currentEpoch = spec.getCurrentEpoch(store);
+    // same as isSidecarPruned_trueWhenSlotBeforePruningBoundary, but with the default retention:
+    // Integer.MAX_VALUE keeps every extension column, so nothing is served by reconstruction
+    when(chainDataClient.getFinalizedBlockSlot())
+        .thenReturn(Optional.of(spec.computeStartSlotAtEpoch(currentEpoch)));
+    final DataColumnSidecarArchiveReconstructorImpl defaultRetention =
+        newReconstructor(spiedSpec, () -> true, Integer.MAX_VALUE);
+
+    assertThat(defaultRetention.isSidecarPruned(ZERO, UInt64.valueOf(halfColumns))).isFalse();
+  }
+
+  @TestTemplate
   public void isSidecarPruned_falseWhenSlotAtOrAfterPruningBoundary() {
     final Spec spiedSpec = spy(spec);
     doReturn(true).when(spiedSpec).isAvailabilityOfDataColumnSidecarsRequiredAtEpoch(any(), any());
