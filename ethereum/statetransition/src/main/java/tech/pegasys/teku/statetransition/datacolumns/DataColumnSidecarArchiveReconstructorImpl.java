@@ -612,12 +612,7 @@ public class DataColumnSidecarArchiveReconstructorImpl
       return false;
     }
 
-    final Optional<UInt64> maybeFinalizedSlot = chainDataClient.getFinalizedBlockSlot();
-    if (maybeFinalizedSlot.isEmpty()) {
-      return false;
-    }
-
-    final UInt64 finalizedEpoch = spec.computeEpochAtSlot(maybeFinalizedSlot.get());
+    final UInt64 finalizedEpoch = store.getFinalizedCheckpoint().getEpoch();
     // Retention controls new archive writes, not whether existing archives can be served.
     return slotEpoch.isLessThan(finalizedEpoch);
   }

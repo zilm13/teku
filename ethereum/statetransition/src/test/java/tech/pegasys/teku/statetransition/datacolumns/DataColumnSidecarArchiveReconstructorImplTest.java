@@ -1017,10 +1017,11 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
   }
 
   @TestTemplate
-  public void isSidecarPruned_falseWhenNoFinalizedBlock() {
+  public void isSidecarPruned_falseWhenFinalizedCheckpointIsGenesis() {
     final Spec spiedSpec = spy(spec);
     doReturn(true).when(spiedSpec).isAvailabilityOfDataColumnSidecarsRequiredAtEpoch(any(), any());
-    when(chainDataClient.getFinalizedBlockSlot()).thenReturn(Optional.empty());
+    when(store.getFinalizedCheckpoint())
+        .thenReturn(new Checkpoint(ZERO, dataStructureUtil.randomBytes32()));
     final DataColumnSidecarArchiveReconstructorImpl spiedReconstructor =
         newReconstructor(spiedSpec, () -> true, 0);
 
@@ -1034,8 +1035,8 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     doReturn(true).when(spiedSpec).isAvailabilityOfDataColumnSidecarsRequiredAtEpoch(any(), any());
     final UInt64 currentEpoch = spec.getCurrentEpoch(store);
     // finalized at the current epoch, so the pruning boundary is well above epoch 0
-    when(chainDataClient.getFinalizedBlockSlot())
-        .thenReturn(Optional.of(spec.computeStartSlotAtEpoch(currentEpoch)));
+    when(store.getFinalizedCheckpoint())
+        .thenReturn(new Checkpoint(currentEpoch, dataStructureUtil.randomBytes32()));
     final DataColumnSidecarArchiveReconstructorImpl spiedReconstructor =
         newReconstructor(spiedSpec, () -> true, 0);
 
@@ -1048,8 +1049,8 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     doReturn(true).when(spiedSpec).isAvailabilityOfDataColumnSidecarsRequiredAtEpoch(any(), any());
     final UInt64 currentEpoch = spec.getCurrentEpoch(store);
     // Restoring default retention must not hide archives written with a shorter retention.
-    when(chainDataClient.getFinalizedBlockSlot())
-        .thenReturn(Optional.of(spec.computeStartSlotAtEpoch(currentEpoch)));
+    when(store.getFinalizedCheckpoint())
+        .thenReturn(new Checkpoint(currentEpoch, dataStructureUtil.randomBytes32()));
     final DataColumnSidecarArchiveReconstructorImpl defaultRetention =
         newReconstructor(spiedSpec, () -> true, Integer.MAX_VALUE);
 
@@ -1061,8 +1062,8 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     final Spec spiedSpec = spy(spec);
     doReturn(true).when(spiedSpec).isAvailabilityOfDataColumnSidecarsRequiredAtEpoch(any(), any());
     final UInt64 currentEpoch = spec.getCurrentEpoch(store);
-    when(chainDataClient.getFinalizedBlockSlot())
-        .thenReturn(Optional.of(spec.computeStartSlotAtEpoch(currentEpoch)));
+    when(store.getFinalizedCheckpoint())
+        .thenReturn(new Checkpoint(currentEpoch, dataStructureUtil.randomBytes32()));
     final DataColumnSidecarArchiveReconstructorImpl spiedReconstructor =
         newReconstructor(spiedSpec, () -> true, 0);
 
