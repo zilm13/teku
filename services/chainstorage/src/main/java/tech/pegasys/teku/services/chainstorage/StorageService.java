@@ -236,7 +236,10 @@ public class StorageService extends Service implements StorageServiceFacade {
                       config.getSpec(),
                       config.getDataStorageMode(),
                       config.getStateRebuildTimeoutSeconds(),
-                      blobSidecarsArchiver);
+                      blobSidecarsArchiver,
+                      slot ->
+                          dataColumnSidecarPruner.ifPresent(
+                              pruner -> pruner.onSidecarStored(slot)));
 
               final DepositStorage depositStorage = DepositStorage.create(database);
 

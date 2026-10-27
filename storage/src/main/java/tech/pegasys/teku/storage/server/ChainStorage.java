@@ -14,10 +14,12 @@
 package tech.pegasys.teku.storage.server;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -72,6 +74,8 @@ public class ChainStorage
   private final FinalizedStateCache finalizedStateCache;
   private final StateStorageMode dataStorageMode;
   private final BlobSidecarsArchiver blobSidecarsArchiver;
+  private final Consumer<UInt64> sidecarStoredListener;
+  private final Spec spec;
 
   private Optional<OnDiskStoreData> cachedStoreData = Optional.empty();
 
@@ -79,11 +83,15 @@ public class ChainStorage
       final Database database,
       final FinalizedStateCache finalizedStateCache,
       final StateStorageMode dataStorageMode,
-      final BlobSidecarsArchiver blobSidecarsArchiver) {
+      final BlobSidecarsArchiver blobSidecarsArchiver,
+      final Consumer<UInt64> sidecarStoredListener,
+      final Spec spec) {
     this.database = database;
     this.finalizedStateCache = finalizedStateCache;
     this.dataStorageMode = dataStorageMode;
     this.blobSidecarsArchiver = blobSidecarsArchiver;
+    this.sidecarStoredListener = sidecarStoredListener;
+    this.spec = spec;
   }
 
   public static ChainStorage create(
@@ -92,13 +100,31 @@ public class ChainStorage
       final StateStorageMode dataStorageMode,
       final int stateRebuildTimeoutSeconds,
       final BlobSidecarsArchiver blobSidecarsArchiver) {
+    return create(
+        database,
+        spec,
+        dataStorageMode,
+        stateRebuildTimeoutSeconds,
+        blobSidecarsArchiver,
+        __ -> {});
+  }
+
+  public static ChainStorage create(
+      final Database database,
+      final Spec spec,
+      final StateStorageMode dataStorageMode,
+      final int stateRebuildTimeoutSeconds,
+      final BlobSidecarsArchiver blobSidecarsArchiver,
+      final Consumer<UInt64> sidecarStoredListener) {
     final int finalizedStateCacheSize = spec.getSlotsPerEpoch(SpecConfig.GENESIS_EPOCH) * 3;
     return new ChainStorage(
         database,
         new FinalizedStateCache(
             spec, database, finalizedStateCacheSize, true, stateRebuildTimeoutSeconds),
         dataStorageMode,
-        blobSidecarsArchiver);
+        blobSidecarsArchiver,
+        sidecarStoredListener,
+        spec);
   }
 
   private synchronized Optional<OnDiskStoreData> getStore() {
@@ -444,6 +470,57 @@ public class ChainStorage
   }
 
   @Override
+  public SafeFuture<List<DataColumnSlotAndIdentifier>> getCustodyDataColumnIdentifiers(
+      final UInt64 slot) {
+    return getDataColumnIdentifiers(slot)
+        .thenApply(
+            identifiers -> {
+              final int numberOfColumns = spec.getNumberOfDataColumns().orElse(0);
+              final int halfColumns = numberOfColumns / 2;
+              if (numberOfColumns == 0 || identifiers.size() < halfColumns) {
+                return identifiers;
+              }
+              // Database identifiers are unique. A complete set for one root needs no archive.
+              if (identifiers.size() == numberOfColumns
+                  && identifiers.stream()
+                      .allMatch(
+                          identifier ->
+                              identifier.blockRoot().equals(identifiers.getFirst().blockRoot())
+                                  && identifier.columnIndex().isLessThan(numberOfColumns))) {
+                return identifiers;
+              }
+              // Read proofs after identifiers so concurrent archival cannot hide availability.
+              // Avoid loading the finalized block entirely when no archive exists.
+              final boolean hasCompleteArchive =
+                  database
+                      .getDataColumnSidecarsProofs(slot)
+                      .map(proofs -> proofs.size() == halfColumns)
+                      .orElse(false);
+              if (!hasCompleteArchive) {
+                return identifiers;
+              }
+              final Optional<Bytes32> canonicalRoot = database.getFinalizedBlockRootBySlot(slot);
+              if (canonicalRoot.isEmpty()) {
+                return identifiers;
+              }
+              final Set<DataColumnSlotAndIdentifier> available = new HashSet<>(identifiers);
+              for (int index = 0; index < halfColumns; index++) {
+                if (!available.contains(
+                    new DataColumnSlotAndIdentifier(
+                        slot, canonicalRoot.get(), UInt64.valueOf(index)))) {
+                  return identifiers;
+                }
+              }
+              for (int index = halfColumns; index < numberOfColumns; index++) {
+                available.add(
+                    new DataColumnSlotAndIdentifier(
+                        slot, canonicalRoot.get(), UInt64.valueOf(index)));
+              }
+              return available.stream().sorted().toList();
+            });
+  }
+
+  @Override
   public SafeFuture<List<DataColumnSlotAndIdentifier>> getNonCanonicalDataColumnIdentifiers(
       final UInt64 slot) {
     return SafeFuture.of(
@@ -497,7 +574,8 @@ public class ChainStorage
 
   @Override
   public SafeFuture<Void> onNewSidecar(final DataColumnSidecar sidecar) {
-    return SafeFuture.fromRunnable(() -> database.addSidecar(sidecar));
+    return SafeFuture.fromRunnable(() -> database.addSidecar(sidecar))
+        .thenRun(() -> sidecarStoredListener.accept(sidecar.getSlot()));
   }
 
   @Override

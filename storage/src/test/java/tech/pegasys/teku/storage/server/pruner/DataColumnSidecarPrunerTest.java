@@ -17,14 +17,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.util.Optional;
 import org.apache.logging.log4j.Level;
+import org.apache.tuweni.bytes.Bytes32;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tech.pegasys.infrastructure.logging.LogCaptor;
@@ -38,6 +42,7 @@ import tech.pegasys.teku.spec.SpecMilestone;
 import tech.pegasys.teku.spec.TestSpecFactory;
 import tech.pegasys.teku.spec.config.SpecConfig;
 import tech.pegasys.teku.spec.config.SpecConfigFulu;
+import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
 import tech.pegasys.teku.storage.server.Database;
 
 public class DataColumnSidecarPrunerTest {
@@ -73,6 +78,8 @@ public class DataColumnSidecarPrunerTest {
 
   @BeforeEach
   void setUp() {
+    when(database.getFinalizedCheckpoint())
+        .thenReturn(Optional.of(new Checkpoint(UInt64.valueOf(100), Bytes32.ZERO)));
     when(database.getGenesisTime()).thenReturn(Optional.of(genesisTime));
     assertThat(dataColumnSidecarPruner.start()).isCompleted();
   }
@@ -92,6 +99,70 @@ public class DataColumnSidecarPrunerTest {
     asyncRunner.executeDueActions();
 
     verify(database, never()).archiveSidecarsProofs(any(), any());
+  }
+
+  @Test
+  void shouldWaitForPersistedFinalization() {
+    when(database.getEarliestDataColumnSidecarSlot()).thenReturn(Optional.of(UInt64.ZERO));
+    when(database.getFinalizedCheckpoint())
+        .thenReturn(Optional.of(new Checkpoint(UInt64.ZERO, Bytes32.ZERO)));
+    dataColumnSidecarPruner.onSidecarArchivePrunableSlot(UInt64.valueOf(10));
+    asyncRunner.executeDueActions();
+    verify(database, never()).archiveSidecarsProofs(any(), any());
+    when(database.getFinalizedCheckpoint())
+        .thenReturn(Optional.of(new Checkpoint(UInt64.valueOf(2), Bytes32.ZERO)));
+    asyncRunner.executeQueuedActions();
+    verify(database).archiveSidecarsProofs(UInt64.ZERO, UInt64.valueOf(10));
+  }
+
+  @Test
+  void shouldRetryProcessedSlotOnlyAfterSidecarWrite() {
+    when(database.getEarliestDataColumnSidecarSlot()).thenReturn(Optional.of(UInt64.ZERO));
+    dataColumnSidecarPruner.onSidecarArchivePrunableSlot(UInt64.valueOf(10));
+    asyncRunner.executeDueActions();
+    asyncRunner.executeQueuedActions();
+    verify(database).archiveSidecarsProofs(UInt64.ZERO, UInt64.valueOf(10));
+
+    dataColumnSidecarPruner.onSidecarStored(UInt64.valueOf(5));
+    dataColumnSidecarPruner.onSidecarStored(UInt64.valueOf(5));
+    asyncRunner.executeQueuedActions();
+    asyncRunner.executeQueuedActions();
+
+    verify(database).archiveSidecarsProofs(UInt64.valueOf(5), UInt64.valueOf(5));
+  }
+
+  @Test
+  void shouldNotLoseSidecarWriteDuringArchiving() {
+    when(database.getEarliestDataColumnSidecarSlot()).thenReturn(Optional.of(UInt64.ZERO));
+    dataColumnSidecarPruner.onSidecarArchivePrunableSlot(UInt64.valueOf(10));
+    doAnswer(
+            invocation -> {
+              dataColumnSidecarPruner.onSidecarStored(UInt64.valueOf(5));
+              return null;
+            })
+        .when(database)
+        .archiveSidecarsProofs(UInt64.ZERO, UInt64.valueOf(10));
+
+    asyncRunner.executeDueActions();
+    asyncRunner.executeQueuedActions();
+    asyncRunner.executeQueuedActions();
+
+    verify(database, times(1)).archiveSidecarsProofs(UInt64.valueOf(5), UInt64.valueOf(5));
+  }
+
+  @Test
+  void shouldRetryFailedArchiveRange() {
+    when(database.getEarliestDataColumnSidecarSlot()).thenReturn(Optional.of(UInt64.ZERO));
+    dataColumnSidecarPruner.onSidecarArchivePrunableSlot(UInt64.valueOf(10));
+    doThrow(new IllegalStateException("write failed"))
+        .doNothing()
+        .when(database)
+        .archiveSidecarsProofs(UInt64.ZERO, UInt64.valueOf(10));
+
+    asyncRunner.executeDueActions();
+    asyncRunner.executeQueuedActions();
+
+    verify(database, times(2)).archiveSidecarsProofs(UInt64.ZERO, UInt64.valueOf(10));
   }
 
   @Test

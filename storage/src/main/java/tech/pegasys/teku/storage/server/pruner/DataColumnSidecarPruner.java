@@ -21,6 +21,8 @@ import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeRangeSet;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -60,11 +62,12 @@ public class DataColumnSidecarPruner extends Service implements SidecarArchivePr
   private final AtomicLong earliestDataColumnSidecarSlot = new AtomicLong(-1);
   private final AtomicLong lastDataColumnSidecarArchivePrunableSlot = new AtomicLong(-1);
   private final AtomicLong slotsToArchive = new AtomicLong(-1);
-  // Tracks which slot ranges have been submitted to archiveSidecarsProofs this session.
-  // The complement within [0, tillSlot] is what still needs archiving. Chunks are always
+  // Tracks ranges examined since their last sidecar write, including skipped slots.
+  // The complement within [0, tillSlot] is what still needs examination. Chunks are always
   // taken from the highest (most recent) unarchived range first, so newly-prunable epochs
   // are archived before the historical backlog. Resets to empty on restart (in-memory only).
-  private final TreeRangeSet<Long> archivedSlotRanges = TreeRangeSet.create();
+  private final TreeRangeSet<Long> processedSlotRanges = TreeRangeSet.create();
+  private final Set<Long> dirtySlots = ConcurrentHashMap.newKeySet();
   private Optional<UInt64> genesisTime = Optional.empty();
 
   private Optional<Cancellable> scheduledPruner = Optional.empty();
@@ -201,10 +204,28 @@ public class DataColumnSidecarPruner extends Service implements SidecarArchivePr
 
   private void doArchiveDataColumnSidecars() {
     LOG.debug("Data column sidecars archiver task triggered");
-    final long tillSlotLong = lastDataColumnSidecarArchivePrunableSlot.get();
-    if (tillSlotLong < 0) {
+    final long signalledSlot = lastDataColumnSidecarArchivePrunableSlot.get();
+    if (signalledSlot < 0) {
       LOG.debug("Not archiving data column sidecars: no prunable slot signal received yet.");
       return;
+    }
+    // Finalization events can precede the storage transaction. Do not mark those slots processed.
+    final Optional<UInt64> persistedBoundary =
+        database
+            .getFinalizedCheckpoint()
+            .map(checkpoint -> spec.computeStartSlotAtEpoch(checkpoint.getEpoch()));
+    if (persistedBoundary.isEmpty() || persistedBoundary.get().isZero()) {
+      return;
+    }
+    final long tillSlotLong =
+        Math.min(signalledSlot, persistedBoundary.get().decrement().longValue());
+
+    // Remove notifications before scanning: writes during the scan must survive for the next pass.
+    final var dirtyIterator = dirtySlots.iterator();
+    while (dirtyIterator.hasNext()) {
+      final long slot = dirtyIterator.next();
+      dirtyIterator.remove();
+      processedSlotRanges.remove(Range.closedOpen(slot, slot + 1));
     }
 
     final long earliestSlotLong =
@@ -219,10 +240,10 @@ public class DataColumnSidecarPruner extends Service implements SidecarArchivePr
     }
 
     final RangeSet<Long> unarchived =
-        archivedSlotRanges.complement().subRangeSet(Range.closed(earliestSlotLong, tillSlotLong));
+        processedSlotRanges.complement().subRangeSet(Range.closed(earliestSlotLong, tillSlotLong));
     if (unarchived.isEmpty()) {
       LOG.debug(
-          "All data column sidecars up to slot {} have been archived to proofs", tillSlotLong);
+          "All data column sidecars up to slot {} have been examined for archival", tillSlotLong);
       return;
     }
 
@@ -257,20 +278,26 @@ public class DataColumnSidecarPruner extends Service implements SidecarArchivePr
     // Store as half-open [lower, upper+1) so adjacent chunks connect and merge in the RangeSet.
     // Range<Long> is real-valued: [9,19] and [20,30] are not connected, which would leave a
     // phantom gap (19,20) that is empty but gets picked as the highest unarchived range.
-    archivedSlotRanges.add(Range.closedOpen(lower, upper + 1L));
-    final long archived =
-        archivedSlotRanges
+    processedSlotRanges.add(Range.closedOpen(lower, upper + 1L));
+    final long processed =
+        processedSlotRanges
             .subRangeSet(Range.closedOpen(earliestSlotLong, tillSlotLong + 1L))
             .asRanges()
             .stream()
             .mapToLong(r -> r.upperEndpoint() - r.lowerEndpoint())
             .sum();
-    slotsToArchive.set(tillSlotLong - earliestSlotLong + 1 - archived);
+    slotsToArchive.set(tillSlotLong - earliestSlotLong + 1 - processed);
   }
 
   @Override
   public void onSidecarArchivePrunableSlot(final UInt64 slot) {
     lastDataColumnSidecarArchivePrunableSlot.set(slot.longValue());
+  }
+
+  public void onSidecarStored(final UInt64 slot) {
+    if (slot.longValue() <= lastDataColumnSidecarArchivePrunableSlot.get()) {
+      dirtySlots.add(slot.longValue());
+    }
   }
 
   // Adds one extra epoch beyond custodyPeriodEpochs to avoid the edge case described in

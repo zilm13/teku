@@ -29,6 +29,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.tuweni.bytes.Bytes32;
 import tech.pegasys.teku.dataproviders.lookup.ExecutionPayloadProvider;
 import tech.pegasys.teku.infrastructure.async.SafeFuture;
+import tech.pegasys.teku.infrastructure.async.stream.AsyncStream;
 import tech.pegasys.teku.infrastructure.bytes.Bytes4;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.kzg.KZGProof;
@@ -939,6 +940,19 @@ public class CombinedChainDataClient {
 
   public SafeFuture<List<DataColumnSlotAndIdentifier>> getDataColumnIdentifiers(final UInt64 slot) {
     return historicalChainData.getDataColumnIdentifiers(slot);
+  }
+
+  public SafeFuture<List<DataColumnSlotAndIdentifier>> getCustodyDataColumnIdentifiers(
+      final UInt64 slot) {
+    return historicalChainData.getCustodyDataColumnIdentifiers(slot);
+  }
+
+  public SafeFuture<List<DataColumnSlotAndIdentifier>> getCustodyDataColumnIdentifiers(
+      final UInt64 fromSlot, final UInt64 toSlot) {
+    return AsyncStream.createUnsafe(UInt64.rangeClosed(fromSlot, toSlot).iterator())
+        .mapAsync(this::getCustodyDataColumnIdentifiers)
+        .toList()
+        .thenApply(slots -> slots.stream().flatMap(List::stream).toList());
   }
 
   public SafeFuture<List<DataColumnSlotAndIdentifier>> getDataColumnIdentifiers(

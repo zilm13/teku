@@ -56,6 +56,7 @@ import tech.pegasys.teku.spec.TestSpecInvocationContextProvider.SpecContext;
 import tech.pegasys.teku.spec.config.SpecConfigFulu;
 import tech.pegasys.teku.spec.datastructures.blobs.DataColumnSidecar;
 import tech.pegasys.teku.spec.datastructures.blocks.SignedBeaconBlock;
+import tech.pegasys.teku.spec.datastructures.blocks.SlotAndBlockRoot;
 import tech.pegasys.teku.spec.datastructures.blocks.blockbody.versions.deneb.BeaconBlockBodyDeneb;
 import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
 import tech.pegasys.teku.spec.logic.common.util.DataColumnSidecarUtil;
@@ -101,7 +102,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
   @TestTemplate
   public void shouldReturnEmptyWhenNoSidecarsAvailable() {
     final SignedBeaconBlock block = createBlockWithBlobs(UInt64.ONE);
-    when(chainDataClient.getDataColumnSidecars(any(UInt64.class), anyList()))
+    when(chainDataClient.getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList()))
         .thenReturn(SafeFuture.completedFuture(List.of()));
     when(chainDataClient.getDataColumnSidecarProofs(any()))
         .thenReturn(SafeFuture.completedFuture(List.of()));
@@ -141,7 +142,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     final List<DataColumnSidecar> firstHalfSidecars = createFirstHalfSidecars(competingBlock);
     final List<List<KZGProof>> secondHalfProofs = createSecondHalfProofs(block);
 
-    when(chainDataClient.getDataColumnSidecars(any(UInt64.class), anyList()))
+    when(chainDataClient.getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList()))
         .thenReturn(SafeFuture.completedFuture(firstHalfSidecars));
     when(chainDataClient.getDataColumnSidecarProofs(any()))
         .thenReturn(SafeFuture.completedFuture(secondHalfProofs));
@@ -197,7 +198,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     when(mockUtil.constructDataColumnSidecars(any(), any(), any(), any(), anyList()))
         .thenReturn(allSidecars);
 
-    when(chainDataClient.getDataColumnSidecars(any(UInt64.class), anyList()))
+    when(chainDataClient.getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList()))
         .thenReturn(SafeFuture.completedFuture(firstHalfSidecars));
     when(chainDataClient.getDataColumnSidecarProofs(any()))
         .thenReturn(SafeFuture.completedFuture(secondHalfProofs));
@@ -231,7 +232,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     final List<DataColumnSidecar> firstHalfSidecars = createFirstHalfSidecars(block);
     final List<List<KZGProof>> secondHalfProofs = createSecondHalfProofs(block);
 
-    when(chainDataClient.getDataColumnSidecars(any(UInt64.class), anyList()))
+    when(chainDataClient.getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList()))
         .thenReturn(SafeFuture.completedFuture(firstHalfSidecars));
     when(chainDataClient.getDataColumnSidecarProofs(any()))
         .thenReturn(SafeFuture.completedFuture(secondHalfProofs));
@@ -258,7 +259,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
               requestLog(block, secondIndex, requestId, "reusing the completed result"));
     }
     // Should have only called getDataColumnSidecars once (same task reused)
-    verify(chainDataClient).getDataColumnSidecars(any(UInt64.class), anyList());
+    verify(chainDataClient).getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList());
     // and loaded the block only to start the reconstruction, not to serve the reused result
     verify(chainDataClient).getBlockByBlockRoot(block.getRoot());
   }
@@ -269,7 +270,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     final List<DataColumnSidecar> firstHalfSidecars = createFirstHalfSidecars(block);
     final List<List<KZGProof>> secondHalfProofs = createSecondHalfProofs(block);
 
-    when(chainDataClient.getDataColumnSidecars(any(UInt64.class), anyList()))
+    when(chainDataClient.getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList()))
         .thenReturn(SafeFuture.completedFuture(firstHalfSidecars));
     when(chainDataClient.getDataColumnSidecarProofs(any()))
         .thenReturn(SafeFuture.completedFuture(secondHalfProofs));
@@ -293,7 +294,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     assertThat(result1).isPresent();
     assertThat(result2).isPresent();
     // reconstruction ran only once despite two independent requests
-    verify(chainDataClient).getDataColumnSidecars(any(UInt64.class), anyList());
+    verify(chainDataClient).getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList());
   }
 
   @TestTemplate
@@ -303,7 +304,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
         newReconstructor(stubAsyncRunner);
     final SignedBeaconBlock block = createBlockWithBlobs(UInt64.ONE);
     final SafeFuture<List<DataColumnSidecar>> firstHalfSidecars = new SafeFuture<>();
-    when(chainDataClient.getDataColumnSidecars(any(UInt64.class), anyList()))
+    when(chainDataClient.getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList()))
         .thenReturn(firstHalfSidecars);
     when(chainDataClient.getDataColumnSidecarProofs(any()))
         .thenReturn(SafeFuture.completedFuture(createSecondHalfProofs(block)));
@@ -335,7 +336,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
 
     assertThat(joined).isCompleted();
     assertThat(joined.join()).isPresent();
-    verify(chainDataClient, times(1)).getDataColumnSidecars(any(UInt64.class), anyList());
+    verify(chainDataClient, times(1)).getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList());
   }
 
   @TestTemplate
@@ -345,7 +346,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
         newReconstructor(stubAsyncRunner);
     final SignedBeaconBlock block = createBlockWithBlobs(UInt64.ONE);
     // the first read never completes, the retry's read does
-    when(chainDataClient.getDataColumnSidecars(any(UInt64.class), anyList()))
+    when(chainDataClient.getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList()))
         .thenReturn(new SafeFuture<>())
         .thenReturn(SafeFuture.completedFuture(createFirstHalfSidecars(block)));
     when(chainDataClient.getDataColumnSidecarProofs(any()))
@@ -370,7 +371,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
 
     assertThat(retried).isCompleted();
     assertThat(retried.join()).isPresent();
-    verify(chainDataClient, times(2)).getDataColumnSidecars(any(UInt64.class), anyList());
+    verify(chainDataClient, times(2)).getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList());
   }
 
   @TestTemplate
@@ -436,7 +437,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     // and it starts no new reconstruction
     stubAsyncRunner.executeDueActionsRepeatedly();
     verify(chainDataClient, never())
-        .getDataColumnSidecars(eq(unreconstructedBlock.getSlot()), anyList());
+        .getDataColumnSidecars(eq(unreconstructedBlock.getSlotAndBlockRoot()), anyList());
     // nor does it load blocks it is not going to reconstruct
     verify(chainDataClient, never()).getBlockByBlockRoot(unreconstructedBlock.getRoot());
 
@@ -501,7 +502,8 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
 
     // the queued reconstruction only starts once the running one frees its slot
     stubAsyncRunner.executeDueActionsRepeatedly();
-    verify(chainDataClient, never()).getDataColumnSidecars(eq(queuedBlock.getSlot()), anyList());
+    verify(chainDataClient, never())
+        .getDataColumnSidecars(eq(queuedBlock.getSlotAndBlockRoot()), anyList());
     runningBlockSidecars.complete(createFirstHalfSidecars(runningBlock));
     stubAsyncRunner.executeDueActionsRepeatedly();
     assertThat(running).isCompletedWithValueMatching(Optional::isPresent);
@@ -553,7 +555,8 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     stubAsyncRunner.executeDueActionsRepeatedly();
 
     // the abandoned reconstruction is skipped, as a failure, while the re-requested one runs
-    verify(chainDataClient, never()).getDataColumnSidecars(eq(abandonedBlock.getSlot()), anyList());
+    verify(chainDataClient, never())
+        .getDataColumnSidecars(eq(abandonedBlock.getSlotAndBlockRoot()), anyList());
     assertThat(failures("skipped")).isEqualTo(1);
     assertThat(rerequested).isCompletedWithValueMatching(Optional::isPresent);
 
@@ -610,9 +613,10 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
                   block.getSlotAndBlockRoot(), index, limitedReconstructor.onRequest()))
           .isCompletedWithValueMatching(Optional::isPresent);
     }
-    verify(chainDataClient).getDataColumnSidecars(eq(firstBlock.getSlot()), anyList());
-    verify(chainDataClient).getDataColumnSidecars(eq(thirdBlock.getSlot()), anyList());
-    verify(chainDataClient, times(2)).getDataColumnSidecars(eq(secondBlock.getSlot()), anyList());
+    verify(chainDataClient).getDataColumnSidecars(eq(firstBlock.getSlotAndBlockRoot()), anyList());
+    verify(chainDataClient).getDataColumnSidecars(eq(thirdBlock.getSlotAndBlockRoot()), anyList());
+    verify(chainDataClient, times(2))
+        .getDataColumnSidecars(eq(secondBlock.getSlotAndBlockRoot()), anyList());
   }
 
   @TestTemplate
@@ -657,7 +661,8 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     stubAsyncRunner.executeDueActionsRepeatedly();
     assertThat(running).isCompletedWithValueMatching(Optional::isPresent);
     assertThat(joined).isCompletedWithValueMatching(Optional::isPresent);
-    verify(chainDataClient).getDataColumnSidecars(eq(runningBlock.getSlot()), anyList());
+    verify(chainDataClient)
+        .getDataColumnSidecars(eq(runningBlock.getSlotAndBlockRoot()), anyList());
   }
 
   @TestTemplate
@@ -695,7 +700,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
             limitedReconstructor.reconstructDataColumnSidecar(
                 slowBlock.getSlotAndBlockRoot(), index.plus(1), requestId))
         .isCompletedWithValueMatching(Optional::isPresent);
-    verify(chainDataClient).getDataColumnSidecars(eq(slowBlock.getSlot()), anyList());
+    verify(chainDataClient).getDataColumnSidecars(eq(slowBlock.getSlotAndBlockRoot()), anyList());
   }
 
   @TestTemplate
@@ -750,7 +755,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
   @TestTemplate
   public void shouldWarnAboutUnexpectedFailureAtMostOncePerInterval() {
     final SignedBeaconBlock block = createBlockWithBlobs(UInt64.ONE);
-    when(chainDataClient.getDataColumnSidecars(any(UInt64.class), anyList()))
+    when(chainDataClient.getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList()))
         .thenReturn(SafeFuture.failedFuture(new IllegalStateException("corrupted archive")));
     when(chainDataClient.getDataColumnSidecarProofs(any()))
         .thenReturn(SafeFuture.completedFuture(List.of()));
@@ -797,7 +802,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
                 reconstructor.onRequest()))
         .isCompletedWithValue(Optional.empty());
     // nothing else is read for a block that cannot be loaded
-    verify(chainDataClient, never()).getDataColumnSidecars(any(UInt64.class), anyList());
+    verify(chainDataClient, never()).getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList());
     assertThat(failures("unavailable")).isEqualTo(1);
   }
 
@@ -805,7 +810,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
   public void shouldCountStorageQueryRejectionApartFromReconstructionQueueRejection() {
     final SignedBeaconBlock block = createBlockWithBlobs(UInt64.ONE);
     // the storage query queue shared with the other RPC handlers is full when reading the archive
-    when(chainDataClient.getDataColumnSidecars(any(UInt64.class), anyList()))
+    when(chainDataClient.getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList()))
         .thenReturn(SafeFuture.failedFuture(new QueueIsFullException()));
     when(chainDataClient.getDataColumnSidecarProofs(any()))
         .thenReturn(SafeFuture.completedFuture(List.of()));
@@ -824,7 +829,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
   @SuppressWarnings("FutureReturnValueIgnored")
   public void shouldRetryReconstructionAfterEmptyResult() {
     final SignedBeaconBlock block = createBlockWithBlobs(UInt64.ONE);
-    when(chainDataClient.getDataColumnSidecars(any(UInt64.class), anyList()))
+    when(chainDataClient.getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList()))
         .thenReturn(SafeFuture.completedFuture(List.of()));
     when(chainDataClient.getDataColumnSidecarProofs(any()))
         .thenReturn(SafeFuture.completedFuture(List.of()));
@@ -838,7 +843,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     reconstructor.reconstructDataColumnSidecar(
         block.getSlotAndBlockRoot(), UInt64.valueOf(halfColumns), newRequestId);
 
-    verify(chainDataClient, times(2)).getDataColumnSidecars(any(UInt64.class), anyList());
+    verify(chainDataClient, times(2)).getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList());
   }
 
   @TestTemplate
@@ -847,7 +852,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     final List<DataColumnSidecar> firstHalfSidecars = createFirstHalfSidecars(block);
     final List<List<KZGProof>> secondHalfProofs = createSecondHalfProofs(block);
 
-    when(chainDataClient.getDataColumnSidecars(any(UInt64.class), anyList()))
+    when(chainDataClient.getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList()))
         .thenReturn(SafeFuture.completedFuture(firstHalfSidecars));
     when(chainDataClient.getDataColumnSidecarProofs(any()))
         .thenReturn(SafeFuture.completedFuture(secondHalfProofs));
@@ -865,7 +870,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
                     block.getSlotAndBlockRoot(), index, reconstructor.onRequest())
                 .join())
         .isPresent();
-    verify(chainDataClient, times(1)).getDataColumnSidecars(any(UInt64.class), anyList());
+    verify(chainDataClient, times(1)).getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList());
   }
 
   @TestTemplate
@@ -874,7 +879,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     final List<DataColumnSidecar> firstHalfSidecars = createFirstHalfSidecars(block);
     final List<List<KZGProof>> secondHalfProofs = createSecondHalfProofs(block);
 
-    when(chainDataClient.getDataColumnSidecars(any(UInt64.class), anyList()))
+    when(chainDataClient.getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList()))
         .thenReturn(SafeFuture.completedFuture(firstHalfSidecars));
     when(chainDataClient.getDataColumnSidecarProofs(any()))
         .thenReturn(SafeFuture.completedFuture(secondHalfProofs));
@@ -894,7 +899,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     reconstructor
         .reconstructDataColumnSidecar(block.getSlotAndBlockRoot(), index, reconstructor.onRequest())
         .join();
-    verify(chainDataClient, times(1)).getDataColumnSidecars(any(UInt64.class), anyList());
+    verify(chainDataClient, times(1)).getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList());
 
     // unrequested for 35s: the per-slot prune drops it and the next request reconstructs again
     timeProvider.advanceTimeBySeconds(35);
@@ -909,7 +914,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
     reconstructor
         .reconstructDataColumnSidecar(block.getSlotAndBlockRoot(), index, reconstructor.onRequest())
         .join();
-    verify(chainDataClient, times(2)).getDataColumnSidecars(any(UInt64.class), anyList());
+    verify(chainDataClient, times(2)).getDataColumnSidecars(any(SlotAndBlockRoot.class), anyList());
   }
 
   @TestTemplate
@@ -1038,18 +1043,17 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
   }
 
   @TestTemplate
-  public void isSidecarPruned_falseWithDefaultRetentionEpochs() {
+  public void isSidecarPruned_canServeExistingArchivesWithDefaultRetentionEpochs() {
     final Spec spiedSpec = spy(spec);
     doReturn(true).when(spiedSpec).isAvailabilityOfDataColumnSidecarsRequiredAtEpoch(any(), any());
     final UInt64 currentEpoch = spec.getCurrentEpoch(store);
-    // same as isSidecarPruned_trueWhenSlotBeforePruningBoundary, but with the default retention:
-    // Integer.MAX_VALUE keeps every extension column, so nothing is served by reconstruction
+    // Restoring default retention must not hide archives written with a shorter retention.
     when(chainDataClient.getFinalizedBlockSlot())
         .thenReturn(Optional.of(spec.computeStartSlotAtEpoch(currentEpoch)));
     final DataColumnSidecarArchiveReconstructorImpl defaultRetention =
         newReconstructor(spiedSpec, () -> true, Integer.MAX_VALUE);
 
-    assertThat(defaultRetention.isSidecarPruned(ZERO, UInt64.valueOf(halfColumns))).isFalse();
+    assertThat(defaultRetention.isSidecarPruned(ZERO, UInt64.valueOf(halfColumns))).isTrue();
   }
 
   @TestTemplate
@@ -1120,7 +1124,7 @@ public class DataColumnSidecarArchiveReconstructorImplTest {
 
   private void stubArchivedBlock(
       final SignedBeaconBlock block, final SafeFuture<List<DataColumnSidecar>> firstHalfSidecars) {
-    when(chainDataClient.getDataColumnSidecars(eq(block.getSlot()), anyList()))
+    when(chainDataClient.getDataColumnSidecars(eq(block.getSlotAndBlockRoot()), anyList()))
         .thenReturn(firstHalfSidecars);
     when(chainDataClient.getDataColumnSidecarProofs(block.getSlot()))
         .thenReturn(SafeFuture.completedFuture(createSecondHalfProofs(block)));

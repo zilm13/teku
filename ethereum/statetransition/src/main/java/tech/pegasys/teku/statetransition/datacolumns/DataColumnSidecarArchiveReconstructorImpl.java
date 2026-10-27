@@ -484,7 +484,8 @@ public class DataColumnSidecarArchiveReconstructorImpl
                           }
                           final SignedBeaconBlock block = maybeBlock.get();
                           return chainDataClient
-                              .getDataColumnSidecars(block.getSlot(), firstHalfOfIndices)
+                              .getDataColumnSidecars(
+                                  block.getSlotAndBlockRoot(), firstHalfOfIndices)
                               .thenComposeCombined(
                                   chainDataClient.getDataColumnSidecarProofs(block.getSlot()),
                                   (sidecars, proofs) ->
@@ -617,9 +618,8 @@ public class DataColumnSidecarArchiveReconstructorImpl
     }
 
     final UInt64 finalizedEpoch = spec.computeEpochAtSlot(maybeFinalizedSlot.get());
-    final UInt64 currentEpoch = spec.getCurrentEpoch(store);
-    return slotEpoch.isLessThan(
-        finalizedEpoch.min(currentEpoch.minusMinZero(dataColumnSidecarExtensionRetentionEpochs)));
+    // Retention controls new archive writes, not whether existing archives can be served.
+    return slotEpoch.isLessThan(finalizedEpoch);
   }
 
   @Override
