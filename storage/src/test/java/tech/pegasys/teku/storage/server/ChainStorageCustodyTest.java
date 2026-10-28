@@ -19,6 +19,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.apache.tuweni.bytes.Bytes32;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -135,6 +137,70 @@ class ChainStorageCustodyTest {
         .isCompletedWithValueMatching(
             ids -> ids.stream().filter(id -> id.blockRoot().equals(root)).count() == columns);
     verify(database).getDataColumnSidecarsProofs(slot);
+  }
+
+  @Test
+  void rangeQueryScansOnceAndExpandsOnlyArchivedSlots() {
+    final UInt64 fullSlot = slot.plus(2);
+    final UInt64 partialSlot = slot.plus(4);
+    final UInt64 unarchivedSlot = slot.plus(6);
+    final UInt64 endSlot = slot.plus(100);
+    final List<DataColumnSlotAndIdentifier> full = identifiers(fullSlot, columns);
+    final List<DataColumnSlotAndIdentifier> partial = identifiers(partialSlot, columns / 2 - 1);
+    final List<DataColumnSlotAndIdentifier> unarchived = identifiers(unarchivedSlot, columns / 2);
+    final Runnable onClose = mock(Runnable.class);
+    when(database.streamDataColumnIdentifiers(slot, endSlot))
+        .thenReturn(
+            Stream.of(firstHalf, full, partial, unarchived).flatMap(List::stream).onClose(onClose));
+    when(database.getDataColumnSidecarsProofs(unarchivedSlot)).thenReturn(Optional.empty());
+    final List<DataColumnSlotAndIdentifier> expected =
+        Stream.of(identifiers(slot, columns), full, partial, unarchived)
+            .flatMap(List::stream)
+            .toList();
+
+    assertThat(storage.getCustodyDataColumnIdentifiers(slot, endSlot))
+        .isCompletedWithValue(expected);
+
+    verify(database).streamDataColumnIdentifiers(slot, endSlot);
+    verify(database).getDataColumnSidecarsProofs(slot);
+    verify(database).getFinalizedBlockRootBySlot(slot);
+    verify(database).getDataColumnSidecarsProofs(unarchivedSlot);
+    verifyNoMoreInteractions(database);
+    verify(onClose).run();
+  }
+
+  @Test
+  void emptyRangeDoesNotPerformPerSlotLookups() {
+    final UInt64 endSlot = slot.plus(1000);
+    final Runnable onClose = mock(Runnable.class);
+    when(database.streamDataColumnIdentifiers(slot, endSlot))
+        .thenReturn(Stream.<DataColumnSlotAndIdentifier>empty().onClose(onClose));
+
+    assertThat(storage.getCustodyDataColumnIdentifiers(slot, endSlot))
+        .isCompletedWithValue(List.of());
+
+    verify(database).streamDataColumnIdentifiers(slot, endSlot);
+    verifyNoMoreInteractions(database);
+    verify(onClose).run();
+  }
+
+  @Test
+  void rangeQueryClosesStreamOnFailure() {
+    final Runnable onClose = mock(Runnable.class);
+    when(database.streamDataColumnIdentifiers(slot, slot))
+        .thenReturn(firstHalf.stream().onClose(onClose));
+    when(database.getDataColumnSidecarsProofs(slot))
+        .thenThrow(new IllegalStateException("proof read failed"));
+
+    assertThat(storage.getCustodyDataColumnIdentifiers(slot, slot)).isCompletedExceptionally();
+
+    verify(onClose).run();
+  }
+
+  private List<DataColumnSlotAndIdentifier> identifiers(final UInt64 slot, final int count) {
+    return IntStream.range(0, count)
+        .mapToObj(index -> new DataColumnSlotAndIdentifier(slot, root, UInt64.valueOf(index)))
+        .toList();
   }
 
   @Test

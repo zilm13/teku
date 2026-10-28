@@ -3636,6 +3636,10 @@ public class DatabaseTest {
     assertThat(getStoredColumnIndices(slot)).hasSize(columns / 2);
     assertThat(storage.getCustodyDataColumnIdentifiers(slot))
         .isCompletedWithValueMatching(ids -> ids.size() == columns);
+    final List<DataColumnSlotAndIdentifier> expectedCustody =
+        sidecars.stream().map(DataColumnSlotAndIdentifier::fromDataColumn).sorted().toList();
+    assertThat(storage.getCustodyDataColumnIdentifiers(UInt64.ZERO, slot.plus(100)))
+        .isCompletedWithValue(expectedCustody);
     assertThat(pruner.stop()).isCompleted();
     // The archive fixture inserts finalized blocks directly, without their corresponding states.
     // Restore the state-backed checkpoint before restarting the full storage system.
@@ -3648,6 +3652,8 @@ public class DatabaseTest {
         ChainStorage.create(database, spec, StateStorageMode.PRUNE, 10, BlobSidecarsArchiver.NOOP);
     assertThat(restarted.getCustodyDataColumnIdentifiers(slot))
         .isCompletedWithValueMatching(ids -> ids.size() == columns);
+    assertThat(restarted.getCustodyDataColumnIdentifiers(UInt64.ZERO, slot.plus(100)))
+        .isCompletedWithValue(expectedCustody);
   }
 
   private List<List<KZGProof>> storeFullColumnSet(

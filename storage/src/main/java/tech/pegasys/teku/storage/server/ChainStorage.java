@@ -19,7 +19,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -473,51 +475,86 @@ public class ChainStorage
   public SafeFuture<List<DataColumnSlotAndIdentifier>> getCustodyDataColumnIdentifiers(
       final UInt64 slot) {
     return getDataColumnIdentifiers(slot)
-        .thenApply(
-            identifiers -> {
-              final int numberOfColumns = spec.getNumberOfDataColumns().orElse(0);
-              final int halfColumns = numberOfColumns / 2;
-              if (numberOfColumns == 0 || identifiers.size() < halfColumns) {
-                return identifiers;
-              }
-              // Database identifiers are unique. A complete set for one root needs no archive.
-              if (identifiers.size() == numberOfColumns
-                  && identifiers.stream()
-                      .allMatch(
-                          identifier ->
-                              identifier.blockRoot().equals(identifiers.getFirst().blockRoot())
-                                  && identifier.columnIndex().isLessThan(numberOfColumns))) {
-                return identifiers;
-              }
-              // Read proofs after identifiers so concurrent archival cannot hide availability.
-              // Avoid loading the finalized block entirely when no archive exists.
-              final boolean hasCompleteArchive =
-                  database
-                      .getDataColumnSidecarsProofs(slot)
-                      .map(proofs -> proofs.size() == halfColumns)
-                      .orElse(false);
-              if (!hasCompleteArchive) {
-                return identifiers;
-              }
-              final Optional<Bytes32> canonicalRoot = database.getFinalizedBlockRootBySlot(slot);
-              if (canonicalRoot.isEmpty()) {
-                return identifiers;
-              }
-              final Set<DataColumnSlotAndIdentifier> available = new HashSet<>(identifiers);
-              for (int index = 0; index < halfColumns; index++) {
-                if (!available.contains(
-                    new DataColumnSlotAndIdentifier(
-                        slot, canonicalRoot.get(), UInt64.valueOf(index)))) {
-                  return identifiers;
-                }
-              }
-              for (int index = halfColumns; index < numberOfColumns; index++) {
-                available.add(
-                    new DataColumnSlotAndIdentifier(
-                        slot, canonicalRoot.get(), UInt64.valueOf(index)));
-              }
-              return available.stream().sorted().toList();
-            });
+        .thenApply(identifiers -> includeArchivedCustodyIdentifiers(slot, identifiers));
+  }
+
+  @Override
+  public SafeFuture<List<DataColumnSlotAndIdentifier>> getCustodyDataColumnIdentifiers(
+      final UInt64 startSlot, final UInt64 endSlot) {
+    return SafeFuture.of(
+        () -> {
+          try (final Stream<DataColumnSlotAndIdentifier> identifiers =
+              database.streamDataColumnIdentifiers(startSlot, endSlot)) {
+            final Map<UInt64, List<DataColumnSlotAndIdentifier>> identifiersBySlot =
+                identifiers.collect(
+                    Collectors.groupingBy(
+                        DataColumnSlotAndIdentifier::slot, TreeMap::new, Collectors.toList()));
+            return identifiersBySlot.entrySet().stream()
+                .flatMap(
+                    entry ->
+                        includeArchivedCustodyIdentifiers(entry.getKey(), entry.getValue())
+                            .stream())
+                .toList();
+          }
+        });
+  }
+
+  private List<DataColumnSlotAndIdentifier> includeArchivedCustodyIdentifiers(
+      final UInt64 slot, final List<DataColumnSlotAndIdentifier> identifiers) {
+    final int numberOfColumns = spec.getNumberOfDataColumns().orElse(0);
+    final int halfColumns = numberOfColumns / 2;
+    if (numberOfColumns == 0 || identifiers.size() < halfColumns) {
+      return identifiers;
+    }
+    if (hasCompletePhysicalColumns(identifiers, numberOfColumns)) {
+      return identifiers;
+    }
+    // Read proofs after identifiers so concurrent archival cannot hide availability.
+    // Avoid loading the finalized block entirely when no archive exists.
+    final boolean hasCompleteArchive =
+        database
+            .getDataColumnSidecarsProofs(slot)
+            .map(proofs -> proofs.size() == halfColumns)
+            .orElse(false);
+    if (!hasCompleteArchive) {
+      return identifiers;
+    }
+    final Optional<Bytes32> canonicalRoot = database.getFinalizedBlockRootBySlot(slot);
+    if (canonicalRoot.isEmpty()) {
+      return identifiers;
+    }
+    return expandCanonicalCustodyIdentifiers(
+        slot, canonicalRoot.get(), identifiers, numberOfColumns);
+  }
+
+  private boolean hasCompletePhysicalColumns(
+      final List<DataColumnSlotAndIdentifier> identifiers, final int numberOfColumns) {
+    // Database identifiers are unique. A complete set for one root needs no archive.
+    return identifiers.size() == numberOfColumns
+        && identifiers.stream()
+            .allMatch(
+                identifier ->
+                    identifier.blockRoot().equals(identifiers.getFirst().blockRoot())
+                        && identifier.columnIndex().isLessThan(numberOfColumns));
+  }
+
+  private List<DataColumnSlotAndIdentifier> expandCanonicalCustodyIdentifiers(
+      final UInt64 slot,
+      final Bytes32 canonicalRoot,
+      final List<DataColumnSlotAndIdentifier> identifiers,
+      final int numberOfColumns) {
+    final int halfColumns = numberOfColumns / 2;
+    final Set<DataColumnSlotAndIdentifier> available = new HashSet<>(identifiers);
+    for (int index = 0; index < halfColumns; index++) {
+      if (!available.contains(
+          new DataColumnSlotAndIdentifier(slot, canonicalRoot, UInt64.valueOf(index)))) {
+        return identifiers;
+      }
+    }
+    for (int index = halfColumns; index < numberOfColumns; index++) {
+      available.add(new DataColumnSlotAndIdentifier(slot, canonicalRoot, UInt64.valueOf(index)));
+    }
+    return available.stream().sorted().toList();
   }
 
   @Override
