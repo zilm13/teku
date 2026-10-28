@@ -18,7 +18,9 @@ import static java.util.stream.Collectors.toMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static tech.pegasys.teku.infrastructure.async.SafeFutureAssert.assertThatSafeFuture;
 import static tech.pegasys.teku.infrastructure.async.SafeFutureAssert.safeJoin;
 import static tech.pegasys.teku.infrastructure.unsigned.UInt64.ONE;
@@ -51,6 +53,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.junit.jupiter.api.AfterEach;
@@ -3441,6 +3444,47 @@ public class DatabaseTest {
     assertThatCode(() -> database.archiveSidecarsProofs(ZERO, UInt64.valueOf(3)))
         .doesNotThrowAnyException();
     assertThat(database.getLastDataColumnSidecarsProofsSlot()).isEmpty();
+  }
+
+  @TestTemplate
+  public void archiveSidecarsProofs_skipsMalformedSidecarAndArchivesHealthySlots(
+      final DatabaseContext context) throws IOException {
+    setupWithSpec(TestSpecFactory.createMinimalFulu());
+    initialize(context);
+
+    final int columns = spec.getNumberOfDataColumns().orElseThrow();
+    final UInt64 corruptSlot = UInt64.valueOf(2);
+    final UInt64 lastSlot = UInt64.valueOf(3);
+    final List<List<KZGProof>> firstProofs = storeFullColumnSet(ONE, columns);
+    final List<DataColumnSidecar> corruptSlotSidecars =
+        storeColumns(storeFinalizedBlockForArchive(corruptSlot), 0, columns);
+    final List<List<KZGProof>> lastProofs = storeFullColumnSet(lastSlot, columns);
+    final DataColumnSidecar original = corruptSlotSidecars.getLast();
+    final DataColumnSidecar malformed = spy(original);
+    doReturn(Bytes.of(0)).when(malformed).sszSerialize();
+    database.addSidecar(malformed);
+
+    database.archiveSidecarsProofs(ZERO, lastSlot);
+
+    assertThat(database.getDataColumnSidecarsProofs(ONE)).contains(firstProofs);
+    assertThat(database.getDataColumnSidecarsProofs(lastSlot)).contains(lastProofs);
+    assertThat(getStoredColumnIndices(ONE)).hasSize(columns / 2);
+    assertThat(getStoredColumnIndices(lastSlot)).hasSize(columns / 2);
+    assertThat(database.getDataColumnSidecarsProofs(corruptSlot)).isEmpty();
+    assertThat(getStoredColumnIndices(corruptSlot)).hasSize(columns);
+
+    database.addSidecar(original);
+    database.archiveSidecarsProofs(corruptSlot, corruptSlot);
+
+    assertThat(getStoredColumnIndices(corruptSlot)).hasSize(columns / 2);
+    assertThat(database.getDataColumnSidecarsProofs(corruptSlot))
+        .contains(
+            corruptSlotSidecars.stream()
+                .skip(columns / 2)
+                .map(
+                    sidecar ->
+                        sidecar.getKzgProofs().stream().map(SszKZGProof::getKZGProof).toList())
+                .toList());
   }
 
   @TestTemplate

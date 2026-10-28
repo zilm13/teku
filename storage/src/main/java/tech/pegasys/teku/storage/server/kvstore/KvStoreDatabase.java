@@ -50,6 +50,7 @@ import org.hyperledger.besu.plugin.services.MetricsSystem;
 import tech.pegasys.teku.ethereum.pow.api.DepositTreeSnapshot;
 import tech.pegasys.teku.ethereum.pow.api.DepositsFromBlockEvent;
 import tech.pegasys.teku.ethereum.pow.api.MinGenesisTimeBlockEvent;
+import tech.pegasys.teku.infrastructure.ssz.sos.SszDeserializeException;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.kzg.KZGProof;
 import tech.pegasys.teku.spec.Spec;
@@ -1550,11 +1551,7 @@ public class KvStoreDatabase implements Database {
             .map(
                 key ->
                     dao.getSidecar(key)
-                        .map(
-                            sidecar ->
-                                spec.deserializeSidecar(sidecar, slot).getKzgProofs().stream()
-                                    .map(SszKZGProof::getKZGProof)
-                                    .toList()))
+                        .flatMap(sidecar -> deserializeSidecarProofsForArchive(key, sidecar)))
             .toList();
     if (!maybeProofs.stream().allMatch(Optional::isPresent)) {
       LOG.trace("Skipping archival for slot {}: extension columns could not be read", slot);
@@ -1568,6 +1565,23 @@ public class KvStoreDatabase implements Database {
         extensionKeys.size(),
         slot);
     return true;
+  }
+
+  private Optional<List<KZGProof>> deserializeSidecarProofsForArchive(
+      final DataColumnSlotAndIdentifier key, final Bytes sidecar) {
+    try {
+      return Optional.of(
+          spec.deserializeSidecar(sidecar, key.slot()).getKzgProofs().stream()
+              .map(SszKZGProof::getKZGProof)
+              .toList());
+    } catch (final SszDeserializeException error) {
+      LOG.warn(
+          "Skipping archival for slot {}: malformed data column sidecar {}",
+          key.slot(),
+          key,
+          error);
+      return Optional.empty();
+    }
   }
 
   /**
