@@ -50,6 +50,7 @@ import org.hyperledger.besu.plugin.services.MetricsSystem;
 import tech.pegasys.teku.ethereum.pow.api.DepositTreeSnapshot;
 import tech.pegasys.teku.ethereum.pow.api.DepositsFromBlockEvent;
 import tech.pegasys.teku.ethereum.pow.api.MinGenesisTimeBlockEvent;
+import tech.pegasys.teku.infrastructure.ssz.sos.SszDeserializeException;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.kzg.KZGProof;
 import tech.pegasys.teku.spec.Spec;
@@ -106,6 +107,7 @@ import tech.pegasys.teku.storage.server.kvstore.schema.SchemaCombinedSnapshotSta
 import tech.pegasys.teku.storage.server.kvstore.schema.SchemaCombinedTreeState;
 import tech.pegasys.teku.storage.server.kvstore.schema.SchemaFinalizedSnapshotStateAdapter;
 import tech.pegasys.teku.storage.server.kvstore.schema.SchemaHotAdapter;
+import tech.pegasys.teku.storage.server.kvstore.serialization.KvStoreDeserializationException;
 import tech.pegasys.teku.storage.server.state.StateRootRecorder;
 
 public class KvStoreDatabase implements Database {
@@ -1519,7 +1521,6 @@ public class KvStoreDatabase implements Database {
                 () ->
                     new IllegalStateException(
                         "Cannot archive data column sidecar proofs before the Fulu milestone"));
-    final int halfColumns = numberOfColumns / 2;
     try (final Stream<DataColumnSlotAndIdentifier> dataColumnSidecars =
         streamDataColumnIdentifiers(startSlot, tillSlotInclusive)) {
 
@@ -1537,65 +1538,132 @@ public class KvStoreDatabase implements Database {
             archiveMap.lastKey());
         try (final FinalizedUpdater updater = finalizedUpdater()) {
           for (final UInt64 slot : archiveMap.keySet()) {
-            // The canonical sidecar table may also hold columns of a never-imported block at this
-            // slot, so columns are grouped by block root and only a block with every column is
-            // archived: first-half columns are required for reconstruction and columns of
-            // different blocks must never be mixed. Proofs are stored per slot, so the slot is
-            // skipped unless exactly one block is complete.
-            final List<List<DataColumnSlotAndIdentifier>> completeBlocks =
-                archiveMap.get(slot).stream()
-                    .collect(Collectors.groupingBy(DataColumnSlotAndIdentifier::blockRoot))
-                    .values()
-                    .stream()
-                    .filter(keys -> keys.size() == numberOfColumns)
-                    .toList();
-            if (completeBlocks.size() != 1) {
-              LOG.trace(
-                  "Skipping archival for slot {}: {} blocks have all {} columns",
-                  slot,
-                  completeBlocks.size(),
-                  numberOfColumns);
-              continue;
+            try {
+              if (archiveSidecarsProofsForSlot(
+                  slot, archiveMap.get(slot), numberOfColumns, updater)) {
+                ++archivedSlots;
+              }
+            } catch (final SszDeserializeException | KvStoreDeserializationException error) {
+              // All reads for a slot precede its writes, so a malformed slot is left untouched.
+              LOG.warn("Skipping archival for slot {}: malformed stored data", slot, error);
             }
-            final List<DataColumnSlotAndIdentifier> extensionKeys =
-                completeBlocks.getFirst().stream()
-                    .filter(id -> id.columnIndex().isGreaterThanOrEqualTo(halfColumns))
-                    .sorted()
-                    .toList();
-
-            final List<Optional<List<KZGProof>>> maybeProofs =
-                extensionKeys.stream()
-                    .map(
-                        key ->
-                            dao.getSidecar(key)
-                                .map(
-                                    sidecar ->
-                                        spec
-                                            .deserializeSidecar(sidecar, slot)
-                                            .getKzgProofs()
-                                            .stream()
-                                            .map(SszKZGProof::getKZGProof)
-                                            .toList()))
-                    .toList();
-            if (!maybeProofs.stream().allMatch(Optional::isPresent)) {
-              LOG.trace("Skipping archival for slot {}: extension columns could not be read", slot);
-              continue;
-            }
-
-            updater.addDataColumnSidecarsProofs(
-                slot, maybeProofs.stream().map(Optional::orElseThrow).toList());
-            extensionKeys.forEach(updater::removeSidecar);
-            ++archivedSlots;
-            LOG.trace(
-                "Pruned {} extension data column sidecars, keeping their proofs, at slot {}",
-                extensionKeys.size(),
-                slot);
           }
           updater.commit();
         }
         LOG.debug("Archived data column sidecars to proofs across {} slots", archivedSlots);
       }
     }
+  }
+
+  private boolean archiveSidecarsProofsForSlot(
+      final UInt64 slot,
+      final List<DataColumnSlotAndIdentifier> slotKeys,
+      final int numberOfColumns,
+      final FinalizedUpdater updater) {
+    final int halfColumns = numberOfColumns / 2;
+    if (slotKeys.stream().noneMatch(key -> key.columnIndex().isGreaterThanOrEqualTo(halfColumns))) {
+      return false;
+    }
+    final Optional<Bytes32> finalizedRoot =
+        slotKeys.stream()
+            .map(DataColumnSlotAndIdentifier::blockRoot)
+            .distinct()
+            .filter(root -> getSlotForFinalizedBlockRoot(root).map(slot::equals).orElse(false))
+            .findFirst();
+    if (finalizedRoot.isEmpty()) {
+      return false;
+    }
+    final List<DataColumnSlotAndIdentifier> canonicalKeys =
+        slotKeys.stream().filter(key -> key.blockRoot().equals(finalizedRoot.get())).toList();
+    final List<DataColumnSlotAndIdentifier> extensionKeys =
+        canonicalKeys.stream()
+            .filter(key -> key.columnIndex().isGreaterThanOrEqualTo(halfColumns))
+            .sorted()
+            .toList();
+    if (extensionKeys.isEmpty()) {
+      return false;
+    }
+    if (hasCompleteSidecarArchive(slot, canonicalKeys.size() - extensionKeys.size(), halfColumns)) {
+      // These stored extension columns are redundant with the existing archive.
+      extensionKeys.forEach(updater::removeSidecar);
+      return false;
+    }
+    if (!hasUniqueCompleteCanonicalBlock(slot, slotKeys, finalizedRoot.get(), numberOfColumns)) {
+      return false;
+    }
+    return storeSidecarArchive(slot, extensionKeys, updater);
+  }
+
+  private boolean hasCompleteSidecarArchive(
+      final UInt64 slot, final int firstHalfColumnCount, final int halfColumns) {
+    if (firstHalfColumnCount != halfColumns) {
+      return false;
+    }
+    try {
+      return getDataColumnSidecarsProofs(slot)
+          .map(proofs -> proofs.size() == halfColumns)
+          .orElse(false);
+    } catch (final KvStoreDeserializationException error) {
+      LOG.warn(
+          "Ignoring malformed archived proofs at slot {}: a complete column set is required to rebuild them",
+          slot,
+          error);
+      return false;
+    }
+  }
+
+  private boolean hasUniqueCompleteCanonicalBlock(
+      final UInt64 slot,
+      final List<DataColumnSlotAndIdentifier> slotKeys,
+      final Bytes32 finalizedRoot,
+      final int numberOfColumns) {
+    // Never-imported blocks may leave columns in the canonical table. Slot-keyed proofs
+    // require exactly one complete block, and it must be the finalized canonical block.
+    final List<List<DataColumnSlotAndIdentifier>> completeBlocks =
+        slotKeys.stream()
+            .collect(Collectors.groupingBy(DataColumnSlotAndIdentifier::blockRoot))
+            .values()
+            .stream()
+            .filter(keys -> keys.size() == numberOfColumns)
+            .toList();
+    if (completeBlocks.size() != 1) {
+      LOG.trace(
+          "Skipping archival for slot {}: {} blocks have all {} columns",
+          slot,
+          completeBlocks.size(),
+          numberOfColumns);
+      return false;
+    }
+    return completeBlocks.getFirst().getFirst().blockRoot().equals(finalizedRoot);
+  }
+
+  private boolean storeSidecarArchive(
+      final UInt64 slot,
+      final List<DataColumnSlotAndIdentifier> extensionKeys,
+      final FinalizedUpdater updater) {
+    final List<Optional<List<KZGProof>>> maybeProofs =
+        extensionKeys.stream()
+            .map(
+                key ->
+                    dao.getSidecar(key)
+                        .map(
+                            sidecar ->
+                                spec.deserializeSidecar(sidecar, slot).getKzgProofs().stream()
+                                    .map(SszKZGProof::getKZGProof)
+                                    .toList()))
+            .toList();
+    if (!maybeProofs.stream().allMatch(Optional::isPresent)) {
+      LOG.trace("Skipping archival for slot {}: extension columns could not be read", slot);
+      return false;
+    }
+    updater.addDataColumnSidecarsProofs(
+        slot, maybeProofs.stream().map(Optional::orElseThrow).toList());
+    extensionKeys.forEach(updater::removeSidecar);
+    LOG.trace(
+        "Pruned {} extension data column sidecars, keeping their proofs, at slot {}",
+        extensionKeys.size(),
+        slot);
+    return true;
   }
 
   /**
