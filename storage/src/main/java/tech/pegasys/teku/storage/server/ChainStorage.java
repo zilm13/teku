@@ -42,6 +42,7 @@ import tech.pegasys.teku.spec.datastructures.blocks.SlotAndBlockRoot;
 import tech.pegasys.teku.spec.datastructures.blocks.StateAndBlockSummary;
 import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.SignedBlindedExecutionPayloadEnvelope;
 import tech.pegasys.teku.spec.datastructures.forkchoice.VoteTracker;
+import tech.pegasys.teku.spec.datastructures.lightclient.LightClientBootstrap;
 import tech.pegasys.teku.spec.datastructures.lightclient.LightClientUpdate;
 import tech.pegasys.teku.spec.datastructures.state.AnchorPoint;
 import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
@@ -61,6 +62,7 @@ import tech.pegasys.teku.storage.api.VoteUpdateChannel;
 import tech.pegasys.teku.storage.api.WeakSubjectivityState;
 import tech.pegasys.teku.storage.api.WeakSubjectivityUpdate;
 import tech.pegasys.teku.storage.archive.BlobSidecarsArchiver;
+import tech.pegasys.teku.storage.server.kvstore.serialization.KvStoreDeserializationException;
 import tech.pegasys.teku.storage.server.state.FinalizedStateCache;
 
 public class ChainStorage
@@ -94,21 +96,6 @@ public class ChainStorage
     this.blobSidecarsArchiver = blobSidecarsArchiver;
     this.sidecarStoredListener = sidecarStoredListener;
     this.spec = spec;
-  }
-
-  public static ChainStorage create(
-      final Database database,
-      final Spec spec,
-      final StateStorageMode dataStorageMode,
-      final int stateRebuildTimeoutSeconds,
-      final BlobSidecarsArchiver blobSidecarsArchiver) {
-    return create(
-        database,
-        spec,
-        dataStorageMode,
-        stateRebuildTimeoutSeconds,
-        blobSidecarsArchiver,
-        __ -> {});
   }
 
   public static ChainStorage create(
@@ -511,20 +498,33 @@ public class ChainStorage
     }
     // Read proofs after identifiers so concurrent archival cannot hide availability.
     // Avoid loading the finalized block entirely when no archive exists.
-    final boolean hasCompleteArchive =
-        database
-            .getDataColumnSidecarsProofs(slot)
-            .map(proofs -> proofs.size() == halfColumns)
-            .orElse(false);
-    if (!hasCompleteArchive) {
+    if (!hasCompleteSidecarArchive(slot, halfColumns)) {
       return identifiers;
     }
-    final Optional<Bytes32> canonicalRoot = database.getFinalizedBlockRootBySlot(slot);
+    final Optional<Bytes32> canonicalRoot =
+        identifiers.stream()
+            .map(DataColumnSlotAndIdentifier::blockRoot)
+            .distinct()
+            .filter(
+                root -> database.getSlotForFinalizedBlockRoot(root).map(slot::equals).orElse(false))
+            .findFirst();
     if (canonicalRoot.isEmpty()) {
       return identifiers;
     }
     return expandCanonicalCustodyIdentifiers(
         slot, canonicalRoot.get(), identifiers, numberOfColumns);
+  }
+
+  private boolean hasCompleteSidecarArchive(final UInt64 slot, final int halfColumns) {
+    try {
+      return database
+          .getDataColumnSidecarsProofs(slot)
+          .map(proofs -> proofs.size() == halfColumns)
+          .orElse(false);
+    } catch (final KvStoreDeserializationException error) {
+      LOG.warn("Ignoring malformed archived proofs for custody at slot {}", slot, error);
+      return false;
+    }
   }
 
   private boolean hasCompletePhysicalColumns(
@@ -651,5 +651,15 @@ public class ChainStorage
   @Override
   public SafeFuture<Void> onPruneBestLightClientUpdatesBefore(final UInt64 period) {
     return SafeFuture.fromRunnable(() -> database.pruneBestLightClientUpdatesBefore(period));
+  }
+
+  @Override
+  public SafeFuture<Void> onNewLightClientBootstrap(final LightClientBootstrap bootstrap) {
+    return SafeFuture.fromRunnable(() -> database.storeLightClientBootstrap(bootstrap));
+  }
+
+  @Override
+  public SafeFuture<Optional<LightClientBootstrap>> getLightClientBootstrap(final UInt64 slot) {
+    return SafeFuture.of(() -> database.getLightClientBootstrap(slot));
   }
 }

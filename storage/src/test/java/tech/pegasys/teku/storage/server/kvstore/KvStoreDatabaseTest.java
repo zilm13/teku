@@ -58,6 +58,7 @@ import tech.pegasys.teku.spec.datastructures.epbs.versions.gloas.SignedBlindedEx
 import tech.pegasys.teku.spec.datastructures.lightclient.LightClientUpdate;
 import tech.pegasys.teku.spec.datastructures.state.AnchorPoint;
 import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
+import tech.pegasys.teku.spec.datastructures.type.SszKZGProof;
 import tech.pegasys.teku.spec.datastructures.util.DataColumnSlotAndIdentifier;
 import tech.pegasys.teku.spec.generator.ChainBuilder;
 import tech.pegasys.teku.spec.util.DataStructureUtil;
@@ -72,12 +73,65 @@ import tech.pegasys.teku.storage.server.kvstore.dataaccess.KvStoreCombinedDao.Fi
 import tech.pegasys.teku.storage.server.kvstore.dataaccess.KvStoreCombinedDao.HotUpdater;
 import tech.pegasys.teku.storage.server.kvstore.schema.KvStoreColumn;
 import tech.pegasys.teku.storage.server.kvstore.schema.V6SchemaCombinedSnapshot;
+import tech.pegasys.teku.storage.server.kvstore.serialization.KvStoreDeserializationException;
 
 class KvStoreDatabaseTest {
 
+  @Test
+  void archiveSidecarsProofs_skipsRootLookupWithoutExtensionColumns() {
+    final Spec spec = TestSpecFactory.createMinimalFulu();
+    final UInt64 slot = UInt64.valueOf(3);
+    final int halfColumns = spec.getNumberOfDataColumns().orElseThrow() / 2;
+    final KvStoreCombinedDao dao = mock(KvStoreCombinedDao.class);
+    final FinalizedUpdater updater = mock(FinalizedUpdater.class);
+    final KvStoreDatabase database = new KvStoreDatabase(dao, StateStorageMode.PRUNE, false, spec);
+    when(dao.streamDataColumnIdentifiers(slot, slot))
+        .thenReturn(
+            IntStream.range(0, halfColumns)
+                .mapToObj(
+                    index ->
+                        new DataColumnSlotAndIdentifier(
+                            slot, Bytes32.ZERO, UInt64.valueOf(index))));
+    when(dao.finalizedUpdater()).thenReturn(updater);
+
+    database.archiveSidecarsProofs(slot, slot);
+
+    verify(dao, never()).getFinalizedBlockAtSlot(any());
+    verify(dao, never()).getSlotForFinalizedBlockRoot(any());
+    verify(dao, never()).getDataColumnSidecarsProofs(any());
+    verify(dao, never()).getSidecar(any());
+    verify(updater, never()).removeSidecar(any());
+  }
+
+  @Test
+  void archiveSidecarsProofs_requiresExactFinalizedSlot() {
+    final Spec spec = TestSpecFactory.createMinimalFulu();
+    final UInt64 slot = UInt64.valueOf(3);
+    final int columns = spec.getNumberOfDataColumns().orElseThrow();
+    final KvStoreCombinedDao dao = mock(KvStoreCombinedDao.class);
+    final FinalizedUpdater updater = mock(FinalizedUpdater.class);
+    final KvStoreDatabase database = new KvStoreDatabase(dao, StateStorageMode.PRUNE, false, spec);
+    when(dao.streamDataColumnIdentifiers(slot, slot))
+        .thenReturn(
+            IntStream.range(0, columns)
+                .mapToObj(
+                    index ->
+                        new DataColumnSlotAndIdentifier(
+                            slot, Bytes32.ZERO, UInt64.valueOf(index))));
+    when(dao.getSlotForFinalizedBlockRoot(Bytes32.ZERO)).thenReturn(Optional.of(slot.increment()));
+    when(dao.finalizedUpdater()).thenReturn(updater);
+
+    database.archiveSidecarsProofs(slot, slot);
+
+    verify(dao).getSlotForFinalizedBlockRoot(Bytes32.ZERO);
+    verify(dao, never()).getFinalizedBlockAtSlot(any());
+    verify(dao, never()).getSidecar(any());
+    verify(updater, never()).removeSidecar(any());
+  }
+
   @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void archiveSidecarsProofs_propagatesStorageFailures(final boolean failCommit) {
+  @ValueSource(strings = {"index", "proofs", "sidecar", "commit"})
+  void archiveSidecarsProofs_propagatesStorageFailures(final String failureLocation) {
     final Spec spec = TestSpecFactory.createMinimalFulu();
     final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
     final UInt64 slot = UInt64.valueOf(3);
@@ -93,29 +147,147 @@ class KvStoreDatabaseTest {
     final KvStoreDatabase database = new KvStoreDatabase(dao, StateStorageMode.PRUNE, false, spec);
     when(dao.streamDataColumnIdentifiers(slot, slot))
         .thenAnswer(__ -> sidecars.stream().map(DataColumnSlotAndIdentifier::fromDataColumn));
-    when(dao.getFinalizedBlockAtSlot(slot)).thenReturn(Optional.of(block));
+    when(dao.getSlotForFinalizedBlockRoot(block.getRoot())).thenReturn(Optional.of(slot));
     when(dao.finalizedUpdater()).thenReturn(updater);
     final IllegalStateException failure = new IllegalStateException("storage failure");
-    if (failCommit) {
-      sidecars.forEach(
-          sidecar ->
-              when(dao.getSidecar(DataColumnSlotAndIdentifier.fromDataColumn(sidecar)))
-                  .thenReturn(Optional.of(sidecar.sszSerialize())));
-      doThrow(failure).when(updater).commit();
-    } else {
-      when(dao.getSidecar(any())).thenThrow(failure);
+    switch (failureLocation) {
+      case "index" -> when(dao.getSlotForFinalizedBlockRoot(any())).thenThrow(failure);
+      case "proofs" -> when(dao.getDataColumnSidecarsProofs(any())).thenThrow(failure);
+      case "sidecar" -> when(dao.getSidecar(any())).thenThrow(failure);
+      case "commit" -> {
+        sidecars.forEach(
+            sidecar ->
+                when(dao.getSidecar(DataColumnSlotAndIdentifier.fromDataColumn(sidecar)))
+                    .thenReturn(Optional.of(sidecar.sszSerialize())));
+        doThrow(failure).when(updater).commit();
+      }
+      default -> throw new IllegalArgumentException(failureLocation);
     }
 
     assertThatThrownBy(() -> database.archiveSidecarsProofs(slot, slot)).isSameAs(failure);
 
+    verify(dao).getSlotForFinalizedBlockRoot(block.getRoot());
+    verify(dao, never()).getFinalizedBlockAtSlot(any());
     verify(updater).close();
-    if (failCommit) {
+    if (failureLocation.equals("commit")) {
       verify(updater).commit();
     } else {
       verify(updater, never()).commit();
       verify(updater, never()).removeSidecar(any());
     }
   }
+
+  @Test
+  void archiveSidecarsProofs_isolatesMalformedIndex() {
+    final Spec spec = TestSpecFactory.createMinimalFulu();
+    final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
+    final int columns = spec.getNumberOfDataColumns().orElseThrow();
+    final KvStoreCombinedDao dao = mock(KvStoreCombinedDao.class);
+    final FinalizedUpdater updater = mock(FinalizedUpdater.class);
+    final KvStoreDatabase database = new KvStoreDatabase(dao, StateStorageMode.PRUNE, false, spec);
+    final List<DataColumnSlotAndIdentifier> identifiers = new ArrayList<>();
+    final UInt64 corruptSlot = UInt64.valueOf(2);
+    final KvStoreDeserializationException corruption =
+        new KvStoreDeserializationException("malformed stored value");
+    for (int slotNumber = 1; slotNumber <= 3; slotNumber++) {
+      final UInt64 slot = UInt64.valueOf(slotNumber);
+      final SignedBeaconBlock block = dataStructureUtil.randomSignedBeaconBlock(slot);
+      when(dao.getSlotForFinalizedBlockRoot(block.getRoot())).thenReturn(Optional.of(slot));
+      for (int index = 0; index < columns; index++) {
+        final DataColumnSidecar sidecar =
+            dataStructureUtil.randomDataColumnSidecar(block, UInt64.valueOf(index));
+        final DataColumnSlotAndIdentifier key = DataColumnSlotAndIdentifier.fromDataColumn(sidecar);
+        identifiers.add(key);
+        when(dao.getSidecar(key)).thenReturn(Optional.of(sidecar.sszSerialize()));
+      }
+      if (slot.equals(corruptSlot)) {
+        when(dao.getSlotForFinalizedBlockRoot(block.getRoot())).thenThrow(corruption);
+      }
+    }
+    when(dao.streamDataColumnIdentifiers(UInt64.ONE, UInt64.valueOf(3)))
+        .thenAnswer(__ -> identifiers.stream());
+    when(dao.finalizedUpdater()).thenReturn(updater);
+
+    database.archiveSidecarsProofs(UInt64.ONE, UInt64.valueOf(3));
+
+    verify(updater).addDataColumnSidecarsProofs(eq(UInt64.ONE), any());
+    verify(updater).addDataColumnSidecarsProofs(eq(UInt64.valueOf(3)), any());
+    verify(updater, never()).addDataColumnSidecarsProofs(eq(corruptSlot), any());
+    identifiers.stream()
+        .filter(key -> key.slot().equals(corruptSlot))
+        .forEach(key -> verify(updater, never()).removeSidecar(key));
+    verify(updater, times(columns)).removeSidecar(any());
+    verify(updater).commit();
+    verify(updater).close();
+  }
+
+  @Test
+  void archiveSidecarsProofs_rebuildsMalformedProofsFromCompleteColumns() {
+    final ArchiveSlotFixture fixture = createSlotWithMalformedProofs(true);
+
+    fixture.database().archiveSidecarsProofs(UInt64.ONE, UInt64.ONE);
+
+    final int halfColumns = fixture.sidecars().size() / 2;
+    verify(fixture.updater())
+        .addDataColumnSidecarsProofs(
+            UInt64.ONE,
+            fixture.sidecars().stream()
+                .skip(halfColumns)
+                .map(
+                    sidecar ->
+                        sidecar.getKzgProofs().stream().map(SszKZGProof::getKZGProof).toList())
+                .toList());
+    fixture.sidecars().stream()
+        .skip(halfColumns)
+        .map(DataColumnSlotAndIdentifier::fromDataColumn)
+        .forEach(key -> verify(fixture.updater()).removeSidecar(key));
+    verify(fixture.updater(), times(halfColumns)).removeSidecar(any());
+    verify(fixture.updater()).commit();
+  }
+
+  @Test
+  void archiveSidecarsProofs_preservesIncompleteColumnsWhenProofsAreMalformed() {
+    final ArchiveSlotFixture fixture = createSlotWithMalformedProofs(false);
+
+    fixture.database().archiveSidecarsProofs(UInt64.ONE, UInt64.ONE);
+
+    verify(fixture.updater(), never()).addDataColumnSidecarsProofs(any(), any());
+    verify(fixture.updater(), never()).removeSidecar(any());
+    verify(fixture.updater()).commit();
+  }
+
+  private ArchiveSlotFixture createSlotWithMalformedProofs(final boolean complete) {
+    final Spec spec = TestSpecFactory.createMinimalFulu();
+    final DataStructureUtil dataStructureUtil = new DataStructureUtil(spec);
+    final SignedBeaconBlock block = dataStructureUtil.randomSignedBeaconBlock(UInt64.ONE);
+    final int columns = spec.getNumberOfDataColumns().orElseThrow();
+    final List<DataColumnSidecar> sidecars =
+        IntStream.range(0, columns)
+            .mapToObj(
+                index -> dataStructureUtil.randomDataColumnSidecar(block, UInt64.valueOf(index)))
+            .toList();
+    final KvStoreCombinedDao dao = mock(KvStoreCombinedDao.class);
+    final FinalizedUpdater updater = mock(FinalizedUpdater.class);
+    when(dao.finalizedUpdater()).thenReturn(updater);
+    when(dao.getSlotForFinalizedBlockRoot(block.getRoot())).thenReturn(Optional.of(UInt64.ONE));
+    when(dao.getDataColumnSidecarsProofs(UInt64.ONE))
+        .thenThrow(new KvStoreDeserializationException("malformed proofs"));
+    when(dao.streamDataColumnIdentifiers(UInt64.ONE, UInt64.ONE))
+        .thenAnswer(
+            __ ->
+                sidecars.stream()
+                    .limit(complete ? columns : columns - 1)
+                    .map(DataColumnSlotAndIdentifier::fromDataColumn));
+    sidecars.forEach(
+        sidecar ->
+            when(dao.getSidecar(DataColumnSlotAndIdentifier.fromDataColumn(sidecar)))
+                .thenReturn(Optional.of(sidecar.sszSerialize())));
+    return new ArchiveSlotFixture(
+        new KvStoreDatabase(dao, StateStorageMode.PRUNE, false, spec), updater, sidecars);
+  }
+
+  private record ArchiveSlotFixture(
+      KvStoreDatabase database, FinalizedUpdater updater, List<DataColumnSidecar> sidecars) {}
 
   // Data column sidecar pruning is forward (oldest-first): each run removes the oldest up-to-limit
   // distinct populated slots at or before the cutoff, so the earliest retained slot keeps advancing

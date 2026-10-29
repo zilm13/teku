@@ -71,6 +71,8 @@ import tech.pegasys.teku.spec.datastructures.execution.ExecutionPayloadSummary;
 import tech.pegasys.teku.spec.datastructures.execution.SlotAndExecutionPayloadSummary;
 import tech.pegasys.teku.spec.datastructures.forkchoice.VoteTracker;
 import tech.pegasys.teku.spec.datastructures.hashtree.HashTree;
+import tech.pegasys.teku.spec.datastructures.lightclient.LightClientBootstrap;
+import tech.pegasys.teku.spec.datastructures.lightclient.LightClientBootstrapSchema;
 import tech.pegasys.teku.spec.datastructures.lightclient.LightClientUpdate;
 import tech.pegasys.teku.spec.datastructures.state.AnchorPoint;
 import tech.pegasys.teku.spec.datastructures.state.Checkpoint;
@@ -78,6 +80,7 @@ import tech.pegasys.teku.spec.datastructures.state.beaconstate.BeaconState;
 import tech.pegasys.teku.spec.datastructures.type.SszKZGProof;
 import tech.pegasys.teku.spec.datastructures.util.DataColumnSlotAndIdentifier;
 import tech.pegasys.teku.spec.datastructures.util.SlotAndBlockRootAndBlobIndex;
+import tech.pegasys.teku.spec.schemas.SchemaDefinitionsAltair;
 import tech.pegasys.teku.storage.api.GloasForkChoiceRebuildData;
 import tech.pegasys.teku.storage.api.OnDiskStoreData;
 import tech.pegasys.teku.storage.api.StorageUpdate;
@@ -104,6 +107,7 @@ import tech.pegasys.teku.storage.server.kvstore.schema.SchemaCombinedSnapshotSta
 import tech.pegasys.teku.storage.server.kvstore.schema.SchemaCombinedTreeState;
 import tech.pegasys.teku.storage.server.kvstore.schema.SchemaFinalizedSnapshotStateAdapter;
 import tech.pegasys.teku.storage.server.kvstore.schema.SchemaHotAdapter;
+import tech.pegasys.teku.storage.server.kvstore.serialization.KvStoreDeserializationException;
 import tech.pegasys.teku.storage.server.state.StateRootRecorder;
 
 public class KvStoreDatabase implements Database {
@@ -1391,6 +1395,69 @@ public class KvStoreDatabase implements Database {
       periodsToDelete = periods.filter(storedPeriod -> storedPeriod.isLessThan(period)).toList();
     }
     removeBestLightClientUpdates(periodsToDelete);
+    pruneLightClientBootstrapsBefore(period);
+  }
+
+  private void pruneLightClientBootstrapsBefore(final UInt64 period) {
+    final List<UInt64> slotsToDelete;
+    try (final Stream<UInt64> slots = dao.streamLightClientBootstrapSlots()) {
+      slotsToDelete =
+          slots.takeWhile(slot -> syncCommitteePeriodAtSlot(slot).isLessThan(period)).toList();
+    }
+    final List<UInt64> committeePeriodsToDelete;
+    try (final Stream<UInt64> periods = dao.streamLightClientSyncCommitteePeriods()) {
+      committeePeriodsToDelete =
+          periods.takeWhile(storedPeriod -> storedPeriod.isLessThan(period)).toList();
+    }
+    if (slotsToDelete.isEmpty() && committeePeriodsToDelete.isEmpty()) {
+      return;
+    }
+    try (final HotUpdater updater = hotUpdater()) {
+      slotsToDelete.forEach(updater::removeLightClientBootstrap);
+      committeePeriodsToDelete.forEach(updater::removeLightClientSyncCommittee);
+      updater.commit();
+    }
+  }
+
+  @Override
+  public void storeLightClientBootstrap(final LightClientBootstrap bootstrap) {
+    final UInt64 slot = bootstrap.getLightClientHeader().getBeacon().getSlot();
+    try (final HotUpdater updater = hotUpdater()) {
+      updater.addLightClientBootstrap(
+          slot,
+          Bytes.concatenate(
+              bootstrap.getSyncCommitteeBranch().sszSerialize(),
+              bootstrap.getLightClientHeader().sszSerialize()),
+          syncCommitteePeriodAtSlot(slot),
+          bootstrap.getCurrentSyncCommittee().sszSerialize());
+      updater.commit();
+    }
+  }
+
+  @Override
+  public Optional<LightClientBootstrap> getLightClientBootstrap(final UInt64 slot) {
+    return dao.getLightClientBootstrap(slot)
+        .flatMap(
+            stored ->
+                dao.getLightClientSyncCommittee(syncCommitteePeriodAtSlot(slot))
+                    .map(syncCommittee -> deserializeBootstrap(slot, stored, syncCommittee)));
+  }
+
+  private LightClientBootstrap deserializeBootstrap(
+      final UInt64 slot, final Bytes stored, final Bytes syncCommittee) {
+    final LightClientBootstrapSchema schema =
+        SchemaDefinitionsAltair.required(spec.atSlot(slot).getSchemaDefinitions())
+            .getLightClientBootstrapSchema();
+    final int branchSize = schema.getSyncCommitteeBranchSchema().getLength() * Bytes32.SIZE;
+    return schema.create(
+        schema.getFieldSchema0().sszDeserialize(stored.slice(branchSize)),
+        schema.getFieldSchema1().sszDeserialize(syncCommittee),
+        schema.getSyncCommitteeBranchSchema().sszDeserialize(stored.slice(0, branchSize)));
+  }
+
+  private UInt64 syncCommitteePeriodAtSlot(final UInt64 slot) {
+    return spec.getSyncCommitteeUtilRequired(slot)
+        .computeSyncCommitteePeriod(spec.computeEpochAtSlot(slot));
   }
 
   @Override
@@ -1471,9 +1538,14 @@ public class KvStoreDatabase implements Database {
             archiveMap.lastKey());
         try (final FinalizedUpdater updater = finalizedUpdater()) {
           for (final UInt64 slot : archiveMap.keySet()) {
-            if (archiveSidecarsProofsForSlot(
-                slot, archiveMap.get(slot), numberOfColumns, updater)) {
-              ++archivedSlots;
+            try {
+              if (archiveSidecarsProofsForSlot(
+                  slot, archiveMap.get(slot), numberOfColumns, updater)) {
+                ++archivedSlots;
+              }
+            } catch (final SszDeserializeException | KvStoreDeserializationException error) {
+              // All reads for a slot precede its writes, so a malformed slot is left untouched.
+              LOG.warn("Skipping archival for slot {}: malformed stored data", slot, error);
             }
           }
           updater.commit();
@@ -1488,11 +1560,19 @@ public class KvStoreDatabase implements Database {
       final List<DataColumnSlotAndIdentifier> slotKeys,
       final int numberOfColumns,
       final FinalizedUpdater updater) {
-    final Optional<Bytes32> finalizedRoot = getFinalizedBlockRootBySlot(slot);
+    final int halfColumns = numberOfColumns / 2;
+    if (slotKeys.stream().noneMatch(key -> key.columnIndex().isGreaterThanOrEqualTo(halfColumns))) {
+      return false;
+    }
+    final Optional<Bytes32> finalizedRoot =
+        slotKeys.stream()
+            .map(DataColumnSlotAndIdentifier::blockRoot)
+            .distinct()
+            .filter(root -> getSlotForFinalizedBlockRoot(root).map(slot::equals).orElse(false))
+            .findFirst();
     if (finalizedRoot.isEmpty()) {
       return false;
     }
-    final int halfColumns = numberOfColumns / 2;
     final List<DataColumnSlotAndIdentifier> canonicalKeys =
         slotKeys.stream().filter(key -> key.blockRoot().equals(finalizedRoot.get())).toList();
     final List<DataColumnSlotAndIdentifier> extensionKeys =
@@ -1516,10 +1596,20 @@ public class KvStoreDatabase implements Database {
 
   private boolean hasCompleteSidecarArchive(
       final UInt64 slot, final int firstHalfColumnCount, final int halfColumns) {
-    return firstHalfColumnCount == halfColumns
-        && getDataColumnSidecarsProofs(slot)
-            .map(proofs -> proofs.size() == halfColumns)
-            .orElse(false);
+    if (firstHalfColumnCount != halfColumns) {
+      return false;
+    }
+    try {
+      return getDataColumnSidecarsProofs(slot)
+          .map(proofs -> proofs.size() == halfColumns)
+          .orElse(false);
+    } catch (final KvStoreDeserializationException error) {
+      LOG.warn(
+          "Ignoring malformed archived proofs at slot {}: a complete column set is required to rebuild them",
+          slot,
+          error);
+      return false;
+    }
   }
 
   private boolean hasUniqueCompleteCanonicalBlock(
@@ -1556,7 +1646,11 @@ public class KvStoreDatabase implements Database {
             .map(
                 key ->
                     dao.getSidecar(key)
-                        .flatMap(sidecar -> deserializeSidecarProofsForArchive(key, sidecar)))
+                        .map(
+                            sidecar ->
+                                spec.deserializeSidecar(sidecar, slot).getKzgProofs().stream()
+                                    .map(SszKZGProof::getKZGProof)
+                                    .toList()))
             .toList();
     if (!maybeProofs.stream().allMatch(Optional::isPresent)) {
       LOG.trace("Skipping archival for slot {}: extension columns could not be read", slot);
@@ -1570,23 +1664,6 @@ public class KvStoreDatabase implements Database {
         extensionKeys.size(),
         slot);
     return true;
-  }
-
-  private Optional<List<KZGProof>> deserializeSidecarProofsForArchive(
-      final DataColumnSlotAndIdentifier key, final Bytes sidecar) {
-    try {
-      return Optional.of(
-          spec.deserializeSidecar(sidecar, key.slot()).getKzgProofs().stream()
-              .map(SszKZGProof::getKZGProof)
-              .toList());
-    } catch (final SszDeserializeException error) {
-      LOG.warn(
-          "Skipping archival for slot {}: malformed data column sidecar {}",
-          key.slot(),
-          key,
-          error);
-      return Optional.empty();
-    }
   }
 
   /**
