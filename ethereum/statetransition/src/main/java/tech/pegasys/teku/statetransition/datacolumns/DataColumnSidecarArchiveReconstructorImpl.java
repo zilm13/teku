@@ -220,9 +220,10 @@ public class DataColumnSidecarArchiveReconstructorImpl
   public SafeFuture<Optional<DataColumnSidecar>> reconstructDataColumnSidecar(
       final SlotAndBlockRoot slotAndBlockRoot, final UInt64 index, final int requestId) {
     checkArgument(
-        index.isGreaterThanOrEqualTo(halfColumns),
-        "Only second-half column indices (>= %s) can be reconstructed, got %s",
+        index.isGreaterThanOrEqualTo(halfColumns) && index.isLessThan(halfColumns * 2L),
+        "Only second-half column indices in [%s, %s) can be reconstructed, got %s",
         halfColumns,
+        halfColumns * 2,
         index);
     final long now = timeProvider.getTimeInMillis().longValue();
     if (requestsPastDeadline.contains(requestId)) {
@@ -471,28 +472,42 @@ public class DataColumnSidecarArchiveReconstructorImpl
         .runAsync(
             () ->
                 chainDataClient
-                    .getBlockByBlockRoot(slotAndBlockRoot.getBlockRoot())
+                    .getDataColumnSidecarProofs(slotAndBlockRoot.getSlot())
                     .thenCompose(
-                        maybeBlock -> {
-                          if (maybeBlock.isEmpty()) {
+                        proofs -> {
+                          if (proofs.size() != halfColumns) {
                             LOG.debug(
                                 "Cannot reconstruct extension data column sidecars for slot {} "
-                                    + "blockRoot {}: block not available",
+                                    + "blockRoot {}: found {} of {} extension proofs",
                                 slotAndBlockRoot.getSlot(),
-                                slotAndBlockRoot.getBlockRoot());
+                                slotAndBlockRoot.getBlockRoot(),
+                                proofs.size(),
+                                halfColumns);
                             return SafeFuture.completedFuture(emptyResult());
                           }
-                          final SignedBeaconBlock block = maybeBlock.get();
                           return chainDataClient
-                              .getDataColumnSidecars(
-                                  block.getSlotAndBlockRoot(), firstHalfOfIndices)
-                              .thenComposeCombined(
-                                  chainDataClient.getDataColumnSidecarProofs(block.getSlot()),
-                                  (sidecars, proofs) ->
-                                      reconstructionAsyncRunner.runAsync(
-                                          () ->
-                                              reconstructDataColumnSidecar(
-                                                  block, sidecars, proofs)));
+                              .getBlockByBlockRoot(slotAndBlockRoot.getBlockRoot())
+                              .thenCompose(
+                                  maybeBlock -> {
+                                    if (maybeBlock.isEmpty()) {
+                                      LOG.debug(
+                                          "Cannot reconstruct extension data column sidecars for slot {} "
+                                              + "blockRoot {}: block not available",
+                                          slotAndBlockRoot.getSlot(),
+                                          slotAndBlockRoot.getBlockRoot());
+                                      return SafeFuture.completedFuture(emptyResult());
+                                    }
+                                    final SignedBeaconBlock block = maybeBlock.get();
+                                    return chainDataClient
+                                        .getDataColumnSidecars(
+                                            block.getSlotAndBlockRoot(), firstHalfOfIndices)
+                                        .thenCompose(
+                                            sidecars ->
+                                                reconstructionAsyncRunner.runAsync(
+                                                    () ->
+                                                        reconstructDataColumnSidecar(
+                                                            block, sidecars, proofs)));
+                                  });
                         }))
         .whenComplete((result, error) -> timer.closeUnchecked().run());
   }
@@ -602,7 +617,7 @@ public class DataColumnSidecarArchiveReconstructorImpl
       return false;
     }
 
-    if (index.isLessThan(halfColumns)) {
+    if (index.isLessThan(halfColumns) || index.isGreaterThanOrEqualTo(halfColumns * 2L)) {
       return false;
     }
 

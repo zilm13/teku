@@ -680,6 +680,11 @@ public class TekuNodeConfigBuilder {
     return this;
   }
 
+  public TekuNodeConfigBuilder withDataColumnSidecarRecoveryMaxDelayMillis(final long millis) {
+    configMap.put("Xdata-column-sidecar-recovery-max-delay", millis);
+    return this;
+  }
+
   public TekuNodeConfigBuilder withDataColumnPruningIntervalSeconds(final int seconds) {
     configMap.put("Xdata-storage-data-column-pruning-interval", seconds);
     return this;

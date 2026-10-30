@@ -27,7 +27,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
-import tech.pegasys.teku.infrastructure.async.Waiter;
 import tech.pegasys.teku.infrastructure.unsigned.UInt64;
 import tech.pegasys.teku.spec.SpecMilestone;
 import tech.pegasys.teku.spec.config.SpecConfigFulu;
@@ -61,7 +60,7 @@ public class DasCheckpointSyncAcceptanceTest extends AcceptanceTestBase {
         primaryNode.getSpec().computeStartSlotAtEpoch(config.getFuluForkEpoch());
     // Keep enough historical slots to observe archival interleaved with backfill.
     final UInt64 minimumCheckpointSlot = firstFuluSlot.plus(24);
-    Waiter.waitFor(
+    primaryNode.waitFor(
         () ->
             assertThat(primaryNode.getFinalizedBlock().getSlot())
                 .isGreaterThanOrEqualTo(minimumCheckpointSlot),
@@ -91,13 +90,17 @@ public class DasCheckpointSyncAcceptanceTest extends AcceptanceTestBase {
                 .withInteropValidators(0, 0)
                 .build());
     secondaryNode.start();
+    secondaryNode.waitFor(
+        () -> assertThat(secondaryNode.getFinalizedBlock()).isNotNull(), 1, TimeUnit.MINUTES);
+    // This is at least the secondary's checkpoint anchor, even if finality already advanced.
+    final UInt64 secondaryStartupFinalizedSlot = secondaryNode.getFinalizedBlock().getSlot();
     waitForBackfillCompletion(secondaryNode);
 
     assertArchivingOverlappedBackfill(secondaryNode, checkpointSlot);
-    Waiter.waitFor(
+    secondaryNode.waitFor(
         () ->
             assertThat(secondaryNode.getFinalizedBlock().getSlot())
-                .isGreaterThan(checkpointSlot.plus(1)),
+                .isGreaterThan(secondaryStartupFinalizedSlot.plus(1)),
         3,
         TimeUnit.MINUTES);
     // Freeze the entire eligible range, including blocks forward-synced after the checkpoint.
@@ -108,6 +111,8 @@ public class DasCheckpointSyncAcceptanceTest extends AcceptanceTestBase {
             .decrement();
     final List<SignedBeaconBlock> expectedBlocks =
         getHistoricalBlocks(primaryNode, firstFuluSlot, archiveEndSlot);
+    assertThat(expectedBlocks)
+        .anyMatch(block -> block.getSlot().isGreaterThan(secondaryStartupFinalizedSlot));
     waitForPhysicalColumns(secondaryNode, expectedBlocks, retainedIndices);
     assertThat(
             primaryNode.getMetricValue(
@@ -125,7 +130,7 @@ public class DasCheckpointSyncAcceptanceTest extends AcceptanceTestBase {
       final int numberOfColumns)
       throws Exception {
     // Status advertises availability only after its next epoch refresh following backfill.
-    Waiter.waitFor(
+    archivedNode.waitFor(
         () ->
             assertThat(archivedNode.getMetricValue("beacon_earliest_available_slot"))
                 .isLessThanOrEqualTo(expectedBlocks.getFirst().getSlot().doubleValue()),
@@ -138,6 +143,9 @@ public class DasCheckpointSyncAcceptanceTest extends AcceptanceTestBase {
                 .withRealNetwork()
                 .withSubscribeAllCustodySubnetsEnabled()
                 .withDataColumnSidecarExtensionRetentionEpochs(Integer.MAX_VALUE)
+                // Keep supernode recovery outside the test window: historical columns must
+                // arrive via RPC, not be reconstructed locally from the first half.
+                .withDataColumnSidecarRecoveryMaxDelayMillis(TimeUnit.HOURS.toMillis(1))
                 .withDasDisableElRecovery()
                 .withCheckpointSyncUrl(archivedNode.getBeaconRestApiUrl())
                 .withGenesisTime(genesisTime.intValue())
@@ -152,11 +160,16 @@ public class DasCheckpointSyncAcceptanceTest extends AcceptanceTestBase {
         expectedBlocks,
         UInt64.range(ZERO, UInt64.valueOf(numberOfColumns)).toList());
     final List<String> localRebuilds =
-        verificationNode.getFilteredOutputContaining("Rebuilding columns for slot ");
+        verificationNode.getFilteredOutputContaining("").stream()
+            .filter(
+                line ->
+                    line.contains("Rebuilding columns for slot ")
+                        || line.contains("Recovery for block: "))
+            .toList();
     for (final SignedBeaconBlock block : expectedBlocks) {
       assertThat(localRebuilds)
           .as("Columns at slot %s must be served by the archived peer", block.getSlot())
-          .noneMatch(line -> line.contains("root " + block.getRoot().toHexString()));
+          .noneMatch(line -> line.contains(block.getRoot().toHexString()));
     }
     assertThat(
             archivedNode.getMetricValue(
@@ -165,10 +178,7 @@ public class DasCheckpointSyncAcceptanceTest extends AcceptanceTestBase {
   }
 
   private void waitForBackfillCompletion(final TekuBeaconNode node) {
-    Waiter.waitFor(
-        () -> assertThat(node.getFilteredOutputContaining(BACKFILL_COMPLETED)).isNotEmpty(),
-        5,
-        TimeUnit.MINUTES);
+    node.waitForLogMessageContaining(BACKFILL_COMPLETED, 5, TimeUnit.MINUTES);
   }
 
   private List<SignedBeaconBlock> getHistoricalBlocks(
@@ -186,7 +196,7 @@ public class DasCheckpointSyncAcceptanceTest extends AcceptanceTestBase {
       final TekuBeaconNode node,
       final List<SignedBeaconBlock> blocks,
       final List<UInt64> expectedIndices) {
-    Waiter.waitFor(
+    node.waitFor(
         () -> {
           for (final SignedBeaconBlock block : blocks) {
             assertThat(node.getBlockAtSlot(block.getSlot()).map(SignedBeaconBlock::getRoot))
